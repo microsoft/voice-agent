@@ -20,24 +20,43 @@ For most customers building voice-first agents, we recommend starting with Voice
 
 ## Quick Links
 
-[Open the Foundry portal](https://ai.azure.com/) | [Open the new Foundry portal](https://ai.azure.com/nextgen)
+| Resource | Description |
+| --- | --- |
+| [Product home page](https://azure.microsoft.com/en-us/products/ai-foundry/agent-service) | Explore Foundry Agent Service, including voice capabilities. |
+| [Foundry portal](https://ai.azure.com/) | Open your Foundry project. |
+| [New Foundry portal — Create & manage agents](https://ai.azure.com/nextgen) | Create and manage voice agents in the new Foundry portal. |
+| [Documentation & quickstart](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent?pivots=portal) | Create a voice-based prompt agent, customize its instructions, and test spoken conversations. |
+| [Configure a voice agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-voice-agent) | Configure your voice agent's behavior and voice settings. |
+| [Use a hosted agent as the conversation engine](https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent) | Use a hosted agent for conversation logic and tools, while Voice Live handles speech, turn-taking, and interruptions. |
+| [Use a subagent in a voice-based agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-subagent-voice-first-agent) | Delegate specialized requests to prompt or hosted subagents in the same Foundry project. |
+| [Pricing & billing](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/voice-agent-pricing) | Understand Voice Agent pricing and billing. |
+| [Foundry blogs](https://techcommunity.microsoft.com/category/azure-ai-foundry/blog/azure-ai-foundry-blog) | Browse the shared Microsoft Foundry blog for announcements and tutorials. |
+| [Voice Live video tutorial](https://www.youtube.com/watch?v=FMfX6qo4LII) | Related Microsoft Learn training on building a Voice Live agent in Foundry. |
+| [GitHub — Official resources & samples](https://github.com/microsoft/voice-agent) | Find Voice Agent resources and runnable examples. |
+| [Report issues & feature requests](https://github.com/microsoft/voice-agent/issues) | Report bugs, request features, and share feedback. |
+| [Hands-on samples](https://github.com/microsoft/voice-agent/tree/main/samples) | Explore runnable samples and extended solutions. |
+| [Tools & integrations — MCP examples](https://github.com/microsoft/voice-agent/tree/main/shared_mcp) | Explore the shared MCP service and tool integration examples. |
+| [Regions & quotas](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions) | Check the shared Foundry Agent Service region and quota documentation. |
+| [Tech Community discussions](https://techcommunity.microsoft.com/category/azure-ai-foundry/discussions/azure-ai-foundry-discussions) | Join the shared Microsoft Foundry community forum. |
+| [Contact the Voice Agent team](mailto:voiceagent@microsoft.com) | Email voiceagent@microsoft.com with questions and feedback. |
+| [Python SDK](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/README.md) | azure-ai-projects for agent management and realtime voice sessions. |
+| [Java SDK](https://github.com/Azure/azure-sdk-for-java/blob/main/sdk/ai/azure-ai-agents/README.md#realtime-voice-agent-sessions) | com.azure:azure-ai-agents for voice sessions, conversations, and telephony. |
+| [JavaScript / TypeScript SDK](https://github.com/Azure/azure-sdk-for-js/blob/main/sdk/ai/ai-projects/README.md) | @azure/ai-projects for agent management and realtime voice sessions. |
+| [C# / .NET SDK](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/ai/Azure.AI.Projects.Agents/README.md) | Azure.AI.Projects.Agents for voice agent definitions and management. |
 
 In the Foundry portal, open your project, go to **Build > Agents**, select **Build an agent**, and choose **Voice** as the interaction mode.
 
-- [Quickstart: Create a voice-based prompt agent](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent?pivots=portal): Create a voice agent in the Foundry portal, customize its instructions, and test spoken conversations in the playground.
-- [Use a hosted agent as the conversation engine](https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent): Use a hosted agent for conversation logic and tools, while Voice Live handles speech, turn-taking, and interruptions.
-- [Use a subagent in a voice-based agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-subagent-voice-first-agent): Delegate specialized requests to prompt or hosted subagents in the same Foundry project.
+Voice Agent is now available in public preview. Customers can start building voice agents and preparing for production.
 
-Voice Agent is now available in public preview. See the [voice agent documentation](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/voice-agent-pricing). Customers can start to build voice agent and get ready to production.
-
-For questions and feedback, contact the Voice Agent team at [voiceagent@microsoft.com](mailto:voiceagent@microsoft.com).
-
-Explore [Voice Agent in Foundry Agent Service](#voice-agent-examples) for voice agent guides, portal links, and runnable samples.
+Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) for voice agent guides, portal links, and runnable samples.
 
 ## Voice Agent Blogs
 
 - 2026.09 [**Ship agents faster with expanded model choice, voice agents, and continuous optimization**](https://azure.microsoft.com/en-us/blog/ship-ai-agents-faster-with-new-capabilities-in-microsoft-foundry-expanded-model-choice-voice-agents-and-built-in-optimization/) — Overview of the latest Foundry Agents capabilities, including a Voice Agent video overview.
 - 2026.09 [**Introducing voice agents in Microsoft Foundry**](https://aka.ms/VoicefirstagentsSept2026) — Voice Agent public preview announcement.
+- 2026.06 [**Azure Speech at Build 2026: Powering Voice Agents with Real-Time and Life-like Experiences**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/azure-speech-at-build-2026-powering-voice-agents-with-real-time-and-life-like-ex/4524638) — Azure Speech updates from Build 2026 for real-time voice agents and lifelike experiences.
+- 2025.11 [**Advancing Speech Innovation with Azure Speech in Microsoft Foundry**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/advancing-speech-innovation-with-azure-speech-in-microsoft-foundry/4471461) — Azure Speech innovations in Microsoft Foundry for conversational AI and voice agents.
+- 2025.09 [**Upgrade your voice agent with Azure AI Voice Live API**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/upgrade-your-voice-agent-with-azure-ai-voice-live-api/4458247) — General availability announcement for Voice Live API, enabling real-time speech-to-speech voice agents.
 
 ## Voice Agent Customer Stories
 
@@ -47,7 +66,7 @@ Explore [Voice Agent in Foundry Agent Service](#voice-agent-examples) for voice 
 
 ---
 
-## Voice Agent examples
+## Voice Agent Extended Samples
 
 ### Start here
 
