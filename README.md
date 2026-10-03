@@ -1,5 +1,5 @@
 # Voice Agent in Foundry Agent Service - Resource
-Voice Agent in Foundry Agent Service offers below key values to customers:
+[Voice Agent in Foundry Agent Service](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent?pivots=portal) offers below key values to customers:
 
 
 > Build and launch an enterprise-ready voice agent in under two minutes. Choose speech-to-speech or cascaded pipelines powered by OpenAI, Microsoft AI, and Azure real-time models.  Extend your agent with Foundry tools, monitor and measure its performance, and connect inbound and outbound calls through Teams and Twilio. Create engaging conversations with voices optimized for call centers and lifelike avatars.
@@ -11,6 +11,12 @@ This repository is the official community hub for Voice Agent in Foundry Agent S
 📚 Resources — Curated links to docs, videos, blogs, and community content for Voice Agent
 
 🧪 Samples — Hands-on samples and extended solutions
+
+# Voice Agent and Voice Live
+
+[Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live) is the foundation for real-time voice interaction, and Voice Agent builds on that foundation to deliver complete voice-first agents. Voice Live handles the real-time voice experience, while Voice Agent adds the intelligence, tools, knowledge, and orchestration required to build end-to-end agentic applications.
+
+For most customers building voice-first agents, we recommend starting with Voice Agent. Voice Agent provides the more complete, integrated experience for building and operating an agent, bringing together voice, reasoning, instructions, knowledge, tools, and orchestration. Voice Live is a better fit when customers already have their own agent stack and primarily need real-time voice capabilities with greater control over the voice application architecture.
 
 ## Quick Links
 
