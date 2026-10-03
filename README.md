@@ -1,12 +1,12 @@
 # Voice Agent in Foundry Agent Service - Resource
 Voice Agent in Foundry Agent Service offers below key values to customers:
 
-> [!IMPORTANT]
+
 > Build and launch an enterprise-ready voice agent in under two minutes. Choose speech-to-speech or cascaded pipelines powered by OpenAI, Microsoft AI, and Azure real-time models.  Extend your agent with Foundry tools, monitor and measure its performance, and connect inbound and outbound calls through Teams and Twilio. Create engaging conversations with voices optimized for call centers and lifelike avatars.
 
 This repository is the official community hub for Voice Agent in Foundry Agent Service. Here you'll find:
 
-🐛 Report Issues — File bugs, feature requests, and feedback via GitHub Issues
+🐛 Report Issues — File bugs, feature requests, and feedback via [GitHub Issues](https://github.com/microsoft/voice-agent/issues)
 
 📚 Resources — Curated links to docs, videos, blogs, and community content for Voice Agent
 
