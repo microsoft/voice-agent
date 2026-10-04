@@ -1,4 +1,4 @@
-# Voice Agent in Foundry Agent Service - Resource
+# Voice Agent in Foundry Agent Service - Community Hub
 [Voice Agent in Foundry Agent Service](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent?pivots=portal) offers below key values to customers:
 
 
