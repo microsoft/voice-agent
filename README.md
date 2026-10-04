@@ -29,6 +29,7 @@ For most customers building voice-first agents, we recommend starting with Voice
 | [Configure a voice agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-voice-agent) | Configure your voice agent's behavior and voice settings. |
 | [Use a hosted agent as the conversation engine](https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent) | Use a hosted agent for conversation logic and tools, while Voice Live handles speech, turn-taking, and interruptions. |
 | [Use a subagent in a voice-based agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-subagent-voice-first-agent) | Delegate specialized requests to prompt or hosted subagents in the same Foundry project. |
+| [Voice Agent tracing, monitoring & evaluation](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/voice-agent-observability) | Monitor voice sessions and evaluate conversation transcripts using datasets, traces, or simulations. |
 | [Pricing & billing](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/voice-agent-pricing) | Understand Voice Agent pricing and billing. |
 | [Foundry blogs](https://techcommunity.microsoft.com/category/azure-ai-foundry/blog/azure-ai-foundry-blog) | Browse the shared Microsoft Foundry blog for announcements and tutorials. |
 | [Voice Live video tutorial](https://www.youtube.com/watch?v=FMfX6qo4LII) | Related Microsoft Learn training on building a Voice Live agent in Foundry. |
@@ -63,6 +64,31 @@ Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) fo
 - [**Astra Tech brings Voice Live API in Azure AI Foundry to its fintech-first app**](https://www.microsoft.com/en/customers/story/25412-astra-tech-azure-ai-foundry) — Astra Tech uses Voice Live in **botim** for a multilingual voice assistant that helps users complete tasks such as international money transfers. The story reports **300,000 monthly active users and 100,000 daily active users**.
 - [**Boosting patient satisfaction with healow Genie and Voice Live API in Azure AI Foundry**](https://www.microsoft.com/en/customers/story/25363-healow-azure-kubernetes-service) — The article describes a Voice Live pilot for **healow Genie**, covering appointment information, common questions, and voicemail callbacks. **Pilot:** It discusses anticipated benefits rather than measured improvements from a completed rollout.
 - [**Kansai Television: AI Hachiemon**](https://www.microsoft.com/en-us/ailab/case-study/kansai-television) — Microsoft AI Co-Innovation case study. Kansai Television built a conversational version of its mascot, **Hachiemon**, using Voice Live and Azure AI Foundry. Azure AI Speech Custom Voice recreates the character's distinctive voice for entertainment and interactive experiences.
+
+## Voice Agent Quality And Scalability
+
+### Latency
+
+Speech-to-speech models can achieve latency as low as **500 ms** on service side. Cascaded pipelines (**STT → LLM → TTS**) can also deliver low latency < 1s with the right LLM and streaming speech configuration. Actual latency depends on the model, region, network conditions, and tool calls.
+
+### Speech and model quality
+
+Voice Agent brings together advanced speech and language models, including [GPT Realtime](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to), [GPT Live](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/gpt-live), Azure speech-to-text and [HD voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=text-to-speech), and MAI Transcribe and MAI Voice. Choose the combination that best fits your languages, domain, and conversational experience.
+
+Recent speech benchmark references:
+
+- **2026.10** [MAI-Transcribe-2-Streaming benchmark results](https://microsoft.ai/news/our-first-streaming-transcription-model/) — Microsoft reports first place for final and partial transcript accuracy on Artificial Analysis in its October 1 announcement.
+- **2026.09** [MAI-Transcribe-2 benchmark results](https://microsoft.ai/news/mai-transcribe-2-is-the-fastest-most-accurate-and-cheapest-speech-recognition-model-in-the-world/) — Microsoft reports first place on FLEURS across 60 languages and second place on the Artificial Analysis word error rate leaderboard in its September 3 announcement.
+- **2026.06** [Azure LLM Speech benchmark results at Build 2026](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/azure-speech-at-build-2026-powering-voice-agents-with-real-time-and-life-like-ex/4524638) — Microsoft reports first place on the Open ASR Leaderboard for the updated LLM Speech model in its Build 2026 announcement.
+
+### Customization
+
+1. **Speech-to-speech — Azure Realtime:** Custom voices are available **upon request**. Contact [voiceagent@microsoft.com](mailto:voiceagent@microsoft.com) to discuss access. See the [Azure Realtime voice configuration reference](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-api-reference-2026-06-01-preview) for the publicly documented native voice settings.
+2. **Cascaded pipelines — speech recognition and synthesis:** Adapt recognition to your vocabulary and audio conditions with [Azure Custom Speech](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/custom-speech-overview). Create a distinctive voice with [Azure Custom Voice](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/custom-neural-voice), or use [MAI Voice customization](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-voices) to create a voice from a short reference recording through the documented access and consent workflow.
+
+### Scalability
+
+Voice Agent can scale to meet your business needs. Customers are already using it to run **more than 3,000 concurrent sessions** and are continuing to scale. For large-scale deployments with high concurrency requirements, contact us to discuss your capacity and scalability needs.
 
 ---
 
