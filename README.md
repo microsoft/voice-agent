@@ -53,6 +53,7 @@ Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) fo
 - 2026.06 [**Azure Speech at Build 2026: Powering Voice Agents with Real-Time and Life-like Experiences**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/azure-speech-at-build-2026-powering-voice-agents-with-real-time-and-life-like-ex/4524638) — Azure Speech updates from Build 2026 for real-time voice agents and lifelike experiences.
 - 2025.11 [**Advancing Speech Innovation with Azure Speech in Microsoft Foundry**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/advancing-speech-innovation-with-azure-speech-in-microsoft-foundry/4471461) — Azure Speech innovations in Microsoft Foundry for conversational AI and voice agents.
 - 2025.09 [**Upgrade your voice agent with Azure AI Voice Live API**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/upgrade-your-voice-agent-with-azure-ai-voice-live-api/4458247) — General availability announcement for Voice Live API, enabling real-time speech-to-speech voice agents.
+- 2025.05 [**Voice-enabled AI Agents: transforming customer engagement with Azure AI Speech**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/voice-enabled-ai-agents-transforming-customer-engagement-with-azure-ai-speech/4413537/) — Voice Live API public preview announcement at Microsoft Build 2025.
 
 ## Voice Agent Customer Stories
 
