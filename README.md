@@ -39,8 +39,6 @@ For most customers building voice-first agents, we recommend starting with Voice
 | [Java SDK](https://github.com/Azure/azure-sdk-for-java/blob/main/sdk/ai/azure-ai-agents/README.md#realtime-voice-agent-sessions) | com.azure:azure-ai-agents for voice sessions, conversations, and telephony. |
 | [JavaScript / TypeScript SDK](https://github.com/Azure/azure-sdk-for-js/blob/main/sdk/ai/ai-projects/README.md) | @azure/ai-projects for agent management and realtime voice sessions. |
 | [C# / .NET SDK](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/ai/Azure.AI.Projects.Agents/README.md) | Azure.AI.Projects.Agents for voice agent definitions and management. |
-| [Voice Live samples](https://github.com/microsoft-foundry/voicelive-samples/) | Referrence only. Voice Live Quickstarts and examples for Python, C#, Java, and JavaScript/TypeScript, including Foundry agent integration, MCP tools, and avatars. We recomend starting with Voice Agent now instead of Voice Live  |
-| [Call Center Voice Agent Accelerator](https://github.com/Azure-Samples/call-center-voice-agent-accelerator) | Referrence only. A template for speech-to-speech call center agents using Voice Live, with browser and telephony integration and deployment to Azure Container Apps. We recomend starting with Voice Agent now instead of Voice Live. Now Voice Agent has supported Twillio and Teams Phone and we will add more support soon.  |
 
 In the Foundry portal, open your project, go to **Build > Agents**, select **Build an agent**, and choose **Voice** as the interaction mode.
 
@@ -264,3 +262,15 @@ running the checkout from `/mnt/c/` are outside the supported path.
   the Azure voice service locally.
 - Review each component's persistence and recording behavior before using
   sensitive prompts, audio, transcripts, or tool output.
+
+## Voice Live Related Links
+| Resource | Description |
+| --- | --- |
+| [Voice Live samples](https://github.com/microsoft-foundry/voicelive-samples/) | Referrence only. Voice Live Quickstarts and examples for Python, C#, Java, and JavaScript/TypeScript, including Foundry agent integration, MCP tools, and avatars. We recomend starting with Voice Agent now instead of Voice Live  |
+| [Call Center Voice Agent Accelerator](https://github.com/Azure-Samples/call-center-voice-agent-accelerator) | Referrence only. A template for speech-to-speech call center agents using Voice Live, with browser and telephony integration and deployment to Azure Container Apps. We recomend starting with Voice Agent now instead of Voice Live. Now Voice Agent has supported Twillio and Teams Phone and we will add more support soon.  |
+| [Voice Live overview](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live) | Referrence only. Learn about real-time voice interactions with speech recognition, language models, and speech synthesis. |
+| [Hosted agents overview](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents) | Referrence only. Learn how to deploy custom agent applications on managed infrastructure. |
+| [Voice Live with hosted agents](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-voice-live-hosted-agent-integration) | Referrence only. Add voice interaction to hosted agents using the Responses or HTTP Invocations protocol; includes Python client and agent examples. |
+| [Voice Live Bridge sample](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/voice-agent-target-agent/basic) | Deploy a hosted conversation engine and a voice wrapper, with Voice Live handling speech and interruptions. |
+| [Build a voice agent with invocations_ws](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/build-voice-agent) | Referrence only. Build hosted voice agents over WebSocket with Voice Live, Pipecat, or LiveKit. |
+| [invocations_ws voice agent samples](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/invocations_ws) | Referrence only. Explore hosted voice agent code using WebSocket audio streaming or signaling for separate media transport. |
