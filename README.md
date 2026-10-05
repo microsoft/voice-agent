@@ -119,7 +119,7 @@ users and coding agents to the correct entry point.
 > and run all repository commands from WSL. Use the Windows browser to open
 > the resulting `localhost` UI and grant microphone permission.
 
-The standalone [audio rewrite and translation sample](samples/audio_file_rewrite/README.md)
+The standalone [audio rewrite and translation sample](samples/audio_transcribe_and_translate/README.md)
 and [language-learning sample](samples/language_learning/README.md) also support
 native Windows PowerShell with Python 3.11+, without WSL.
 
@@ -168,7 +168,7 @@ lifecycle. Do not run a second manual portal after this quickstart.
 | Run the GPT Live terminal sample | [`samples/gpt_live/README.md`](samples/gpt_live/README.md) | Create or reuse a GPT Live agent, stream microphone audio with the OpenAI SDK, and view independently scrollable GPT Live, delegation, and user transcripts |
 | Run the complete Finance workflow | [`docs/README.md`](docs/README.md) | Ordered subscription, MCP, sample, portal, and debugging guides |
 | Work on or deploy the Finance MCP | [`shared_mcp/README.md`](shared_mcp/README.md) | Shared MCP image, Finance routes, local Dev Tunnel hosting, and Azure Container Apps deployment |
-| Create an IQ + voice + avatar Agent | [`samples/create-agent-with-iq-avatar-voice/README.md`](samples/create-agent-with-iq-avatar-voice/README.md) | Portal-first Andrew Dragon HD, Harry Business, Knowledge IQ, and optional Python creation |
+| Create an IQ + voice + avatar Agent | [`samples/create_agent_with_iq_avatar_voice/README.md`](samples/create_agent_with_iq_avatar_voice/README.md) | Portal-first Andrew Dragon HD, Harry Business, Knowledge IQ, and optional Python creation |
 | Inspect SDK package information | [`dist/README.md`](dist/README.md) | Public Python and .NET SDK dependencies and historical preview build records |
 | Use the coding-agent workflows | [`skills/`](skills/) | Voice Agent creation, IQ/Toolbox provisioning, and local-session debugging |
 
@@ -180,7 +180,7 @@ When the user asks to run or debug something from this directory:
    checkout in the WSL filesystem. If the checkout is under `/mnt/c/` or the
    terminal is native Windows, stop and guide the user to clone and reopen the
    repository in WSL2 before continuing. Exceptions: the standalone
-   `samples/audio_file_rewrite/` and `samples/language_learning/` samples support
+   `samples/audio_transcribe_and_translate/` and `samples/language_learning/` samples support
    native Windows; follow their READMEs.
 2. Select the component from the table above and read its `README.md` before
    running commands.
@@ -229,7 +229,7 @@ user did not choose.
 The supported repository working environment is Linux. On a Windows computer,
 use **WSL2 for the entire repository workflow**, including the portal, samples,
 MCP, deployment, and validation commands. The standalone
-[`audio_file_rewrite` sample](samples/audio_file_rewrite/README.md) and
+[`audio_transcribe_and_translate` sample](samples/audio_transcribe_and_translate/README.md) and
 [`language_learning` sample](samples/language_learning/README.md) are exceptions
 and can run and be tested directly in Windows PowerShell.
 

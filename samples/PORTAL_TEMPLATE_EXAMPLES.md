@@ -29,7 +29,7 @@ allowlisted in `portal/templates.config.json` is not a portal Template.
 Use a stable, descriptive directory name:
 
 ```text
-VoiceAgent/samples/<example-name>/
+VoiceAgent/samples/<example_name>/
   README.md
   agent.json
   sample.py              # optional CLI publisher or smoke test

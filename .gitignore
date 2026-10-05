@@ -9,4 +9,4 @@ voice-agent-output/
 samples/CSharp/.packages/
 samples/CSharp/*.pcm
 
-samples/audio_file_rewrite/.env
+samples/audio_transcribe_and_translate/.env

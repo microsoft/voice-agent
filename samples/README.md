@@ -19,13 +19,16 @@ For the general browser UI, use the
 shared MCP, and portal workflow, start with the
 [Finance documentation index](../docs/README.md).
 
+Use underscores between words in sample directory names, including subagent examples.
+
 ## Choose a sample
 
 | Sample | Lifecycle |
 | --- | --- |
 | [Language learning with pronunciation assessment](language_learning/README.md) | Have a hands-free conversation with a voice coach that asks you to read specified sentences, then gives per-sentence and word-level feedback through an Azure Speech Pronunciation Assessment function tool. Supports spoken retries and a WAV-file mode. |
-| [Agent-based transcript refinement, summary, and translation](audio_file_rewrite/README.md) | Transcribe a WAV recording with mai-transcribe-2 and process it with a gpt-5.4 Voice Agent. Includes refinement and translation modes, guidance for adapting the instructions to summarization, and a 60-second input limit. Supports native Windows PowerShell. |
-| [Knowledge, Andrew Dragon HD, and Harry Business](create-agent-with-iq-avatar-voice/README.md) | Portal creation is recommended; optional Python validation/create/readback is included. Supports optional custom photo avatar and Personal Voice workflows. |
+| [Realtime STT agent](realtime_stt/README.md) | Create or reuse a voice-first agent with VAD, disabled LLM responses, MAI Transcribe 2 or Azure Speech, microphone or paced WAV input, and final usage collection with explicit completeness status. |
+| [Agent-based transcript refinement, summary, and translation](audio_transcribe_and_translate/README.md) | Transcribe a WAV recording with mai-transcribe-2 and process it with a gpt-5.4 Voice Agent. Includes refinement and translation modes, guidance for adapting the instructions to summarization, and a 60-second input limit. Supports native Windows PowerShell. |
+| [Knowledge, Andrew Dragon HD, and Harry Business](create_agent_with_iq_avatar_voice/README.md) | Portal creation is recommended; optional Python validation/create/readback is included. Supports optional custom photo avatar and Personal Voice workflows. |
 | [`simple_rest_lifecycle.py`](simple_rest_lifecycle.py) | Create a simple Agent with REST, or retrieve an existing Agent. |
 | [`basic_voice_agent.py`](basic_voice_agent.py) | Create and version a basic Agent, or connect to an existing Agent, then converse through the microphone. |
 | [Foundry GPT Live / OpenAI Python SDK sample](gpt_live/README.md) | Create an English-teacher agent or reuse `AGENT_NAME`, stream microphone audio with Responses delegation, and print the conversation ID and download command after close. |
@@ -33,9 +36,9 @@ shared MCP, and portal workflow, start with the
 | [`voice_agent_with_foundry_iq.py`](voice_agent_with_foundry_iq.py) | Create a Foundry IQ Agent, converse through the microphone, and display tool activity. |
 | [`voice_agent_with_local_function.py`](voice_agent_with_local_function.py) | Execute `add_numbers` in the client, return its output, and hear the response. |
 | [`voice_agent_with_toolbox.py`](voice_agent_with_toolbox.py) | Create a Toolbox Agent, converse through the microphone, and display tool activity. |
-| [Documentation-generated voice web sample](foundry-voice-webrtc/README.md) | Connect a browser to an existing voice Agent with WebSocket audio or experimental WebRTC; standalone Python backend, Azure CLI authentication, and Azure session storage enabled. |
-| [Basic prompt subagent](subagent/voice-subagent-prompt-basic/README.md) | Create a poetry prompt subagent and a voice agent that delegates poem writing to it. |
-| [Hosted GitHub Copilot subagent](subagent/voice-subagent-hosted-agent/README.md) | Create a voice agent that delegates research, learning, and coding tasks to an existing hosted GitHub Copilot agent. |
+| [Documentation-generated voice web sample](foundry_voice_webrtc/README.md) | Connect a browser to an existing voice Agent with WebSocket audio or experimental WebRTC; standalone Python backend, Azure CLI authentication, and Azure session storage enabled. |
+| [Basic prompt subagent](subagent/voice_subagent_prompt_basic/README.md) | Create a poetry prompt subagent and a voice agent that delegates poem writing to it. |
+| [Hosted GitHub Copilot subagent](subagent/voice_subagent_hosted_agent/README.md) | Create a voice agent that delegates research, learning, and coding tasks to an existing hosted GitHub Copilot agent. |
 | [Finance with Handoff](example1_finance_with_handoff/README.md) | Publish Realtime and Cascade Luna variants of one shared Finance handoff graph and run text Voice WebSocket smoke tests. |
 | [Finance with OTP and Officer Search](example2_finance_with_OTP_and_Officer_Search/README.md) | Publish a flat Finance Agent for OTP verification and loan-officer search, then run a text smoke test. |
 | [Elevator Service with Safety, Zendesk, and Handoff](example3_elevator_service_with_safety_zendesk_and_handoff/README.md) | Publish an inbound field-service graph with deterministic safety checks, explicit Zendesk ticket confirmation, exact-ID status queries, and human-assistance routing. |
