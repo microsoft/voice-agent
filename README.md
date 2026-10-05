@@ -14,6 +14,8 @@ This repository is the official community hub for Voice Agent in Foundry Agent S
 
 ## What's New
 
+![What's new: Voice Agent public preview](assets/whats-new.gif)
+
 Voice Agent is now available in **public preview**, making voice a first-class modality in Foundry Agent Service. We've received great feedback from customers and are working with them to move their voice agents into production as we prepare for general availability (GA).
 
 # Voice Agent and Voice Live
