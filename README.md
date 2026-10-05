@@ -46,9 +46,15 @@ Voice Agent is now available in public preview. Customers can start building voi
 
 Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) for voice agent guides, portal links, and runnable samples.
 
-## Voice Agent Video
+## Voice Agent Videos
+
+**Short demo (720p, 1:38)**
 
 https://github.com/user-attachments/assets/6dc991a6-276a-40f5-b6d4-20100d823ca9
+
+**Full walkthrough (1080p, 15:11)**
+
+https://github.com/user-attachments/assets/c62c179a-f181-4d29-ab99-c84dc6091fdd
 
 [Download the short demo (720p, 1:38)](video-assets/voice-agent-short.mp4) · [Download the full walkthrough (1080p, 15:11)](video-assets/voice-agent-foundry-demo.mp4).
 
