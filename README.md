@@ -119,7 +119,7 @@ users and coding agents to the correct entry point.
 > and run all repository commands from WSL. Use the Windows browser to open
 > the resulting `localhost` UI and grant microphone permission.
 
-The standalone [audio rewrite and translation sample](samples/audio_file_rewrite/README.md)
+The standalone [audio rewrite and translation sample](samples/audio_transcribe_and_translate/README.md)
 also supports native Windows PowerShell with Python 3.11+, without WSL.
 
 For an unqualified request such as **"run the UI"** or **"start the portal"**,
@@ -179,7 +179,7 @@ When the user asks to run or debug something from this directory:
    checkout in the WSL filesystem. If the checkout is under `/mnt/c/` or the
    terminal is native Windows, stop and guide the user to clone and reopen the
    repository in WSL2 before continuing. Exception: the standalone
-   `samples/audio_file_rewrite/` sample supports native Windows; follow its README.
+   `samples/audio_transcribe_and_translate/` sample supports native Windows; follow its README.
 2. Select the component from the table above and read its `README.md` before
    running commands.
 3. Treat **UI** without a qualifier as the general [`portal/`](portal/README.md).
@@ -227,7 +227,7 @@ user did not choose.
 The supported repository working environment is Linux. On a Windows computer,
 use **WSL2 for the entire repository workflow**, including the portal, samples,
 MCP, deployment, and validation commands. The standalone
-[`audio_file_rewrite` sample](samples/audio_file_rewrite/README.md) is an exception
+[`audio_transcribe_and_translate` sample](samples/audio_transcribe_and_translate/README.md) is an exception
 and can run and be tested directly in Windows PowerShell:
 
 1. Start a supported WSL2 Linux distribution.
