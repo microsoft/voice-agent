@@ -36,7 +36,7 @@ flowchart TD
 
 ## Prepare your project and assets
 
-Use a Foundry project, not a hub-based project. Follow [subscription setup](../../setup_subscription.md) if a project is not already available. Confirm that the resource and region support the chosen voice and avatar capabilities. Native voice agents are preview.
+Use a Foundry project, not a hub-based project. Follow [subscription setup](../../docs/01_setup_subscription.md) if a project is not already available. Confirm that the resource and region support the chosen voice and avatar capabilities. Native voice agents are preview.
 
 The default Andrew + Standard Harry Business combination needs no personal photo, prompt audio, consent-media upload or asset-training task. Obtain approval for the destination, cost and permissions before uploading Knowledge documents. For optional custom photo avatars and Personal Voice, use your own likeness and voice or those of a person whose explicit authorization and required consent you hold. Keep credentials, consent media, real resource/asset identifiers and local output out of Git.
 
@@ -124,14 +124,14 @@ Use this path when you want a local configuration and explicit native agent IDs/
 Use an isolated environment; the recorded run uses Python 3.13 in WSL Ubuntu. In WSL, open this repository through its `/mnt/c/...` path. From `VoiceAgent`, choose an unused environment path:
 
 ```bash
-VENV="$HOME/.venvs/create-agent-with-iq-avatar-voice"
+VENV="$HOME/.venvs/create_agent_with_iq_avatar_voice"
 if [ -e "$VENV" ] || [ -L "$VENV" ]; then
   printf '%s\n' 'Choose a new environment path; do not overwrite an existing environment.'
 else
   python3.13 -m venv "$VENV" &&
   env -u PIP_EXTRA_INDEX_URL -u PIP_INDEX_URL PIP_CONFIG_FILE=/dev/null \
     "$VENV/bin/python" -m pip install --index-url https://pypi.org/simple \
-    -r samples/create-agent-with-iq-avatar-voice/requirements.txt
+    -r samples/create_agent_with_iq_avatar_voice/requirements.txt
 fi
 ```
 
@@ -140,12 +140,12 @@ After successful installation:
 ```bash
 source "$VENV/bin/activate"
 python -m pip check
-cd samples/create-agent-with-iq-avatar-voice
+cd samples/create_agent_with_iq_avatar_voice
 python -c 'import create_agent; create_agent.require_sdk()'
 python create_agent.py --help
 ```
 
-For an existing verified installation of 2.7.0 or later, activate its environment and skip creation/install. Upgrade older installations with this sample's requirements first. Run the remaining commands from `VoiceAgent/samples/create-agent-with-iq-avatar-voice`. The requirements use `azure-ai-projects>=2.7.0` from PyPI. No `[voice]` extra, PyAudio or Voice Live SDK is needed. Transitive dependencies resolve from the package metadata.
+For an existing verified installation of 2.7.0 or later, activate its environment and skip creation/install. Upgrade older installations with this sample's requirements first. Run the remaining commands from `VoiceAgent/samples/create_agent_with_iq_avatar_voice`. The requirements use `azure-ai-projects>=2.7.0` from PyPI. No `[voice]` extra, PyAudio or Voice Live SDK is needed. Transitive dependencies resolve from the package metadata.
 
 Sign in through Azure CLI or another supported `DefaultAzureCredential` identity before cloud commands. `validate` needs neither credentials nor network access. The CLI does not load or rewrite `.env` files.
 

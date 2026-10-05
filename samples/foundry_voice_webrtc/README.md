@@ -38,7 +38,7 @@ Run from the repository root in PowerShell. Virtual-environment activation is no
 required, avoiding PowerShell script execution-policy issues:
 
 ```powershell
-cd VoiceAgent\samples\foundry-voice-webrtc
+cd VoiceAgent\samples\foundry_voice_webrtc
 az login
 # If necessary: az login --tenant YOUR-TENANT-ID
 # If necessary: az account set --subscription YOUR-SUBSCRIPTION-ID
