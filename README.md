@@ -46,6 +46,14 @@ Voice Agent is now available in public preview. Customers can start building voi
 
 Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) for voice agent guides, portal links, and runnable samples.
 
+## Voice Agent Video
+
+[Download the short demo (720p, 1:38)](video-assets/voice-agent-short.mp4).
+
+[![Voice agents in Microsoft Foundry Agent Service](https://i.ytimg.com/vi/u8usaIQMR5s/hqdefault.jpg)](https://www.youtube.com/watch?v=u8usaIQMR5s&t=660s)
+
+[Watch on YouTube, starting at 11:00](https://www.youtube.com/watch?v=u8usaIQMR5s&t=660s).
+
 ## Voice Agent Blogs
 
 - 2026.09 [**Ship agents faster with expanded model choice, voice agents, and continuous optimization**](https://azure.microsoft.com/en-us/blog/ship-ai-agents-faster-with-new-capabilities-in-microsoft-foundry-expanded-model-choice-voice-agents-and-built-in-optimization/) — Overview of the latest Foundry Agents capabilities, including a Voice Agent video overview.
