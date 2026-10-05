@@ -12,6 +12,10 @@ This repository is the official community hub for Voice Agent in Foundry Agent S
 
 🧪 Samples — Hands-on samples and extended solutions
 
+## What's New ![New](assets/whats-new-animated.gif)
+
+Voice Agent is now available in **public preview**, making voice a first-class modality in Foundry Agent Service. We've received great feedback from customers and are working with them to move their voice agents into production as we prepare for general availability (GA).
+
 # Voice Agent and Voice Live
 
 [Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live) is the foundation for real-time voice interaction, and Voice Agent builds on that foundation to deliver complete voice-first agents. Voice Live handles the real-time voice experience, while Voice Agent adds the intelligence, tools, knowledge, and orchestration required to build end-to-end agentic applications.
