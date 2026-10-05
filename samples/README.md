@@ -23,6 +23,7 @@ shared MCP, and portal workflow, start with the
 
 | Sample | Lifecycle |
 | --- | --- |
+| [Realtime STT agent](realtime_stt/README.md) | Create or reuse a voice-first agent with VAD, disabled LLM responses, MAI Transcribe 2 or Azure Speech, microphone or paced WAV input, and final usage collection with explicit completeness status. |
 | [Agent-based transcript refinement, summary, and translation](audio_file_rewrite/README.md) | Transcribe a WAV recording with mai-transcribe-2 and process it with a gpt-5.4 Voice Agent. Includes refinement and translation modes, guidance for adapting the instructions to summarization, and a 60-second input limit. Supports native Windows PowerShell. |
 | [Knowledge, Andrew Dragon HD, and Harry Business](create-agent-with-iq-avatar-voice/README.md) | Portal creation is recommended; optional Python validation/create/readback is included. Supports optional custom photo avatar and Personal Voice workflows. |
 | [`simple_rest_lifecycle.py`](simple_rest_lifecycle.py) | Create a simple Agent with REST, or retrieve an existing Agent. |
