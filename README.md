@@ -83,7 +83,7 @@ Speech-to-speech models can achieve latency as low as **500 ms** on service side
 
 ### Speech and model quality
 
-Voice Agent brings together advanced speech and language models, including [GPT Realtime](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to), [GPT Live](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/gpt-live), Azure speech-to-text and [HD voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=text-to-speech), and MAI Transcribe and MAI Voice. Choose the combination that best fits your languages, domain, and conversational experience.
+Voice Agent brings together advanced speech and language models, including [GPT Realtime](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to), [GPT Live](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/gpt-live), Azure speech-to-text and [HD voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=text-to-speech), and MAI Transcribe and MAI Voice. Choose the combination that best fits your languages, domain, and conversational experience.  For more resources and samples for Azure Speech HD / MAI voices, visit the [Azure Text-to-Speech repository](https://github.com/Azure-Samples/Cognitive-Speech-TTS).
 
 Recent speech benchmark references:
 
