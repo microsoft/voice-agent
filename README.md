@@ -56,8 +56,6 @@ https://github.com/user-attachments/assets/6dc991a6-276a-40f5-b6d4-20100d823ca9
 
 https://github.com/user-attachments/assets/c62c179a-f181-4d29-ab99-c84dc6091fdd
 
-The full walkthrough is [Build, test, monitor and optimize a voice agent in Microsoft Foundry](https://www.youtube.com/watch?v=u8usaIQMR5s). Both MP4 assets are stored with Git LFS.
-
 ## Voice Agent Blogs
 
 - 2026.09 [**Ship agents faster with expanded model choice, voice agents, and continuous optimization**](https://azure.microsoft.com/en-us/blog/ship-ai-agents-faster-with-new-capabilities-in-microsoft-foundry-expanded-model-choice-voice-agents-and-built-in-optimization/) — Overview of the latest Foundry Agents capabilities, including a Voice Agent video overview.
