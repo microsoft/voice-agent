@@ -48,7 +48,11 @@ Explore [Voice Agent in Foundry Agent Service](#voice-agent-extended-samples) fo
 
 ## Voice Agent Video
 
-[Download the short demo (720p, 1:38)](video-assets/voice-agent-short.mp4).
+https://github.com/user-attachments/assets/6dc991a6-276a-40f5-b6d4-20100d823ca9
+
+[Download the short demo (720p, 1:38)](video-assets/voice-agent-short.mp4) · [Download the full walkthrough (1080p, 15:11)](video-assets/voice-agent-foundry-demo.mp4).
+
+The full walkthrough is [Build, test, monitor and optimize a voice agent in Microsoft Foundry](https://www.youtube.com/watch?v=u8usaIQMR5s). Both MP4 assets are stored with Git LFS.
 
 [![Voice agents in Microsoft Foundry Agent Service](https://i.ytimg.com/vi/u8usaIQMR5s/hqdefault.jpg)](https://www.youtube.com/watch?v=u8usaIQMR5s&t=660s)
 
