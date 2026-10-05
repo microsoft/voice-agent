@@ -232,6 +232,8 @@ Prosody scores are never invented if omitted by the service.
 - A session is capped at 1000 completed tool calls. Restart the sample for a
   new lesson if that limit is reached.
 
+Known speech-rendering issues and follow-up work are tracked in [TODO.md](TODO.md).
+
 ## Validate
 
 Offline tests use controlled audio and service boundaries, not a real Speech
