@@ -129,7 +129,7 @@ the configured Azure project.
 ### Windows PowerShell (no WSL)
 
 ```powershell
-cd D:\Agent\Cognitive-Speech-TTS\VoiceAgent\samples\audio_file_rewrite
+cd D:\Agent\Cognitive-Speech-TTS\VoiceAgent\samples\audio_transcribe_and_translate
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
