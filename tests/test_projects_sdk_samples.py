@@ -199,31 +199,44 @@ def audio_metadata(item_id=None, blob_uri=None):
 
 
 class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
-    def test_released_sdk_requirements(self):
-        self.assertIn(
-            "voice", metadata.metadata("azure-ai-projects").get_all("Provides-Extra")
+    def test_released_sdk_requirements(self: ProjectsSDKSampleTests) -> None:
+        """Verify released SDK requirements at the current sample folder paths.
+
+        Returns
+        -------
+        None
+            Assertions verify the expected SDK package and voice extra.
+        """
+        provided_extras = (
+            metadata.metadata("azure-ai-projects").get_all("Provides-Extra") or []
         )
+        self.assertIn("voice", provided_extras)
         voice_requirements = {
             "requirements.txt",
             "subagent/client/requirements.txt",
-            "subagent/voice-subagent-prompt-basic/requirements.txt",
-            "subagent/voice-subagent-hosted-agent/requirements.txt",
+            "subagent/voice_subagent_prompt_basic/requirements.txt",
+            "subagent/voice_subagent_hosted_agent/requirements.txt",
         }
         management_requirements = {
-            "create-agent-with-iq-avatar-voice/requirements.txt",
+            "create_agent_with_iq_avatar_voice/requirements.txt",
             "example1_finance_with_handoff/requirements.txt",
             "example2_finance_with_OTP_and_Officer_Search/requirements.txt",
         }
         for relative_path in sorted(voice_requirements | management_requirements):
             path = ROOT / "samples" / relative_path
             requirements = path.read_text(encoding="utf-8").splitlines()
-            projects = [
-                line for line in requirements
-                if "azure-ai-projects" in line or "azure_ai_projects" in line
-            ]
+            project_requirements = []
+            for requirement in requirements:
+                if (
+                    "azure-ai-projects" in requirement
+                    or "azure_ai_projects" in requirement
+                ):
+                    project_requirements.append(requirement)
             with self.subTest(path=relative_path):
                 extra = "[voice]" if relative_path in voice_requirements else ""
-                self.assertEqual(projects, [f"azure-ai-projects{extra}>=2.7.0"])
+                self.assertEqual(
+                    project_requirements, [f"azure-ai-projects{extra}>=2.7.0"]
+                )
 
     def test_supporting_scripts_import(self):
         with patch.dict(os.environ, {"PYTHON_DOTENV_DISABLED": "1"}):

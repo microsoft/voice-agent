@@ -167,7 +167,7 @@ lifecycle. Do not run a second manual portal after this quickstart.
 | Run the GPT Live terminal sample | [`samples/gpt_live/README.md`](samples/gpt_live/README.md) | Create or reuse a GPT Live agent, stream microphone audio with the OpenAI SDK, and view independently scrollable GPT Live, delegation, and user transcripts |
 | Run the complete Finance workflow | [`docs/README.md`](docs/README.md) | Ordered subscription, MCP, sample, portal, and debugging guides |
 | Work on or deploy the Finance MCP | [`shared_mcp/README.md`](shared_mcp/README.md) | Shared MCP image, Finance routes, local Dev Tunnel hosting, and Azure Container Apps deployment |
-| Create an IQ + voice + avatar Agent | [`samples/create-agent-with-iq-avatar-voice/README.md`](samples/create-agent-with-iq-avatar-voice/README.md) | Portal-first Andrew Dragon HD, Harry Business, Knowledge IQ, and optional Python creation |
+| Create an IQ + voice + avatar Agent | [`samples/create_agent_with_iq_avatar_voice/README.md`](samples/create_agent_with_iq_avatar_voice/README.md) | Portal-first Andrew Dragon HD, Harry Business, Knowledge IQ, and optional Python creation |
 | Inspect SDK package information | [`dist/README.md`](dist/README.md) | Public Python and .NET SDK dependencies and historical preview build records |
 | Use the coding-agent workflows | [`skills/`](skills/) | Voice Agent creation, IQ/Toolbox provisioning, and local-session debugging |
 
