@@ -121,7 +121,9 @@ users and coding agents to the correct entry point.
 
 The standalone [audio rewrite and translation sample](samples/audio_transcribe_and_translate/README.md)
 and [language-learning sample](samples/language_learning/README.md) also support
-native Windows PowerShell with Python 3.11+, without WSL.
+native Windows PowerShell with Python 3.11+, without WSL. The
+[Data Zone and regional realtime sample](samples/realtime_datazone_voice_agent.md)
+supports native Windows PowerShell using the common Python sample prerequisites.
 
 For an unqualified request such as **"run the UI"** or **"start the portal"**,
 use [`portal/`](portal/README.md). It is the general Voice Agent UI and runs on
@@ -165,6 +167,7 @@ lifecycle. Do not run a second manual portal after this quickstart.
 | --- | --- | --- |
 | Run the general Voice Agent UI | [`portal/README.md`](portal/README.md) | Agent editor, YAML version editing, Templates, voice playground, and standalone WebRTC page |
 | Run Python or .NET samples | [`samples/README.md`](samples/README.md) | Common Python setup, microphone samples, REST lifecycle, IQ, Toolbox, local functions, downloads, and the C# sample |
+| Run Data Zone and regional realtime voice agents | [`samples/realtime_datazone_voice_agent.md`](samples/realtime_datazone_voice_agent.md) | East US 2 `gpt-realtime-2.1-datazone` with US inference, Japan East `azure-realtime` with confirmed GPU routing, and eligible Central India `gpt-realtime`; model-specific voices and PowerShell microphone setup |
 | Run the GPT Live terminal sample | [`samples/gpt_live/README.md`](samples/gpt_live/README.md) | Create or reuse a GPT Live agent, stream microphone audio with the OpenAI SDK, and view independently scrollable GPT Live, delegation, and user transcripts |
 | Run the complete Finance workflow | [`docs/README.md`](docs/README.md) | Ordered subscription, MCP, sample, portal, and debugging guides |
 | Work on or deploy the Finance MCP | [`shared_mcp/README.md`](shared_mcp/README.md) | Shared MCP image, Finance routes, local Dev Tunnel hosting, and Azure Container Apps deployment |
@@ -180,8 +183,9 @@ When the user asks to run or debug something from this directory:
    checkout in the WSL filesystem. If the checkout is under `/mnt/c/` or the
    terminal is native Windows, stop and guide the user to clone and reopen the
    repository in WSL2 before continuing. Exceptions: the standalone
-   `samples/audio_transcribe_and_translate/` and `samples/language_learning/` samples support
-   native Windows; follow their READMEs.
+   `samples/audio_transcribe_and_translate/`, `samples/language_learning/`, and
+   `samples/realtime_datazone_voice_agent.py` samples support native Windows;
+   follow their linked sample guides.
 2. Select the component from the table above and read its `README.md` before
    running commands.
 3. Treat **UI** without a qualifier as the general [`portal/`](portal/README.md).
