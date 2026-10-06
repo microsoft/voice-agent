@@ -111,19 +111,8 @@ the Finance reference workflow, and its shared MCP service. Detailed setup and
 operation instructions live with the component that owns them; this file routes
 users and coding agents to the correct entry point.
 
-> [!IMPORTANT]
-> **On Windows, use WSL2 for this repository.** Do not run the repository
-> setup or runtime workflow from native PowerShell or Command Prompt, and do
-> not use a checkout mounted under `/mnt/c/`. Start WSL2, clone the repository
-> into the WSL Linux filesystem (for example, `~/src/voice-agent`),
-> and run all repository commands from WSL. Use the Windows browser to open
-> the resulting `localhost` UI and grant microphone permission.
-
-The standalone [audio rewrite and translation sample](samples/audio_transcribe_and_translate/README.md)
-and [language-learning sample](samples/language_learning/README.md) also support
-native Windows PowerShell with Python 3.11+, without WSL. The
-[Data Zone and regional realtime sample](samples/realtime_datazone_voice_agent.md)
-supports native Windows PowerShell using the common Python sample prerequisites.
+See [Platform support](#platform-support) for operating-system requirements and
+standalone sample exceptions.
 
 For an unqualified request such as **"run the UI"** or **"start the portal"**,
 use [`portal/`](portal/README.md). It is the general Voice Agent UI and runs on
@@ -133,7 +122,7 @@ the request mentions Finance, Templates, or the shared MCP.
 ### Portal + local MCP quickstart
 
 Use this path when the portal must publish or run the checked-in Templates.
-It is the recommended end-to-end Linux/WSL workflow:
+It is the recommended end-to-end workflow:
 
 ```bash
 cd /path/to/voice-agent
@@ -167,7 +156,8 @@ lifecycle. Do not run a second manual portal after this quickstart.
 | --- | --- | --- |
 | Run the general Voice Agent UI | [`portal/README.md`](portal/README.md) | Agent editor, YAML version editing, Templates, voice playground, and standalone WebRTC page |
 | Run Python or .NET samples | [`samples/README.md`](samples/README.md) | Common Python setup, microphone samples, REST lifecycle, IQ, Toolbox, local functions, downloads, and the C# sample |
-| Run Data Zone and regional realtime voice agents | [`samples/realtime_datazone_voice_agent.md`](samples/realtime_datazone_voice_agent.md) | East US 2 `gpt-realtime-2.1-datazone` with US inference, Japan East `azure-realtime` with confirmed GPU routing, and eligible Central India `gpt-realtime`; model-specific voices and PowerShell microphone setup |
+| Run realtime speech transcription | [`samples/realtime_stt/README.md`](samples/realtime_stt/README.md) | MAI Transcribe 2 or Azure Speech with VAD, microphone or WAV input, disabled LLM responses, and reported session usage |
+| Run Data Zone and regional realtime voice agents | [`samples/realtime_datazone_voice_agent.md`](samples/realtime_datazone_voice_agent.md) | East US 2 `gpt-realtime-2.1-datazone` with US inference, Japan East `azure-realtime` with confirmed GPU routing, and eligible Central India `gpt-realtime`; model-specific voices and microphone setup |
 | Run the GPT Live terminal sample | [`samples/gpt_live/README.md`](samples/gpt_live/README.md) | Create or reuse a GPT Live agent, stream microphone audio with the OpenAI SDK, and view independently scrollable GPT Live, delegation, and user transcripts |
 | Run the complete Finance workflow | [`docs/README.md`](docs/README.md) | Ordered subscription, MCP, sample, portal, and debugging guides |
 | Work on or deploy the Finance MCP | [`shared_mcp/README.md`](shared_mcp/README.md) | Shared MCP image, Finance routes, local Dev Tunnel hosting, and Azure Container Apps deployment |
@@ -179,13 +169,8 @@ lifecycle. Do not run a second manual portal after this quickstart.
 
 When the user asks to run or debug something from this directory:
 
-1. Verify that commands will run on Linux. For a Windows user, require a WSL2
-   checkout in the WSL filesystem. If the checkout is under `/mnt/c/` or the
-   terminal is native Windows, stop and guide the user to clone and reopen the
-   repository in WSL2 before continuing. Exceptions: the standalone
-   `samples/audio_transcribe_and_translate/`, `samples/language_learning/`, and
-   `samples/realtime_datazone_voice_agent.py` samples support native Windows;
-   follow their linked sample guides.
+1. Verify the environment follows [Platform support](#platform-support) for the
+   selected workflow before running commands.
 2. Select the component from the table above and read its `README.md` before
    running commands.
 3. Treat **UI** without a qualifier as the general [`portal/`](portal/README.md).
@@ -232,10 +217,15 @@ user did not choose.
 
 The supported repository working environment is Linux. On a Windows computer,
 use **WSL2 for the entire repository workflow**, including the portal, samples,
-MCP, deployment, and validation commands. The standalone
-[`audio_transcribe_and_translate` sample](samples/audio_transcribe_and_translate/README.md) and
-[`language_learning` sample](samples/language_learning/README.md) are exceptions
-and can run and be tested directly in Windows PowerShell.
+MCP, deployment, and validation commands, except for these standalone samples
+that support native Windows PowerShell:
+
+| Sample | Prerequisites and commands |
+| --- | --- |
+| [Audio rewrite and translation](samples/audio_transcribe_and_translate/README.md) | Python 3.11+; follow the sample guide. |
+| [Language learning](samples/language_learning/README.md) | Python 3.11+; follow the sample guide. |
+| [Realtime STT](samples/realtime_stt/README.md) | Python 3.13+; follow the sample guide. |
+| [Data Zone and regional realtime](samples/realtime_datazone_voice_agent.md) | Follow the common Python sample prerequisites and the sample's PowerShell commands. |
 
 For the other repository workflows on Windows:
 
@@ -256,11 +246,8 @@ For the other repository workflows on Windows:
 6. Open the resulting `localhost` URL in the Windows browser; browser
    microphone permission remains on the Windows side.
 
-Some individual component documents retain native PowerShell commands because
-their code can run independently on Windows. They are not the recommended or
-supported end-to-end repository workflow. Except for the standalone samples above,
-native Windows execution, WSL1, and
-running the checkout from `/mnt/c/` are outside the supported path.
+Other component documents may retain PowerShell commands, but those do not imply
+support for the end-to-end repository workflow.
 
 ### Directory map
 
