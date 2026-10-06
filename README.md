@@ -111,8 +111,8 @@ the Finance reference workflow, and its shared MCP service. Detailed setup and
 operation instructions live with the component that owns them; this file routes
 users and coding agents to the correct entry point.
 
-See [Platform support](#platform-support) for operating-system requirements and
-standalone sample exceptions.
+See [Platform support](#platform-support) for workflow-specific operating-system
+requirements.
 
 For an unqualified request such as **"run the UI"** or **"start the portal"**,
 use [`portal/`](portal/README.md). It is the general Voice Agent UI and runs on
@@ -215,39 +215,17 @@ user did not choose.
 
 ### Platform support
 
-The supported repository working environment is Linux. On a Windows computer,
-use **WSL2 for the entire repository workflow**, including the portal, samples,
-MCP, deployment, and validation commands, except for these standalone samples
-that support native Windows PowerShell:
+**On Windows, WSL2 is required for the combined portal + local MCP automation:**
 
-| Sample | Prerequisites and commands |
-| --- | --- |
-| [Audio rewrite and translation](samples/audio_transcribe_and_translate/README.md) | Python 3.11+; follow the sample guide. |
-| [Language learning](samples/language_learning/README.md) | Python 3.11+; follow the sample guide. |
-| [Realtime STT](samples/realtime_stt/README.md) | Python 3.13+; follow the sample guide. |
-| [Data Zone and regional realtime](samples/realtime_datazone_voice_agent.md) | Follow the common Python sample prerequisites and the sample's PowerShell commands. |
+- `scripts/setup-local-examples.sh`: installs Linux tools and prepares the stack.
+- `scripts/manage-local-mcp-and-ui.sh`: starts, stops, and monitors Linux processes.
 
-For the other repository workflows on Windows:
+Run this workflow from a checkout in the WSL Linux filesystem, such as `~/src/`,
+not `/mnt/c/`, and authenticate Azure CLI inside WSL.
 
-1. Start a supported WSL2 Linux distribution.
-2. Clone this repository again into the WSL filesystem, for example under
-   `~/src/`. Do not run the workflow from a Windows checkout mounted under
-   `/mnt/c/`.
-3. Install Git, Python 3.10+, and Azure CLI inside WSL, then authenticate Azure
-   CLI. The local setup script can install repository-local Node.js 22 and Dev
-   Tunnel CLI copies. Azure Developer CLI is needed only for deployment.
-   Windows-side CLI login state is not assumed to be shared.
-4. The local setup, MCP E2E, and lifecycle scripts use native Python and never
-   invoke Docker. Install Docker only when deliberately running the separate
-   `shared_mcp/scripts/package.sh` image-packaging command; Azure Container
-   Apps deployment uses a remote build.
-5. Open the WSL checkout with VS Code Remote - WSL and run all commands from
-   its WSL terminal.
-6. Open the resulting `localhost` URL in the Windows browser; browser
-   microphone permission remains on the Windows side.
-
-Other component documents may retain PowerShell commands, but those do not imply
-support for the end-to-end repository workflow.
+**Other standalone Python and .NET samples can run natively on Windows.**
+Follow each sample's prerequisites and commands. Bash-only wrappers still need
+Bash/Unix tooling or equivalent PowerShell commands.
 
 ### Directory map
 
