@@ -25,6 +25,7 @@ Use underscores between words in sample directory names, including subagent exam
 
 | Sample | Lifecycle |
 | --- | --- |
+| [Language learning with pronunciation assessment](language_learning/README.md) | Have a hands-free conversation with a voice coach that asks you to read specified sentences, then gives per-sentence and word-level feedback through an Azure Speech Pronunciation Assessment function tool. Supports spoken retries and a WAV-file mode. |
 | [Realtime STT agent](realtime_stt/README.md) | Create or reuse a voice-first agent with VAD, disabled LLM responses, MAI Transcribe 2 or Azure Speech, microphone or paced WAV input, and final usage collection with explicit completeness status. |
 | [Agent-based transcript refinement, summary, and translation](audio_transcribe_and_translate/README.md) | Transcribe a WAV recording with mai-transcribe-2 and process it with a gpt-5.4 Voice Agent. Includes refinement and translation modes, guidance for adapting the instructions to summarization, and a 60-second input limit. Supports native Windows PowerShell. |
 | [Knowledge, Andrew Dragon HD, and Harry Business](create_agent_with_iq_avatar_voice/README.md) | Portal creation is recommended; optional Python validation/create/readback is included. Supports optional custom photo avatar and Personal Voice workflows. |
@@ -64,8 +65,8 @@ For Central India, use the exact `gpt-realtime` model, not `gpt-realtime-2.1`
 does not list Agent support in Central India; confirm enablement before running
 this voice-first Agent sample.
 
-The Finance, Elevator, and documentation-generated voice web samples use their
-own `requirements.txt` files. The voice web sample uses a standalone HTTP/WebSocket
+The Finance, Elevator, language-learning, and documentation-generated voice web
+samples use their own `requirements.txt` files. The voice web sample uses a standalone HTTP/WebSocket
 backend and does not require the Projects SDK; follow its README for setup.
 The common Python SDK samples require `azure-ai-projects>=2.7.0` from PyPI.
 
