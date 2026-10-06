@@ -215,56 +215,17 @@ user did not choose.
 
 ### Platform support
 
-**Standalone samples do not inherently require WSL.** Their Python and .NET
-runtimes are not Linux-specific. On Windows, use native PowerShell and follow
-the selected sample's package, audio-device, Azure identity, and service-access
-prerequisites. Bash examples in a sample guide may need equivalent PowerShell
-syntax; that alone is not a Linux runtime requirement.
+**On Windows, WSL2 is required for the combined portal + local MCP automation:**
 
-| Sample group | Native Windows guidance |
-| --- | --- |
-| [Common Python samples](samples/README.md) | Python 3.10+; includes basic voice, MCP, Foundry IQ, local functions, Toolbox, REST lifecycle, and downloaders. Microphone samples also need PyAudio and working audio devices. |
-| [Data Zone and regional realtime](samples/realtime_datazone_voice_agent.md) | Uses the common Python prerequisites and provides PowerShell commands without activation. |
-| [Audio rewrite and translation](samples/audio_transcribe_and_translate/README.md), [language learning](samples/language_learning/README.md) | Python 3.11+; follow each sample's separate dependencies and audio requirements. |
-| [Realtime STT](samples/realtime_stt/README.md) | Python 3.13+; supports microphone or WAV input. |
-| [GPT Live](samples/gpt_live/README.md) | Python 3.11+; provides native PowerShell setup and terminal microphone commands. |
-| [Prompt subagent](samples/subagent/voice_subagent_prompt_basic/README.md), [hosted subagent](samples/subagent/voice_subagent_hosted_agent/README.md), [microphone client](samples/subagent/client/README.md) | Python 3.10+; provide PowerShell setup and client commands. |
-| [C#](samples/CSharp/README.md) | .NET 8+; runs with PowerShell and does not require microphone or speaker access. |
-| [Foundry voice web sample](samples/foundry_voice_webrtc/README.md) | Python 3.11+ and a browser; local setup and cloud deployment have PowerShell commands. Its Linux container image does not require WSL on the local host. |
-| [IQ, voice, and avatar creation](samples/create_agent_with_iq_avatar_voice/README.md) | The Python validator and SDK creation client have no Linux-only dependency; the recorded WSL run in its guide is not a requirement. |
-| [Finance handoff](samples/example1_finance_with_handoff/README.md), [Finance OTP](samples/example2_finance_with_OTP_and_Officer_Search/README.md), [Elevator](samples/example3_elevator_service_with_safety_zendesk_and_handoff/README.md) | Python publish/check/connect/run clients do not require WSL when their MCP endpoint and Project connection are already configured. Bundled MCP automation is a separate workflow. |
+- `scripts/setup-local-examples.sh`: installs Linux tools and prepares the stack.
+- `scripts/manage-local-mcp-and-ui.sh`: starts, stops, and monitors Linux processes.
 
-This distinguishes runtime dependencies from a guarantee that every live Azure,
-microphone, or preview feature has been validated on every operating system.
+Run this workflow from a checkout in the WSL Linux filesystem, such as `~/src/`,
+not `/mnt/c/`, and authenticate Azure CLI inside WSL.
 
-**The checked-in combined portal + local MCP automation requires Linux; on
-Windows, use WSL2.** `scripts/setup-local-examples.sh` installs Linux x64 tools
-and assumes Unix virtual-environment paths. `scripts/manage-local-mcp-and-ui.sh`
-uses Linux `/proc`, process groups, and `setsid`. This requirement applies to
-those scripts and the combined quickstart, not to all samples.
-
-Other `.sh` wrappers, such as `portal/run.sh` and the shared MCP deployment
-scripts, require Bash/Unix tooling as written. Do not infer a Linux requirement
-for the underlying Python application merely from a Bash launch command.
-
-For the Linux-dependent automation on Windows:
-
-1. Start a supported WSL2 Linux distribution.
-2. Clone this repository again into the WSL filesystem, for example under
-   `~/src/`. Do not run the workflow from a Windows checkout mounted under
-   `/mnt/c/`.
-3. Install Git, Python 3.10+, and Azure CLI inside WSL, then authenticate Azure
-   CLI. The local setup script can install repository-local Node.js 22 and Dev
-   Tunnel CLI copies. Azure Developer CLI is needed only for deployment.
-   Windows-side CLI login state is not assumed to be shared.
-4. The local setup, MCP E2E, and lifecycle scripts use native Python and never
-   invoke Docker. Install Docker only when deliberately running the separate
-   `shared_mcp/scripts/package.sh` image-packaging command; Azure Container
-   Apps deployment uses a remote build.
-5. Open the WSL checkout with VS Code Remote - WSL and run all commands from
-   its WSL terminal.
-6. Open the resulting `localhost` URL in the Windows browser; browser
-   microphone permission remains on the Windows side.
+**Other standalone Python and .NET samples can run natively on Windows.**
+Follow each sample's prerequisites and commands. Bash-only wrappers still need
+Bash/Unix tooling or equivalent PowerShell commands.
 
 ### Directory map
 
