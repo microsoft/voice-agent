@@ -26,6 +26,8 @@ class DatazoneSampleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored["kind"], "voice")
         self.assertEqual(stored["model_type"], "managed")
         self.assertEqual(stored["instructions"], sample.INSTRUCTIONS)
+        self.assertEqual(stored["audio"]["output"]["voice"], "en-US-Ava:DragonHDLatestNeural")
+        self.assertEqual(stored["audio"]["output"]["voice_type"], "azure-standard")
         self.assertTrue(stored["store"])
 
     def test_azure_realtime_native_voice(self):
@@ -83,7 +85,7 @@ class DatazoneSampleTests(unittest.IsolatedAsyncioTestCase):
         stored = definition.as_dict()
         self.assertEqual(stored["model"], "gpt-realtime")
         self.assertEqual(stored["model_type"], "managed")
-        self.assertEqual(stored["audio"]["output"]["voice"], "en-US-AvaNeural")
+        self.assertEqual(stored["audio"]["output"]["voice"], "en-IN-Diya:DragonHDLatestNeural")
         self.assertEqual(stored["audio"]["output"]["voice_type"], "azure-standard")
         with self.assertRaises(ValueError):
             sample.validate_definition(definition)

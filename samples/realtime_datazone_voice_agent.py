@@ -32,7 +32,14 @@ def build_definition(model: str = MODEL) -> VoiceAgentDefinition:
     voice = (
         {"type": "azure-realtime-native", "name": "ava"}
         if model == "azure-realtime"
-        else {"type": "azure-standard", "name": "en-US-AvaNeural"}
+        else {
+            "type": "azure-standard",
+            "name": (
+                "en-IN-Diya:DragonHDLatestNeural"
+                if model == "gpt-realtime"
+                else "en-US-Ava:DragonHDLatestNeural"
+            ),
+        }
     )
     return VoiceAgentDefinition(
         {

@@ -3,12 +3,22 @@
 This sample publishes a **`kind: voice`** Foundry Agent using the exact managed
 model **`gpt-realtime-2.1-datazone`**, then opens a hands-free microphone session.
 It uses 24 kHz mono PCM audio, automatic voice activity detection, interruption,
-user/assistant transcripts, and an American English Azure Speech voice.
+user/assistant transcripts, and the American English Azure Speech HD voice
+`en-US-Ava:DragonHDLatestNeural`.
 It reuses the basic sample's microphone capture and playback implementation.
 An explicit `--model azure-realtime` option uses Azure Realtime with its required
 native `ava` voice instead; the default remains GPT Realtime 2.1 Data Zone.
 An explicit `--model gpt-realtime` option targets an eligible Central India
 Project using the Standard (regional) model listed for that region.
+
+| Model | Output voice | Voice type |
+| --- | --- | --- |
+| `gpt-realtime-2.1-datazone` | `en-US-Ava:DragonHDLatestNeural` | `azure-standard` (Azure Speech HD) |
+| `azure-realtime` | `ava` | `azure-realtime-native` |
+| `gpt-realtime` | `en-IN-Diya:DragonHDLatestNeural` | `azure-standard` (Azure Speech HD) |
+
+These voices are set when creating an Agent. Existing Agents retain their stored
+voice settings; run without `--agent-name` to create an Agent with the new defaults.
 
 ## Select the model for your Project region
 
@@ -159,7 +169,8 @@ $env:AZURE_VOICE_AGENTS_ENDPOINT = "https://<centralindia-account>.services.ai.a
 ```
 
 The sample uses the managed `gpt-realtime` model and Azure standard
-`en-US-AvaNeural` voice. Resource region and conversation language are independent.
+`en-IN-Diya:DragonHDLatestNeural` HD voice. Resource region and conversation
+language are independent.
 Always repeat `--model gpt-realtime` when reusing this agent.
 
 The identity needs Agent data-plane permissions. The agent is retained and
