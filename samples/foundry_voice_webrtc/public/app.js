@@ -115,6 +115,23 @@ function waitForIce(peer, signal) {
     if (signal.aborted) aborted();
   });
 }
+async function connectWebRtc(session) {
+  let offer, sent = false;
+  const sendOffer = ws => {
+    if (call !== session || !offer || sent || ws.readyState !== WebSocket.OPEN) return;
+    sent = true;
+    ws.send(JSON.stringify({type:'rtc.call.sdp.create', sdp_offer:offer}));
+  };
+  // Authenticate and connect to Azure while the browser gathers ICE candidates.
+  openSocket(session, sendOffer);
+  state('Gathering ICE candidates', 'Preparing direct audio while connecting to Azure.', 'Connecting');
+  await session.peer.setLocalDescription(await session.peer.createOffer());
+  await waitForIce(session.peer, session.abort.signal);
+  if (call !== session) return;
+  offer = session.peer.localDescription.sdp;
+  state('Connecting direct audio', 'Exchanging the SDP offer and establishing the media connection.', 'Connecting');
+  sendOffer(session.ws);
+}
 async function handleEvent(session, event) {
   if (call !== session) return;
   const type = event.type || '';
@@ -219,10 +236,7 @@ async function start() {
     };
     // Required in the offer. Events use the signaling socket to avoid duplicate transcripts.
     session.channel = peer.createDataChannel('voice-live-events');
-    await peer.setLocalDescription(await peer.createOffer());
-    await waitForIce(peer, session.abort.signal);
-    if (call !== session) return;
-    openSocket(session, ws => ws.send(JSON.stringify({type:'rtc.call.sdp.create',sdp_offer:peer.localDescription.sdp})));
+    await connectWebRtc(session);
   } catch (error) {
     if (error.name === 'NotAllowedError') error = new Error('Microphone access was denied. Allow it in your browser’s site permissions and try again.');
     fail(session,error);

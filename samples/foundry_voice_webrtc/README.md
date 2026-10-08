@@ -173,6 +173,9 @@ the availability status of the WebRTC transport.
 - **WebRTC:** adds `transport=webrtc`. The backend relays `rtc.call.sdp.create`
   with `sdp_offer` and receives `rtc.call.sdp.created` with `sdp_answer`. Audio
   travels over WebRTC; PCM deltas are filtered to avoid duplicate playback.
+  The browser opens the signaling socket while gathering ICE candidates, so
+  backend authentication and Azure connection setup overlap with ICE gathering.
+  The complete SDP offer is sent only after ICE gathering and socket opening.
 - **Text (both transports):** the browser sends a user `conversation.item.create`
   with one `input_text` content part, followed by `response.create`, through the
   same backend socket, selecting `output_modalities: ["text"]` for typed turns.
@@ -195,6 +198,8 @@ above, not the separate Azure OpenAI `/openai/v1/realtime/calls` flow.
 | OS denied outbound connection | Run in a permitted environment or ask your administrator to allow Python HTTPS access. |
 | WebSocket audio-format error | Set input/output to mono PCM16 at 24 kHz in the saved agent. |
 | ICE gathering timeout | Check STUN/TURN/firewall settings, or use WebSocket. `ICE_SERVERS_JSON=[]` disables external ICE servers but may limit connectivity. |
+| Slow WebRTC startup | Check the ICE servers for invalid hostnames, placeholder values, or blocked STUN/TURN ports. Failed lookups can add seconds before signaling. The deployment script forwards `ICE_SERVERS_JSON` from `.env`; use valid servers, or `[]` only if your network supports direct connectivity. |
+| Slow first request after inactivity | ACA uses `minReplicas=0` and may cold-start. Subsequent warm requests are faster. Keeping one replica warm avoids scale-to-zero cold starts but adds ongoing compute cost. |
 | Silent output | Check the output device and enable speaker audio if autoplay is blocked. |
 | No user transcript / automatic reply | Enable transcription / server-side turn detection in Foundry. |
 
