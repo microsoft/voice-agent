@@ -2,9 +2,9 @@
 
 This AI-assisted sample was generated starting from the Microsoft Learn
 [Create a voice-based prompt agent quickstart](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/prompt-voice-agent?pivots=portal)
-and extended with a browser UI, WebSocket audio, and experimental WebRTC support.
-It is a companion implementation, not code copied verbatim from the documentation
-or a guarantee of support for every preview transport.
+and extended with a browser UI, WebSocket audio, and WebRTC support.
+Both WebSocket and WebRTC transports are generally available (GA).
+This is a companion implementation, not code copied verbatim from the documentation.
 
 The app connects to an **existing saved Foundry voice agent**. It does not create,
 update, or delete agents. The agent retains its saved instructions, model, and
@@ -17,7 +17,7 @@ and needs no build step. A Python backend keeps Azure credentials out of the bro
 | Transport | Audio path | Requirements |
 | --- | --- | --- |
 | WebSocket (default) | Browser → local backend → Azure; mono PCM16 at 24 kHz | Outbound secure WebSocket/HTTPS; no ICE |
-| WebRTC (experimental) | Browser → Azure; backend relays signaling | Voice-agent WebRTC preview access and ICE connectivity; STUN/TURN may be needed |
+| WebRTC (GA) | Browser → Azure; backend relays signaling | ICE connectivity; STUN/TURN may be needed |
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ and needs no build step. A Python backend keeps Azure credentials out of the bro
 For WebSocket audio, configure the saved agent for mono **PCM16 at 24 kHz**
 input/output, server-side turn detection with automatic responses, and input
 transcription if user transcripts are wanted. Test the agent in Foundry first.
-WebRTC support must be confirmed separately for the selected resource and agent.
+For WebRTC, ensure your browser and network allow ICE connectivity to Azure.
 
 ## Configure and run
 
@@ -164,6 +164,8 @@ wss://RESOURCE.services.ai.azure.com/api/projects/PROJECT/agents/AGENT/endpoint/
 ```
 
 The backend sends an Entra bearer token and `Foundry-Features: VoiceAgents=V1Preview`.
+The header value is retained for protocol compatibility; it does not describe
+the availability status of the WebRTC transport.
 
 - **WebSocket:** an AudioWorklet captures 100-ms PCM16 chunks. The browser sends
   `input_audio_buffer.append` events after session readiness and plays returned
@@ -174,15 +176,13 @@ The backend sends an Entra bearer token and `Foundry-Features: VoiceAgents=V1Pre
 - **Text (both transports):** the browser sends a user `conversation.item.create`
   with one `input_text` content part, followed by `response.create`, through the
   same backend socket, selecting `output_modalities: ["text"]` for typed turns.
-  The bridge translates this to `modalities: ["text"]` for the WebRTC preview protocol.
+  The bridge translates this to `modalities: ["text"]` for the WebRTC protocol.
   The backend validates text and allows only this text-only response override,
   not other response or session configuration changes. WebRTC uses its socket for events
   and WebRTC for audio, not the data channel for text.
 
-The WebRTC extension was informed by development samples in the original
-workspace; those repositories are not runtime dependencies. The linked public
-quickstart does **not** establish this entire WebRTC wire contract. Preview routes
-may change. This is not the separate Azure OpenAI `/openai/v1/realtime/calls` flow.
+This sample uses the Foundry voice-agent WebRTC signaling protocol described
+above, not the separate Azure OpenAI `/openai/v1/realtime/calls` flow.
 
 ## Troubleshooting
 
@@ -190,8 +190,8 @@ may change. This is not the separate Azure OpenAI `/openai/v1/realtime/calls` fl
 | --- | --- |
 | Setup needed | Fill in this directory's `.env` and restart. |
 | CLI token failure / 401 | Run `az login` for the correct tenant as the same user running the backend. |
-| 403 | Check agent/project permissions, preview access, and network policies. |
-| 404 | Use the new lookup diagnostic; verify project endpoint, saved agent name, invokable version, and preview availability. |
+| 403 | Check agent/project permissions and network policies. |
+| 404 | Use the lookup diagnostic; verify project endpoint, saved agent name, invokable version, and voice endpoint availability. |
 | OS denied outbound connection | Run in a permitted environment or ask your administrator to allow Python HTTPS access. |
 | WebSocket audio-format error | Set input/output to mono PCM16 at 24 kHz in the saved agent. |
 | ICE gathering timeout | Check STUN/TURN/firewall settings, or use WebSocket. `ICE_SERVERS_JSON=[]` disables external ICE servers but may limit connectivity. |
