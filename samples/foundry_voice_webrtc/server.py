@@ -245,7 +245,7 @@ async def diagnose_voice_not_found(client, cfg, headers, transport):
     """Do not guess a new route or create an agent when an upgrade returns 404."""
     fallback = ("Azure returned HTTP 404 for the voice endpoint. The cause could not be verified. "
                 "Check the exact project endpoint and saved voice agent name in .env, then restart. "
-                "Also confirm voice-agent preview access for this project.")
+                "Also confirm voice endpoint availability for this project.")
     try:
         async with asyncio.timeout(12):
             async with client.get(cfg.agent_url(), headers=headers, allow_redirects=False) as response:
@@ -267,9 +267,9 @@ async def diagnose_voice_not_found(client, cfg, headers, transport):
                         return ("The configured voice agent exists, but Azure returned HTTP 404 for its "
                                 "voice connection endpoint. " + hint +
                                 "Check that it has an invokable version and that this project's region/resource "
-                                "has the voice-agent preview route enabled. Test the same agent in Foundry.")
+                                "supports the voice endpoint. Test the same agent in Foundry.")
                     return ("The configured agent exists, but Azure returned HTTP 404 for its voice endpoint. "
-                            "Verify a saved voice-agent version and preview availability in Foundry.")
+                            "Verify a saved voice-agent version and voice endpoint availability in Foundry.")
             if status == 404:
                 # A missing agent and a missing project can both produce 404.
                 async with client.get(cfg.agent_url(collection=True), headers=headers,
@@ -283,7 +283,7 @@ async def diagnose_voice_not_found(client, cfg, headers, transport):
                         return ("Both the agent lookup and the project's agents API returned HTTP 404. "
                                 "Copy the project endpoint from Foundry's project overview into "
                                 "AZURE_AI_PROJECT_ENDPOINT, then restart. If it already matches, ask the "
-                                "resource owner to confirm this API/preview is available on the resource.")
+                                "resource owner to confirm this API is available on the resource.")
             if status in {401, 403}:
                 return ("The voice endpoint returned HTTP 404; the follow-up agent lookup was denied "
                         f"(HTTP {status}), so agent existence could not be verified. "

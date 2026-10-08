@@ -38,7 +38,7 @@ Use underscores between words in sample directory names, including subagent exam
 | [`voice_agent_with_foundry_iq.py`](voice_agent_with_foundry_iq.py) | Create a Foundry IQ Agent, converse through the microphone, and display tool activity. |
 | [`voice_agent_with_local_function.py`](voice_agent_with_local_function.py) | Execute `add_numbers` in the client, return its output, and hear the response. |
 | [`voice_agent_with_toolbox.py`](voice_agent_with_toolbox.py) | Create a Toolbox Agent, converse through the microphone, and display tool activity. |
-| [Documentation-generated voice web sample](foundry_voice_webrtc/README.md) | Connect a browser to an existing voice Agent with WebSocket audio or experimental WebRTC; standalone Python backend, Azure CLI authentication, and Azure session storage enabled. |
+| [Documentation-generated voice web sample](foundry_voice_webrtc/README.md) | Connect a browser to an existing voice Agent with generally available WebSocket or WebRTC transports; standalone Python backend, Azure CLI authentication, and Azure session storage enabled. |
 | [Basic prompt subagent](subagent/voice_subagent_prompt_basic/README.md) | Create a poetry prompt subagent and a voice agent that delegates poem writing to it. |
 | [Hosted GitHub Copilot subagent](subagent/voice_subagent_hosted_agent/README.md) | Create a voice agent that delegates research, learning, and coding tasks to an existing hosted GitHub Copilot agent. |
 | [Finance with Handoff](example1_finance_with_handoff/README.md) | Publish Realtime and Cascade Luna variants of one shared Finance handoff graph and run text Voice WebSocket smoke tests. |
