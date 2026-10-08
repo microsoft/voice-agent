@@ -1,4 +1,4 @@
-"""Local Foundry voice bridge: WebRTC signaling or PCM audio over WebSocket."""
+"""Local Foundry voice bridge: text, WebRTC signaling and WebSocket PCM audio."""
 
 import asyncio
 import base64
@@ -6,6 +6,7 @@ import binascii
 import json
 import logging
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -155,9 +156,43 @@ def validate_client_frame(raw, started, transport="webrtc"):
     if not isinstance(frame, dict):
         raise ValueError("Expected an event object.")
     kind = frame.get("type")
+    if transport not in TRANSPORTS:
+        raise ValueError("Unsupported transport.")
+    if transport == "webrtc" and not started:
+        if kind != "rtc.call.sdp.create" or not isinstance(frame.get("sdp_offer"), str):
+            raise ValueError("The first event must contain a WebRTC SDP offer.")
+        if not frame["sdp_offer"].startswith("v=0"):
+            raise ValueError("Invalid SDP offer.")
+        return {"type": kind, "sdp_offer": frame["sdp_offer"]}
+    if kind == "conversation.item.create":
+        item = frame.get("item")
+        if not isinstance(item, dict) or item.get("type") != "message" or item.get("role") != "user":
+            raise ValueError("Text input must be a user message.")
+        content = item.get("content")
+        if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
+            raise ValueError("Text input must contain one input_text part.")
+        part = content[0]
+        text = part.get("text")
+        if part.get("type") != "input_text" or not isinstance(text, str) or not text.strip() or len(text) > 4000:
+            raise ValueError("Text input must contain 1 to 4000 characters.")
+        clean_item = {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}
+        if "id" in item:
+            item_id = item["id"]
+            if not isinstance(item_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", item_id):
+                raise ValueError("Text message ID must contain 1 to 32 letters, digits, underscores or hyphens.")
+            clean_item["id"] = item_id
+        return {"type": kind, "item": clean_item}
+    if kind == "response.create":
+        # Text turns can select text-only output; other settings stay in Foundry.
+        if set(frame) == {"type", "response"} and frame["response"] == {"output_modalities": ["text"]}:
+            modality_key = "modalities" if transport == "webrtc" else "output_modalities"
+            return {"type": kind, "response": {modality_key: ["text"]}}
+        if set(frame) != {"type"}:
+            raise ValueError("Only text-only output can override the saved response configuration.")
+        return {"type": kind}
     if transport == "websocket":
         if kind != "input_audio_buffer.append" or not isinstance(frame.get("audio"), str):
-            raise ValueError("WebSocket mode only accepts PCM audio append events.")
+            raise ValueError("WebSocket mode accepts PCM audio, user text and response requests.")
         try:
             audio = base64.b64decode(frame["audio"], validate=True)
         except (ValueError, binascii.Error) as error:
@@ -165,16 +200,8 @@ def validate_client_frame(raw, started, transport="webrtc"):
         if not audio or len(audio) % 2 or len(audio) > 48000:
             raise ValueError("Audio must be PCM16, at most one second per event.")
         return {"type": kind, "audio": frame["audio"]}
-    if transport != "webrtc":
-        raise ValueError("Unsupported transport.")
-    if not started:
-        if kind != "rtc.call.sdp.create" or not isinstance(frame.get("sdp_offer"), str):
-            raise ValueError("The first event must contain a WebRTC SDP offer.")
-        if not frame["sdp_offer"].startswith("v=0"):
-            raise ValueError("Invalid SDP offer.")
-        return {"type": kind, "sdp_offer": frame["sdp_offer"]}
     # Keep all agent configuration in Foundry, not client-controlled session updates.
-    raise ValueError("This voice-only starter accepts one SDP offer per connection.")
+    raise ValueError("Only user text and response requests are accepted after the SDP offer.")
 
 
 async def forward_browser(browser, upstream, transport):

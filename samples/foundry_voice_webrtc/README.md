@@ -10,7 +10,7 @@ The app connects to an **existing saved Foundry voice agent**. It does not creat
 update, or delete agents. The agent retains its saved instructions, model, and
 voice configuration; the browser does not send a replacement `session.update`.
 
-Features include microphone input, spoken replies, live transcripts, mute,
+Features include microphone and text input, spoken replies, live transcripts, mute,
 interruption, and end-call cleanup. The frontend uses plain HTML/CSS/JavaScript
 and needs no build step. A Python backend keeps Azure credentials out of the browser.
 
@@ -67,6 +67,14 @@ configuration or source files.
 Open [http://127.0.0.1:8080](http://127.0.0.1:8080), choose a transport, select
 **Start conversation**, and allow the microphone. Set `PORT` to another free port
 if needed. Use **End** to stop the microphone and connections.
+
+For either transport, type in **Message your agent** and press **Enter** or
+**Send** once connected. Submitted text appears in the conversation and requests
+a text-only reply. Microphone turns still use the saved agent's output settings.
+Messages are limited to 4,000 characters;
+the Send button waits while you are speaking or the agent is generating a reply.
+Mute the microphone to converse by text without spoken replies to typed messages.
+Session startup still requires microphone permission, even if you only plan to type.
 
 Authentication uses `AzureCliCredential` and the scope
 `https://ai.azure.com/.default`. Run the server as the Windows/OS user who ran
@@ -163,6 +171,13 @@ The backend sends an Entra bearer token and `Foundry-Features: VoiceAgents=V1Pre
 - **WebRTC:** adds `transport=webrtc`. The backend relays `rtc.call.sdp.create`
   with `sdp_offer` and receives `rtc.call.sdp.created` with `sdp_answer`. Audio
   travels over WebRTC; PCM deltas are filtered to avoid duplicate playback.
+- **Text (both transports):** the browser sends a user `conversation.item.create`
+  with one `input_text` content part, followed by `response.create`, through the
+  same backend socket, selecting `output_modalities: ["text"]` for typed turns.
+  The bridge translates this to `modalities: ["text"]` for the WebRTC preview protocol.
+  The backend validates text and allows only this text-only response override,
+  not other response or session configuration changes. WebRTC uses its socket for events
+  and WebRTC for audio, not the data channel for text.
 
 The WebRTC extension was informed by development samples in the original
 workspace; those repositories are not runtime dependencies. The linked public
@@ -193,6 +208,7 @@ Run offline validation from this directory (Node.js is needed only for JavaScrip
 node --check public/app.js
 node --check public/pcm-audio.mjs
 node --check public/pcm-capture.js
+node --test test_text_input.mjs
 ```
 
 The included regression test checks `store=true` and transport selection in both

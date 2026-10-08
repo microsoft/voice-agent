@@ -4,6 +4,35 @@ const $ = (id) => document.getElementById(id);
 let config, call = null;
 const messages = new Map();
 
+function updateTextInput() {
+  const enabled = call?.ready && call.ws?.readyState === WebSocket.OPEN && !call.responding && !call.userSpeaking;
+  $('text-input').disabled = !call?.ready || call.ws?.readyState !== WebSocket.OPEN;
+  $('send-text').disabled = !enabled || !$('text-input').value.trim();
+}
+function sendText(event) {
+  event.preventDefault();
+  const session = call;
+  const text = $('text-input').value.trim();
+  if (!session?.ready || session.ws?.readyState !== WebSocket.OPEN || session.responding || session.userSpeaking || !text) return;
+  if (text.length > 4000) {
+    showError('Text input must contain at most 4000 characters.');
+    return;
+  }
+  const id = crypto.randomUUID().replaceAll('-', '');
+  try {
+    session.ws.send(JSON.stringify({type:'conversation.item.create', item:{
+      id, type:'message', role:'user', content:[{type:'input_text', text}]
+    }}));
+    session.ws.send(JSON.stringify({type:'response.create', response:{output_modalities:['text']}}));
+  } catch (error) {
+    fail(session, error);
+    return;
+  }
+  session.responding = true;
+  transcript(id, 'user', text);
+  $('text-input').value = '';
+  updateTextInput();
+}
 function showError(message) { $('error').textContent = message; $('error').hidden = false; }
 function state(title, hint, badge) {
   $('status').textContent = title; $('hint').textContent = hint; $('connection').textContent = badge;
@@ -33,6 +62,7 @@ function stop(title = 'Conversation ended', hint = 'Start again whenever you’r
   $('start').disabled = !config?.configured; $('stop').disabled = true; $('mute').disabled = true;
   $('transport').disabled = false;
   $('mute').textContent = 'Mute mic'; $('mute').setAttribute('aria-pressed', 'false');
+  updateTextInput();
   state(title, hint, 'Offline');
 }
 function fail(session, error) {
@@ -53,7 +83,8 @@ function markReady(session) {
   session.ready = true;
   clearTimeout(session.timeout); clearTimeout(session.disconnectTimer);
   $('mute').disabled = false; $('orb').className = 'orb active';
-  state('Listening', 'Say hello. Your agent will respond when you pause.', 'Connected');
+  updateTextInput();
+  state('Listening', 'Say hello or send a text message. Your agent will respond.', 'Connected');
   if (!session.clock) {
     const began = Date.now();
     session.clock = setInterval(() => {
@@ -92,6 +123,14 @@ async function handleEvent(session, event) {
     markReady(session);
   } else if (type === 'response.created') {
     session.responseId = event.response?.id;
+    session.responding = true;
+    updateTextInput();
+  } else if (type === 'response.done') {
+    session.responding = false;
+    updateTextInput();
+    if (event.response?.status === 'failed') {
+      showError(event.response.status_details?.error?.message || 'The agent could not respond. Try sending your message again.');
+    }
   } else if (type === 'rtc.call.sdp.created') {
     if (!event.sdp_answer) throw new Error('Azure returned no SDP answer.');
     await session.peer.setRemoteDescription({type:'answer', sdp:event.sdp_answer});
@@ -99,11 +138,13 @@ async function handleEvent(session, event) {
     throw new Error(event.error?.message || 'Azure could not start this voice session.');
   } else if (type === 'input_audio_buffer.speech_started') {
     session.userSpeaking = true;
+    updateTextInput();
     session.interruptedResponse = session.responseId;
     session.audio?.interrupt();
     $('orb').className = 'orb active'; $('status').textContent = 'Listening to you';
   } else if (type === 'input_audio_buffer.speech_stopped') {
     session.userSpeaking = false;
+    updateTextInput();
   } else if (['response.audio.delta', 'response.output_audio.delta'].includes(type) && session.audio) {
     const responseId = event.response_id || session.responseId;
     if (event.delta && !session.userSpeaking && (!session.interruptedResponse || responseId !== session.interruptedResponse)) {
@@ -169,6 +210,8 @@ async function start() {
         markReady(session);
       } else if (peer.connectionState === 'failed') fail(session, new Error('WebRTC media failed. Check firewall rules or configure TURN.'));
       else if (peer.connectionState === 'disconnected') {
+        session.ready = false;
+        updateTextInput();
         state('Reconnecting', 'The media connection was interrupted.', 'Reconnecting');
         clearTimeout(session.disconnectTimer);
         session.disconnectTimer = setTimeout(() => fail(session, new Error('Media connection lost. Start a new session.')),10000);
@@ -186,6 +229,8 @@ async function start() {
   }
 }
 $('start').onclick = start;
+$('text-form').onsubmit = sendText;
+$('text-input').oninput = updateTextInput;
 $('stop').onclick = () => stop();
 $('play').onclick = playAudio;
 $('mute').onclick = () => {
@@ -194,7 +239,7 @@ $('mute').onclick = () => {
   call.audio?.mute(call.muted);
   $('mute').textContent = call.muted ? 'Unmute mic' : 'Mute mic';
   $('mute').setAttribute('aria-pressed', String(call.muted));
-  $('hint').textContent = call.muted ? 'Your microphone is muted. You can still hear the agent.' : 'Say hello. Your agent will respond when you pause.';
+  $('hint').textContent = call.muted ? 'Your microphone is muted. You can still type and hear the agent.' : 'Say hello or send a text message. Your agent will respond.';
 };
 $('clear').onclick = () => { messages.clear(); $('transcript').replaceChildren(); };
 window.addEventListener('pagehide', () => stop());
