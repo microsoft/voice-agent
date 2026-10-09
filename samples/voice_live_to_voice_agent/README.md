@@ -1,5 +1,21 @@
 # Migrate Voice Live to Voice Agent
 
+**We recommend migrating from Voice Live with a direct LLM to Voice Agent.**
+Voice Agent retains Voice Live capabilities and adds a managed, named agent in
+Foundry: migration is about gaining agent features, not losing the voice
+experience or your local function integrations.
+
+![Voice Live to Voice Agent architecture: the same client audio and tool-call flow, with managed orchestration, conversation state, observability, evaluation, and lifecycle management in Foundry.](../../assets/voice-live-to-voice-agent.png)
+
+Keep real-time audio, speech recognition and synthesis, turn-taking,
+interruptions, and function calls while adding reusable, versioned
+configuration, Foundry tools and connectors, knowledge integration,
+conversation state management, observability, evaluation, and agent lifecycle
+management. Confirm model, voice, region, and access availability in your
+target Project; availability and configuration depend on the selected pipeline.
+This sample demonstrates preservation of the settings and local function flow
+below, rather than exercising every additional agent capability.
+
 Two Python files demonstrate the same **cascaded pipeline: Azure Speech STT ->
 GPT-4.1 mini -> Azure TTS**. This is not a speech-to-speech realtime model.
 
