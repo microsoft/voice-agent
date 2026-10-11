@@ -5,7 +5,9 @@ vehicle's local side**. Talk to the agent to change cabin temperature, adjust
 media volume, read vehicle status, or set a navigation destination. The dashboard
 shows the local state and the conversation/tool execution log.
 
-Voice sessions initially expose only **`search_vehicle_tools(query)`**. The
+![AURA simulated vehicle cockpit with the live request pipeline, vehicle overview, and voice connection controls](assets/cockpit.png)
+
+Each new user turn exposes only **`search_vehicle_tools(query)`**. The
 agent searches the local catalog for the user's intent, the client exposes
 matching function schemas for the next response, and the agent calls the
 selected capability. Search and execution both appear in the dashboard log.
@@ -13,7 +15,7 @@ selected capability. Search and execution both appear in the dashboard log.
 The **Live request pipeline** shows observed listening, cloud action selection,
 catalog search, discovered definitions, local execution, and reply generation.
 It displays the actual search query, expandable schemas, and local success or
-rejection results. Reused capabilities skip a fresh search; ordinary conversation
+rejection results. Repeated vehicle requests search again; ordinary conversation
 skips tool execution. These are service/client lifecycle events, not hidden
 model reasoning. "Response ready" means generation completed, not that speaker
 playback has finished.
@@ -134,7 +136,8 @@ to invent one.
 
 The client puts matched schemas in `response.create(..., tools=[...])`; sending
 schemas merely as search-result text is not sufficient. Up to twelve recently
-discovered definitions remain available in a voice session. The dispatcher
+discovered definitions remain available within the current user turn, then are
+cleared before the next turn's response. The dispatcher
 independently rejects execution of undiscovered or unavailable capabilities.
 Reconnect starts a fresh discovery session while preserving local vehicle state.
 Manual dashboard controls are direct local UI actions and do not require agent
@@ -143,8 +146,8 @@ discovery, but retain the same argument validation and availability checks.
 The shipped catalog has four vehicle capabilities plus search. Extend `tools()`,
 `SEARCH_TAGS`, and the approved simulator/OEM adapter together for a larger
 catalog. This is a local discovery pattern, not a Foundry-managed remote Toolbox.
-It adds a tool round trip on first use of a capability; later turns can reuse
-discovered definitions. No vector database or external search service is needed.
+It adds a search tool round trip on every vehicle request, including repeated
+requests. No vector database or external search service is needed.
 
 `vehicle_voice_agent.py` executes only calls from **completed** responses, never
 partial argument events. It returns the original `call_id` and requests another

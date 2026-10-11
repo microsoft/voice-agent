@@ -279,6 +279,58 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         agents.create_version.assert_awaited_once()
         agents.enable.assert_awaited_once()
 
+    async def test_each_user_turn_requires_fresh_search(self):
+        conn, dispatcher = connection(), Dispatcher(discovery=True)
+        session = Session(conn, dispatcher)
+        for index in range(2):
+            await session.handle({"type": "input_audio_buffer.committed"})
+            self.assertEqual(dispatcher.discovered, [])
+            self.assertEqual(
+                [tool["name"] for tool in conn.response.create.call_args.kwargs["response"]["tools"]],
+                [SEARCH_TOOL],
+            )
+            rejected = dispatcher.dispatch(call(call_id=f"unsearched-{index}"))
+            self.assertFalse(rejected["ok"])
+            await session.handle(done([call(SEARCH_TOOL, {"query": "cabin temperature"}, f"search-{index}")]))
+            self.assertIn("set_cabin_temperature", dispatcher.discovered)
+            await session.handle(done([call(call_id=f"execute-{index}")]))
+            self.assertEqual(dispatcher.vehicle.temperature_c, 22)
+            self.assertIn("set_cabin_temperature", dispatcher.discovered)
+            await session.handle(done([{"type": "message", "content": [{"text": "Set to 22 degrees."}]}]))
+        self.assertEqual(session.turn_id, 2)
+
+    async def test_queued_turn_clears_discovery_only_after_current_reply(self):
+        conn, dispatcher = connection(), Dispatcher(discovery=True)
+        session = Session(conn, dispatcher)
+        await session.handle({"type": "input_audio_buffer.committed"})
+        await session.handle(done([call(SEARCH_TOOL, {"query": "cabin temperature"}, "search")]))
+        await session.handle({"type": "input_audio_buffer.committed"})
+        self.assertIn("set_cabin_temperature", dispatcher.discovered)
+        await session.handle(done())
+        self.assertEqual(dispatcher.vehicle.temperature_c, 22)
+        await session.handle(done([{"type": "message", "content": [{"text": "Set to 22 degrees."}]}]))
+        self.assertEqual(dispatcher.discovered, [])
+        self.assertEqual(
+            [tool["name"] for tool in conn.response.create.call_args.kwargs["response"]["tools"]],
+            [SEARCH_TOOL],
+        )
+
+    async def test_text_turn_clears_previous_discovery(self):
+        conn, dispatcher = connection(), Dispatcher(discovery=True)
+        dispatcher.execute(SEARCH_TOOL, {"query": "cabin temperature"})
+        conn.recv.side_effect = [
+            done([call(SEARCH_TOOL, {"query": "media volume"}, "search")]),
+            done([call("set_media_volume", {"volume_percent": 30}, "volume")]),
+            done([{"type": "message", "content": [{"text": "Volume set to 30 percent."}]}]),
+        ]
+        await text_turn(conn, dispatcher, "Set volume to 30 percent.")
+        self.assertEqual(
+            [tool["name"] for tool in conn.response.create.await_args_list[0].kwargs["response"]["tools"]],
+            [SEARCH_TOOL],
+        )
+        self.assertNotIn("set_cabin_temperature", dispatcher.discovered)
+        self.assertEqual(dispatcher.vehicle.volume_percent, 30)
+
     async def test_completed_calls_execute_and_return_matching_id(self):
         conn, dispatcher, notify = connection(), Dispatcher(), AsyncMock()
         session = Session(conn, dispatcher, notify=notify)

@@ -79,8 +79,8 @@ export function processEvent(event) {
     step("responding", "idle");
     if (document.querySelector('[data-step="searching"]').dataset.state === "idle") {
       step("searching", "skipped"); step("discovered", "skipped");
-      $("process-query").textContent = "Using an already-discovered capability";
-      $("process-matches").textContent = "No new search needed this turn";
+      $("process-query").textContent = "No search event observed for this turn";
+      $("process-matches").textContent = "No discovery event observed for this turn";
     }
     step("executing", "active");
     $("process-result").textContent = `${event.name}\n${formatArguments(event.arguments)}\n\nAwaiting local policy and execution result…`;

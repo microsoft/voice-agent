@@ -38,11 +38,12 @@ def definition(model: str, voice: str, text: bool) -> dict[str, Any]:
             "All vehicle operations are simulated, not real vehicle controls. "
             "Use the local tools for vehicle status, cabin temperature, media volume, "
             "and navigation. Never invent state, successful actions, routes, or ETAs. "
-            "Initially only search_vehicle_tools is exposed. Search the local catalog "
+            "Each new user turn exposes only search_vehicle_tools. Search the local catalog "
             "using the user's intent before calling a vehicle capability. Successful "
             "search results make the matched function tools available on the next "
-            "response. Use discovered tools directly while they remain available; "
-            "search again for other capabilities. If no matches are found, explain "
+            "response. Discovered tools remain available only within that user turn; "
+            "search again on every new turn, even for a previously used capability. "
+            "If no matches are found, explain "
             "the limitation or ask for clarification. Never invent a function name. "
             "Resolve ambiguous destinations and units with the user before calling a tool. "
             "The temperature tool uses Celsius; convert Fahrenheit if explicitly requested. "
@@ -128,6 +129,7 @@ class Session:
             self.pending_turns -= 1
             self.tool_rounds = 0
             self.turn_id += 1
+            self.dispatcher.discovered.clear()
             await self.process("understanding", "Cloud agent is selecting the next action.")
             await self.respond()
 
@@ -323,7 +325,8 @@ async def text_turn(connection: Any, dispatcher: Dispatcher, text: str) -> None:
     })
     print(f"You: {text}")
     session = Session(connection, dispatcher)
-    await session.respond()
+    session.pending_turns = 1
+    await session.next_turn()
     async with asyncio.timeout(120):
         while not await session.handle(await receive(connection)):
             pass
