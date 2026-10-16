@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,10 +13,12 @@ from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 
 import demo_server
+import template_portal
 from template_portal import (
     McpProbeError,
     MODEL_OVERRIDE_KEY,
     TemplateCatalog,
+    materialize_template,
     template_agent_name,
 )
 
@@ -153,6 +156,18 @@ class TemplateCatalogTests(unittest.TestCase):
             ["mock_zendesk_get_ticket_status"],
             query_issue["tools"],
         )
+        materialized = materialize_template(
+            catalog.document("elevator-service-example"),
+            model="",
+            voice="",
+            mcp_server_url="https://tools.example/mcp",
+            mcp_connection_id="elevator-connection",
+        )
+        for node in materialized["handoff"]["nodes"]:
+            config = node["config"]
+            self.assertNotIn("inherit_from_base_instructions", config)
+            self.assertTrue(config["instructions"].startswith("## GLOBAL POLICY\n"))
+            self.assertIn("\n\n## CURRENT NODE\n", config["instructions"])
 
     def test_template_agent_names_are_limited_to_63_characters(self) -> None:
         self.assertEqual(
@@ -203,9 +218,13 @@ class TemplateCatalogTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((ROOT / "static" / name).is_file())
         html = (ROOT / "static" / "templates.html").read_text(encoding="utf-8")
+        app_js = (ROOT / "static" / "template-app.js").read_text(encoding="utf-8")
+        styles = (ROOT / "static" / "template-styles.css").read_text(encoding="utf-8")
         self.assertIn("VoiceAgent/portal/templates.config.json", html)
         self.assertIn('id="mcp-token"', html)
         self.assertIn('type="password"', html)
+        self.assertNotIn('classList.toggle("embedded"', app_js)
+        self.assertNotIn(".embedded .local-template-header", styles)
         for name in (
             "components/HandoffGraphPanel.jsx",
             "lib/projectPicker.mjs",
@@ -267,6 +286,11 @@ class TemplateRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(detail_payload["runtime_locked"])
         self.assertGreater(len(detail_payload["graph"]["nodes"]), 1)
+        self.assertEqual("voice", detail_payload["definition"]["kind"])
+        self.assertRegex(
+            detail_payload["suggested_agent_name"],
+            r"^local-only-finance-example-realtime-[0-9a-f]{8}$",
+        )
 
     async def test_template_assets_are_served_without_azure_credentials(self) -> None:
         for name in (
@@ -390,6 +414,46 @@ class TemplateRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(409, response.status)
         self.assertIn("browser-provided MCP tokens are disabled", await response.text())
+
+    async def test_portal_refreshes_managed_template_connection_server_side(self) -> None:
+        catalog = self.client.server.app[template_portal.CATALOG_KEY]
+        source = catalog.source("elevator-service-example")
+        assert source is not None
+        with tempfile.TemporaryDirectory() as directory:
+            token_file = Path(directory) / "token"
+            token_file.write_text("synthetic-server-token\n", encoding="utf-8")
+            managed_source = replace(
+                source,
+                mcp_server_url="https://example.com/mcp/elevator-service",
+                mcp_connection_id="elevator-service-local-e2e",
+                mcp_token_file=token_file,
+                allowed_backends=(),
+            )
+            with (
+                patch.object(catalog, "source", return_value=managed_source),
+                patch("template_portal.create_mcp_connection") as create_connection,
+            ):
+                response = await self.client.post(
+                    "/api/templates/elevator-service-example/mcp/configure",
+                    json={},
+                )
+
+        self.assertEqual(200, response.status)
+        payload = await response.json()
+        self.assertTrue(payload["configured"])
+        self.assertEqual(
+            "elevator-service-local-e2e",
+            payload["connection_name"],
+        )
+        create_connection.assert_called_once()
+        self.assertEqual(
+            "https://example.com/mcp/elevator-service",
+            create_connection.call_args.kwargs["server_url"],
+        )
+        self.assertEqual(
+            "synthetic-server-token",
+            create_connection.call_args.kwargs["bearer_token"],
+        )
 
 
 if __name__ == "__main__":

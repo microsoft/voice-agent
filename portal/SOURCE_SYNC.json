@@ -7,6 +7,7 @@
     "roots": {
       "voice_demo": "tests/voice-agent-tests/voice-agents-tests-dashboard/voice_demo",
       "template_view": "tests/voice-agent-tests/voice-agents-tests-dashboard/template_view",
+      "handoff_view": "tests/voice-agent-tests/voice-agents-tests-dashboard/handoff_view",
       "template_tests": "tests/voice-agent-tests/voice-agents-tests-dashboard/tests",
       "template_config": "samples/voice-agent-templates/templates.config.json",
       "template_example1": "samples/voice-agent-templates/example1_finance_with_handoff/agent.json",
@@ -88,7 +89,8 @@
       "root": "template_view",
       "source": "static/template-styles.css",
       "destination": "static/template-styles.css",
-      "action": "exact"
+      "action": "adapted",
+      "reason": "The Dashboard hides its standalone header only when embedded; the Portal always renders this page as a top-level destination."
     },
     {
       "root": "template_tests",
@@ -103,11 +105,123 @@
       "action": "adapted"
     }
   ],
+  "handoff_mappings": [
+    {
+      "root": "handoff_view",
+      "source": "__init__.py",
+      "action": "omitted",
+      "reason": "The Portal Handoff adapter is a standalone module, not a Python package."
+    },
+    {
+      "root": "handoff_view",
+      "source": "routes.py",
+      "destination": "handoff_portal.py",
+      "action": "adapted",
+      "reason": "The Portal retains its loopback security middleware, static allowlist, and standalone route composition."
+    },
+    {
+      "root": "handoff_view",
+      "source": "static/handoff.html",
+      "destination": "static/handoff/handoff.html",
+      "action": "adapted",
+      "reason": "The Portal uses standalone navigation and immutable release publication, so it omits Dashboard embedded-page navigation and draft save."
+    },
+    {
+      "root": "handoff_view",
+      "source": "static/handoff-app.js",
+      "destination": "static/handoff/handoff-app.js",
+      "action": "adapted",
+      "reason": "The Portal opens its explicit-connect runtime with view=handoff, accepts version-only publication readback, refreshes managed Template MCP connections before publication, and labels node comparison estimates with an internal-experiment disclaimer."
+    },
+    {
+      "root": "handoff_view",
+      "source": "static/handoff-core.mjs",
+      "destination": "static/handoff/handoff-core.mjs",
+      "action": "adapted",
+      "reason": "The Portal exposes the Voice Live model/STT/voice compatibility matrix and validates imported combinations."
+    },
+    {
+      "root": "handoff_view",
+      "source": "static/handoff.css",
+      "destination": "static/handoff/handoff.css",
+      "action": "adapted",
+      "reason": "The Portal styles disabled compatibility choices and a prominent latency/cost estimate disclaimer."
+    },
+    {
+      "root": "handoff_view",
+      "source": "static/handoff-core.test.mjs",
+      "destination": "web/src/lib/handoffEditorCore.test.mjs",
+      "action": "adapted",
+      "reason": "The Portal test imports the shipped standalone core from its Portal static path."
+    },
+    {
+      "root": "template_tests",
+      "source": "test_handoff_view.py",
+      "destination": "tests/test_handoff_portal.py",
+      "action": "adapted",
+      "reason": "The Portal test covers standalone routes, allowlisted assets, template materialization, and runtime navigation."
+    }
+  ],
   "additional_runtime_mappings": [
+    {
+      "source": "web/.gitignore",
+      "destination": "web/.gitignore",
+      "action": "adapted",
+      "reason": "The Portal ignores its standalone build, test, and local-run artifacts rather than the Dashboard workspace outputs."
+    },
+    {
+      "source": "web/src/components/AgentConfig.jsx",
+      "destination": "web/src/components/AgentConfig.jsx",
+      "action": "adapted",
+      "reason": "The Dashboard includes GPT Live and draft working-copy fields that are outside the Portal runtime surface."
+    },
+    {
+      "source": "web/src/components/AgentDefinitionDialog.jsx",
+      "destination": "web/src/components/AgentDefinitionDialog.jsx",
+      "action": "adapted",
+      "reason": "The Portal saves immutable versions directly and does not import Dashboard draft/improve workflows."
+    },
+    {
+      "source": "web/src/config.js",
+      "destination": "web/src/config.js",
+      "action": "adapted",
+      "reason": "The Portal keeps standalone Project discovery and omits Dashboard-only GPT Live deployment discovery."
+    },
+    {
+      "source": "web/src/lib/agentCatalog.test.mjs",
+      "destination": "web/src/lib/agentCatalog.test.mjs",
+      "action": "adapted",
+      "reason": "The Portal shares Realtime pagination contracts but does not include Dashboard GPT Live normalization cases."
+    },
+    {
+      "source": "web/src/lib/agentForm.test.mjs",
+      "destination": "web/src/lib/agentForm.test.mjs",
+      "action": "adapted",
+      "reason": "The Portal form tests cover its public Realtime authoring surface without Dashboard GPT Live drafts."
+    },
+    {
+      "source": "web/src/lib/digitDemo.test.mjs",
+      "destination": "web/src/lib/digitDemo.test.mjs",
+      "action": "adapted",
+      "reason": "The Portal retains public naming and storage defaults in its digit-demo test contract."
+    },
+    {
+      "source": "web/tests/serve.mjs",
+      "destination": "web/tests/serve.mjs",
+      "action": "adapted",
+      "reason": "The Portal browser harness serves standalone routes and public Project fixtures rather than Dashboard mounts."
+    },
     {
       "source": "web/tests/privacy.spec.mjs",
       "destination": "web/tests/privacy.spec.mjs",
-      "action": "exact"
+      "action": "adapted",
+      "reason": "The Portal keeps public storage and synthetic-data privacy fixtures while sharing the same picker and conversation-review behavior."
+    },
+    {
+      "source": "web/src/webrtc/webrtc.css",
+      "destination": "web/src/webrtc/webrtc.css",
+      "action": "adapted",
+      "reason": "The Portal adds standalone setup guidance and a return-to-studio notice around the shared WebRTC experience."
     }
   ],
   "sample_mappings": [
@@ -123,7 +237,8 @@
       "source": ".",
       "destination": "samples/example1_finance_with_handoff/agent.json",
       "destination_root": "voice_agent",
-      "action": "exact"
+      "action": "adapted",
+      "reason": "The public sample keeps Portal-compatible local MCP connection policy rather than the Dashboard deployment target."
     },
     {
       "root": "template_example2",

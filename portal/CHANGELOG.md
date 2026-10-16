@@ -3,6 +3,154 @@
 This is the downstream port log, not the full upstream repository history.
 Keep the upstream pin and intentional differences in every port entry.
 
+## 2026-10-16 — Verify independent installation
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+This is a Portal-only setup documentation and verification update.
+
+- Verified the published PR from tracked source with new public-registry
+  Python and npm installations, a fresh browser, and no ignored local state.
+- Confirmed Python-only production startup, all four pages and Template cards,
+  complete regression suites, and read-only access to a real Foundry Project.
+- Corrected repository-root setup commands to `cd portal` and documented that
+  the full repository supplies the shared helpers, samples, and guide.
+- Recorded the evidence and the boundary between independent operation,
+  required Azure/MCP configuration, and fixture-based versus live validation.
+
+## 2026-10-16 — Clarify node component estimates
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+This is a Portal-only copy and presentation change.
+
+- Replaced the STT, Model, and Voice selector introductions in **Edit node**
+  with a highlighted disclaimer: latency and pricing are estimates from
+  internal experiments and vary with usage scenarios, sales discounts, prompt
+  length, and other factors.
+- Renamed the comparison columns to **Latency (estimated)** and **Cost
+  (estimated)** without changing calculations, compatibility, or sorting.
+- Added browser coverage for all three selectors in Realtime and cascaded
+  pipelines and refreshed static asset cache versions.
+- Made browser MCP fixtures self-contained so publication tests do not depend
+  on ignored local Dev Tunnel configuration or bearer files.
+
+## 2026-10-14 — Refresh Handoff MCP connections before publication
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+This is a Portal-only reliability and UI correction.
+
+- Separated input transcription from output voice in Studio and Handoff
+  authoring. Model changes now retain compatible choices, disable incompatible
+  STT/voice options with an explanation, and validate imported definitions
+  against the Voice Live capability families. Handoff STT remains Agent-level
+  and is restricted to the intersection supported by every node model.
+- Replaced the Handoff right-side STT/model/voice card list with one sortable
+  comparison table. Provider labels distinguish GPT native, Azure Realtime,
+  and Azure Speech voice families; latency and cost use relative bars, latency
+  ranges display and sort by their minimum, and missing component latency stays
+  explicitly unavailable.
+- Template-origin **Publish** and **Publish & run** now refresh the selected
+  Project's managed MCP connection before creating the Agent version, so a
+  restarted local Dev Tunnel or bearer does not leave the published graph
+  pointing at stale connection state.
+- Removed the Handoff Graph **Save draft** action. It was not part of the
+  Portal's immutable release workflow; local edits remain available for export
+  or release publication.
+- Propagated backend HTTP and voice bridge failures to the active page with a
+  request ID, while redacting credential-shaped values. Voice connection errors
+  now remain visible after the WebSocket closes instead of reverting to the
+  generic disconnected status.
+- Replaced Live session's compact SVG-only runtime graph with the authoring
+  editor's layered card and route visual language. Runtime cards now show
+  cumulative active-node dwell time, completed user turns, visits, speech
+  pipeline badges, MCP/tool counts, and outgoing route counts.
+- Consolidated runtime numbers into one larger bottom strip. Dwell, 100%-based
+  stage share, and turns refresh every two seconds with a flip transition.
+  Clicking the strip reveals node-attributed observed latency statistics and
+  the editor's shared STT/LLM/TTS cost and latency estimates.
+- Strengthened completed-path styling with an emerald double frame, tinted
+  surface, and explicit `VISITED` badge while retaining the animated `LIVE`
+  treatment for the current node.
+- Increased path contrast again: every untouched runtime node now has a full
+  gray `NOT VISITED` veil, while visited nodes scale up with a thick emerald
+  double frame and the active node receives the largest, brightest treatment.
+- Added an accessible draggable divider between Agent Debug and Live
+  conversation. The graph can grow beyond the former 620px cap while the
+  conversation retains a protected minimum width; keyboard resize and
+  double-click reset are supported.
+- Consolidated Handoff authoring publication into one top-level **Publish &
+  run** action. Its progress dialog shows validation, managed MCP refresh,
+  version creation, readback verification, and Live session launch, and stops
+  on the exact failed task while preserving the working copy.
+- Kept spoken handoff transfer messages and the target Agent reply in one turn
+  metric lifecycle. The transfer response no longer finalizes latency before
+  the target response; an aborted handoff closes the pending transfer turn
+  explicitly.
+- Added route and browser coverage for the server-held connection refresh.
+
+## 2026-10-13 — Add Handoff Graph authoring and runtime handoff view
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+This ports the Dashboard's current Handoff Graph working tree as an explicitly
+mapped Portal surface; it does not advance the accepted source commit.
+
+- Added the standalone `/handoff/` graph editor with node, edge, runtime,
+  validation, export, draft, and release publication controls.
+- Added Portal navigation from Live session and Templates.
+- Materialized the Portal Template catalog as editable definitions without
+  exposing server-held MCP tokens. The three sample projects remain four cards
+  because Example 1 has separate Realtime and Cascade Luna variants.
+- Added release readback compatibility for Foundry endpoints that return a
+  version object rather than a complete Agent resource.
+- Made **Publish & run** open Live session with the runtime handoff graph
+  expanded while preserving the Portal's explicit Connect action.
+- Added Python, Node, and Playwright coverage plus `handoff_view` source-sync
+  mappings.
+
+## 2026-09-24 — Align the runtime layout and WebRTC name lookup
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+Reviewed Dashboard source range
+`834b34c30c7197f2129e4992e9daa064ac246c81..2ce62f0e4cdec25e4c0bde1e713cc4dbb973c589`.
+The accepted multi-root baseline remains
+`88185887035f63a6b81114d7b38305532ebb6ad0`: the reviewed range also contains
+Dashboard-only GPT Live, draft, camera, ICM, and outer-dashboard surfaces that
+do not belong in this two-page Portal.
+
+- Synchronized the compact Studio header, workspace spacing, Session Agent
+  row, Agent metadata/settings/actions footer, and Conversation header so the
+  running transcript receives more vertical space without removing controls.
+- Kept the searchable paged Studio picker aligned with the Dashboard's compact
+  **More** affordance and responsive behavior.
+- Changed standalone WebRTC selection to an input with loaded-name suggestions.
+  An exact name outside the current page now uses the single-Agent endpoint
+  before opening a session, rather than requiring every earlier cursor page.
+- Added layout and page-external WebRTC browser regressions and rebuilt both
+  bundles.
+- Preserved the Portal's top-level Templates header, managed Local Dev Tunnel
+  connection flow, Project adapter, and public-policy tests. The Dashboard's
+  `embedded=1` header hiding is intentionally not imported; the source mapping
+  now records Template CSS and privacy coverage as adapted rather than exact.
+
+## 2026-09-24 — Paginate large Voice Agent catalogs
+
+**Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.
+This is a portal-only performance change, not a new upstream import.
+
+- Changed Studio and standalone WebRTC startup to request only the first 25
+  Voice Agents instead of following every service cursor before rendering.
+- Added explicit **Load more agents** controls that request one subsequent
+  cursor page at a time, deduplicate results, preserve existing selections, and
+  keep directly linked Agents selectable even when they are not on the first
+  page.
+- Replaced the Studio Session Agent select with a name-search field. Loaded
+  Agents are offered as browser suggestions, and exact names outside the
+  current page are resolved individually without scanning the full catalog.
+  Session actions remain disabled while typed text is not a confirmed Agent.
+- Added catalog unit coverage and a browser regression proving that startup
+  stops after one bounded request and the next page is fetched only on demand.
+- Rebuilt both browser bundles; the Foundry service remains the source of truth
+  and all requests continue through the authenticated local proxy.
+
 ## 2026-09-17 — Add the local sample Templates tab
 
 **Upstream pin unchanged:** `e713a37c4cdb3282157cbaf46b6d425bcd984c05`.

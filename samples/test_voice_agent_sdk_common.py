@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from voice_agent_definition import materialize_handoff_instruction_inheritance
 from voice_agent_sdk_common import (
     EventPrinter,
     _canonical_definition,
@@ -23,6 +24,42 @@ from voice_agent_sdk_common import (
 
 
 class VoiceAgentSdkCommonTests(unittest.TestCase):
+    def test_materializes_shared_handoff_instructions_for_publish(self) -> None:
+        definition = {
+            "instructions": "Shared policy.",
+            "handoff": {
+                "nodes": [
+                    {
+                        "id": "billing",
+                        "config": {
+                            "instructions": "Handle billing.",
+                            "inherit_from_base_instructions": True,
+                        },
+                    },
+                    {
+                        "id": "support",
+                        "config": {
+                            "instructions": "Handle support.",
+                            "inherit_from_base_instructions": False,
+                        },
+                    },
+                ],
+                "edges": [],
+            },
+        }
+
+        materialize_handoff_instruction_inheritance(definition)
+
+        billing = definition["handoff"]["nodes"][0]["config"]
+        support = definition["handoff"]["nodes"][1]["config"]
+        self.assertEqual(
+            "Shared policy.\n\nHandle billing.",
+            billing["instructions"],
+        )
+        self.assertEqual("Handle support.", support["instructions"])
+        self.assertNotIn("inherit_from_base_instructions", billing)
+        self.assertNotIn("inherit_from_base_instructions", support)
+
     def test_validates_project_endpoint_and_agent_name(self) -> None:
         endpoint = "https://account.services.ai.azure.com/api/projects/project"
         self.assertEqual(_validate_project_endpoint(endpoint + "/"), endpoint)
@@ -285,13 +322,61 @@ class VoiceAgentSdkCommonTests(unittest.TestCase):
         )
         self.assertEqual(len(elevator_service["handoff"]["nodes"]), 9)
         self.assertEqual(len(elevator_service["handoff"]["edges"]), 17)
+        source_definition = json.loads(
+            (
+                samples
+                / "example3_elevator_service_with_safety_zendesk_and_handoff"
+                / "agent.json"
+            ).read_text(encoding="utf-8")
+        )["definition"]
+        shared_instructions = source_definition["instructions"]
+        self.assertIn("## CONVERSATIONAL RESPONSE", shared_instructions)
+        self.assertIn(
+            "Match an explicitly stated emotion with restrained empathy.",
+            shared_instructions,
+        )
+        self.assertIn(
+            "that operation is the only next step",
+            shared_instructions,
+        )
+        self.assertIn(
+            "Never invent or\nintensify an emotion",
+            shared_instructions,
+        )
+        self.assertNotIn("## CURRENT NODE", shared_instructions)
+        for source_node, materialized_node in zip(
+            source_definition["handoff"]["nodes"],
+            elevator_service["handoff"]["nodes"],
+            strict=True,
+        ):
+            source_config = source_node["config"]
+            materialized_config = materialized_node["config"]
+            self.assertIs(source_config["inherit_from_base_instructions"], True)
+            self.assertTrue(
+                source_config["instructions"].startswith("## CURRENT NODE\n")
+            )
+            self.assertNotIn("## GLOBAL POLICY", source_config["instructions"])
+            self.assertNotIn(
+                "inherit_from_base_instructions",
+                materialized_config,
+            )
+            self.assertTrue(
+                materialized_config["instructions"].startswith("## GLOBAL POLICY\n")
+            )
+            self.assertIn(
+                "\n\n## CURRENT NODE\n",
+                materialized_config["instructions"],
+            )
         query_edge = next(
             edge
             for edge in elevator_service["handoff"]["edges"]
             if edge["id"] == "intent_router_to_query_issue"
         )
         self.assertEqual("auto", query_edge["target_response"])
-        self.assertNotIn("transfer_message", query_edge)
+        self.assertEqual(
+            "I understand you want a clear update on this ticket.",
+            query_edge["transfer_message"],
+        )
         report_issue = next(
             node
             for node in elevator_service["handoff"]["nodes"]
@@ -314,6 +399,7 @@ class VoiceAgentSdkCommonTests(unittest.TestCase):
             ["mock_zendesk_get_ticket_status"],
             query_issue["config"]["tools"][0]["allowed_tools"],
         )
+        self.assertIsNone(query_issue["config"]["interim_response"])
         human_handoff = next(
             node
             for node in elevator_service["handoff"]["nodes"]

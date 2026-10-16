@@ -51,7 +51,20 @@ async function api(path, options = undefined) {
   } catch {
     payload = { error: text };
   }
-  if (!response.ok) throw new Error(payload.error || `${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    const detail = payload?.error;
+    const message = typeof detail === "string"
+      ? detail
+      : detail?.message || payload?.message || `${response.status} ${response.statusText}`;
+    const requestId = detail?.request_id
+      || payload?.request_id
+      || response.headers.get("X-Portal-Request-Id")
+      || response.headers.get("x-ms-request-id");
+    const reference = requestId && !message.includes(requestId)
+      ? ` (request ${requestId})`
+      : "";
+    throw new Error(`${message}${reference}`);
+  }
   return payload;
 }
 

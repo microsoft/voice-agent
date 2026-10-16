@@ -42,6 +42,10 @@ test("describes an agent-initiated conversation close as successful", () => {
     describeSessionClose(1001, ""),
     { text: "session ended (idle/timeout)", kind: "" },
   );
+  assert.deepEqual(
+    describeSessionClose(1011, "Voice session closed", "AzureCliCredential: az login required"),
+    { text: "error: AzureCliCredential: az login required", kind: "err" },
+  );
 });
 
 test("drains audio only for an agent-initiated end-conversation close", () => {

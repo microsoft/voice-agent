@@ -1,3 +1,120 @@
+# Runtime synchronization validation
+
+## Independent PR installation validation
+
+Validated on **October 16, 2026** against the published PR #37 runtime at
+`f1f52b4624cf040c7b01ad5a9049953ae64d4a95`, on Linux with Python **3.12.3**,
+Node.js **24.21.0**, and newly downloaded Playwright Chromium.
+
+The source was exported from the GitHub PR ref, not copied from the developer's
+working directory. The export contained no `.env`, generated MCP configuration,
+virtual environment, `node_modules`, browser cache, Git metadata, or in-progress
+hosted-playground files. No Git worktree or sibling repository was used.
+
+| Check | Result |
+| --- | --- |
+| Fresh Portal dependencies | New venv, installed only `portal/requirements.txt` from public PyPI; resolved `azure-ai-projects 2.8.0` and `azure-identity 1.26.0`; `pip check` passed |
+| Python-only production startup | Started `demo_server.py` from an unrelated empty directory with an isolated HOME and neither Node.js nor Azure CLI on PATH |
+| Production pages and assets | Studio, Templates, Handoff Graph, and WebRTC returned HTTP 200; 11 referenced static assets loaded from the shipped files |
+| Template catalog without local state | All four configured cards and their definitions loaded; MCP configuration remained explicitly required |
+| Missing configuration and credentials | Missing Project stopped startup; missing MCP setup and Azure credentials returned explicit errors, not fabricated results |
+| Owned imports | All Portal modules and `samples/voice_agent_definition.py` resolved inside the exported repository; third-party imports resolved inside the new venv |
+| Fresh frontend tooling | `npm ci` used the public npm registry and lockfile; both bundles rebuilt with zero local hash drift |
+| JavaScript unit suite | **238 passed** |
+| Studio/privacy browser suite | **54 passed**, using a fresh browser installation |
+| Real local Portal browser suite | **10 passed**, including creation, editing, Template publication/readback, runtime graph, WebSocket responses, and explicit microphone startup |
+| Portal Python suite | **69 passed** |
+| Sample SDK/definition suite | **11 passed** |
+| Native shared MCP | New dedicated venv from `shared_mcp/requirements.txt`; **16 passed**, including Streamable HTTP and legacy SSE; `pip check` passed |
+| Real Azure read-only check | The exported production Portal, using only the existing Azure CLI sign-in, listed Agents and read one existing Agent with HTTP 200; no Agent, connection, or voice session was created |
+
+The clean checkout check also reproduced the old setup-directory error.
+[README setup commands](README.md#set-up) now use `cd portal` from the repository
+root, independent of the checkout folder's name.
+
+This proves repository and dependency independence, not offline operation.
+Use a complete checkout: the Portal uses the helpers and templates shipped in
+`samples/` and the guide in `docs/`. A real Foundry Project, preview/model access,
+and an authorized identity remain runtime prerequisites. Template publication
+also requires the documented native MCP and Dev Tunnel setup.
+
+The automated browser suites substitute Azure service boundaries. The separate
+live check was read-only; this validation did not repeat a real microphone-to-
+Azure voice conversation or publish a Template to Azure. Historical live
+conversation checks below must not be confused with this clean-install run.
+
+## Handoff MCP connection refresh validation
+
+Validated on **October 14, 2026** on Linux with the live Portal, native MCP
+runtime, Dev Tunnel, and the `voice-agent-india-tip` Foundry Project.
+
+| Check | Result |
+| --- | --- |
+| Failed session diagnosis | `sess_EYkhjQc8iN9yGkyYveNHR` aborted twice at `entrypoint_to_open_call`; native MCP recorded matching `GET /mcp/elevator-service` requests returning HTTP 401 |
+| Legacy MCP transport implementation | Current `shared_mcp` server and tests are byte-identical to the existing compatibility fix; 16 focused tests passed |
+| Managed connection refresh | India Project connection target matched the current generated Dev Tunnel URL after refresh |
+| Live control session | Existing Agent completed `entrypoint_to_open_call` and activated `open_call` |
+| Live runtime graph | Existing Elevator Agent rendered 10 authoring-style cards; four visited stages showed shares totaling exactly 100%, the entrypoint displayed one attributed turn, and its expanded panel showed observed Average/P50/P95/latest latency plus STT/LLM/TTS estimates |
+| Runtime metric unit coverage | Dwell accumulation, exact 100% shares, re-entry visits, per-node turns/latency samples, P50/P95 summaries, session stop, and compact duration formatting passed |
+| Handoff/Templates Python suites | 15 passed |
+| Portal JavaScript suite | 235 passed on Node 22 |
+| Portal browser UI | 54 passed, including spoken transfer-message continuation, gray `NOT VISITED` veils, enlarged emerald visited/live cards, live node metrics, and desktop drag/keyboard resizing |
+| Portal browser integration | 8 passed, including the consolidated Publish & run progress flow and a simulated publication failure that preserves the working copy |
+
+## Handoff Graph authoring and runtime validation
+
+Validated on **October 13, 2026** on Linux with Python **3.12.3**, Node
+**24.21.0**, npm, and Playwright headless Chromium.
+
+| Check | Result |
+| --- | --- |
+| `npm test` | **216 passed**, including 13 imported Handoff editor core tests |
+| `npm run build:all` | Studio and standalone WebRTC bundles built |
+| `npm run test:ui` | **48 passed** |
+| `npm run test:local` | **7 passed**, including Template → editor → publish → runtime graph |
+| Handoff-related Python suites | **52 passed** |
+| Full Python discovery | **69 passed** |
+| Live Portal on `127.0.0.1:9527` | Health, Templates, and Handoff returned HTTP 200 |
+| Live Handoff smoke | Four runtime-variant cards; Finance Realtime rendered 14 nodes; no browser errors |
+
+The checked-in browser dependency notices now identify the installed
+`js-yaml 5.4.1` version, so the public-release artifact suite passes together
+with Handoff routes, Templates materialization, proxy contracts, source-sync
+manifest tests, and local security tests.
+
+The live smoke loaded a local Template working copy but did not publish it.
+The Playwright Foundry fixture covered publication, version-only readback,
+navigation to `?view=handoff`, and the expanded runtime graph without modifying
+a real Azure Project.
+
+Validated on **September 24, 2026** on Linux with Python **3.12.3**, Node.js
+**26.10.0**, npm **11.19.1**, and Playwright headless Chromium.
+
+The immutable upstream pin remains
+`e713a37c4cdb3282157cbaf46b6d425bcd984c05`. This synchronization reviewed
+Dashboard source range
+`834b34c30c7197f2129e4992e9daa064ac246c81..2ce62f0e4cdec25e4c0bde1e713cc4dbb973c589`
+without advancing the accepted multi-root baseline past
+`88185887035f63a6b81114d7b38305532ebb6ad0`; Dashboard-only GPT Live, drafts,
+camera, ICM, and outer-shell files remain outside the Portal.
+
+| Check | Result |
+| --- | --- |
+| `npm test` | **203 passed** |
+| `npm run build:all` | Studio and standalone WebRTC bundles built |
+| `npm run test:ui` | **48 passed** |
+| `npm run test:local` | **6 passed** |
+| `python -m unittest discover -s tests -v` | **62 passed** |
+| Source synchronization audit | 126 source changes reported for review; **0 exact mapping drift**; **0 MCP source changes** |
+| Live Portal on `127.0.0.1:18098` | Health, Studio, Templates, WebRTC, config, and four-template catalog returned HTTP 200 |
+| Compact Studio measurement | Header 80 px, session controls 144 px, Agent input 257 px, transcript 761 px, no horizontal overflow |
+| Templates policy | Standalone header visible, no `embedded` class, four configured cards |
+| Standalone WebRTC | Exact-name input visible with five live suggestions; page-external lookup covered by deterministic browser regression |
+
+**319 Portal tests passed.** Live verification selected an existing Agent for
+read-only layout measurement but did not create an Agent, publish a Template,
+start a voice session, or modify an Azure Project connection.
+
 # Templates tab validation
 
 Validated on **September 17, 2026** on Linux with Python **3.13**, Node.js

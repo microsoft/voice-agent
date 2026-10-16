@@ -1,7 +1,85 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Browser-level regression coverage; no Azure credentials or live agent creation.
 import { test, expect } from "@playwright/test";
-import { mountStudio, selectTab, CONFIG } from "./studio-fixtures.mjs";
+import {
+  mountStudio, selectSessionAgent, selectTab, CONFIG,
+} from "./studio-fixtures.mjs";
+
+test("shows backend configuration failures with their request ID", async ({ page }) => {
+  await mountStudio(page, {}, "/demo/", {
+    configError: "Synthetic portal backend failure",
+    configRequestId: "request-123",
+  });
+
+  await expect(page.getByRole("alert")).toContainText("Synthetic portal backend failure");
+  await expect(page.getByRole("alert")).toContainText("request-123");
+});
+
+test("keeps a backend voice bridge failure visible after the socket closes", async ({ page }) => {
+  const api = await mountStudio(page);
+  await selectSessionAgent(page, "realtime-agent");
+  await page.getByRole("button", { name: "Connect & start session" }).click();
+  await expect.poll(() => api.sockets.length).toBeGreaterThan(0);
+
+  api.send({
+    type: "error",
+    error: {
+      code: "portal_bridge_error",
+      message: "Voice connection failed: synthetic upstream failure",
+      type: "RuntimeError",
+      request_id: "request-456",
+    },
+  });
+  await api.close(1011, "Voice session closed");
+
+  await expect(page.locator(".connection-status")).toContainText(
+    "Voice connection failed: synthetic upstream failure",
+  );
+  await expect(page.locator(".timeline")).toContainText("request-456");
+});
+
+test("loads the agent catalog one page at a time", async ({ page }) => {
+  const api = await mountStudio(page, {}, "/demo/", { extraVoiceAgents: 30 });
+  const picker = page.getByLabel("Session agent", { exact: true });
+
+  await expect(page.locator("datalist option")).toHaveCount(25);
+  expect(api.agentListQueries).toEqual(["?api-version=v1&kind=voice&limit=25"]);
+
+  await page.getByRole("button", { name: "Load more agents" }).click();
+
+  await expect(page.locator("datalist option")).toHaveCount(34);
+  await expect(page.getByRole("button", { name: "Load more agents" })).toHaveCount(0);
+  expect(api.agentListQueries).toHaveLength(2);
+  expect(api.agentListQueries[1]).toContain("limit=25");
+  expect(api.agentListQueries[1]).toContain("after=");
+});
+
+test("direct URLs select an agent outside the first catalog page", async ({ page }) => {
+  const api = await mountStudio(
+    page,
+    {},
+    "/demo/?agent=paged-agent-30",
+    { extraVoiceAgents: 30 },
+  );
+
+  await expect(page.getByLabel("Session agent", { exact: true })).toHaveValue("paged-agent-30");
+  expect(api.agentListQueries).toEqual(["?api-version=v1&kind=voice&limit=25"]);
+});
+
+test("searches an exact agent name outside the loaded catalog page", async ({ page }) => {
+  const api = await mountStudio(page, {}, "/demo/", { extraVoiceAgents: 30 });
+  const picker = page.getByLabel("Session agent", { exact: true });
+
+  await picker.fill("paged-agent-30");
+  await expect(page.getByRole("button", { name: "Connect & start session" })).toBeDisabled();
+  await picker.press("Enter");
+
+  await expect(picker).toHaveValue("paged-agent-30");
+  await expect(page.getByRole("button", { name: "Connect & start session" })).toBeEnabled();
+  expect((await page.locator(".studio-header").boundingBox()).height).toBeLessThan(90);
+  expect((await page.locator(".session-controls").boundingBox()).height).toBeLessThan(160);
+  expect(api.agentListQueries).toEqual(["?api-version=v1&kind=voice&limit=25"]);
+});
 
 test("default editor creates the same managed agent and selects it in the playground", async ({ page }) => {
   const api = await mountStudio(page);
@@ -16,6 +94,29 @@ test("default editor creates the same managed agent and selects it in the playgr
     audio: { input: { echo_cancellation: { reference_source: "client", channels: 2 } } },
   });
   await expect(page.getByRole("button", { name: "Edit definition" })).toBeEnabled();
+  expect(api.errors).toEqual([]);
+});
+
+test("speech input and output controls expose incompatible choices without allowing them", async ({ page }) => {
+  const api = await mountStudio(page);
+  await selectTab(page, "Voice");
+  const stt = page.getByLabel("Transcription model");
+  const voice = page.getByLabel("Output voice");
+  await expect(stt).toHaveValue("azure-speech");
+  await expect(stt.locator("option[value=whisper-1]")).toBeEnabled();
+  await expect(voice.locator("option[value=alloy]")).toBeEnabled();
+  await stt.selectOption("mai-transcribe-2");
+
+  await selectTab(page, "Agent");
+  await page.getByLabel("Model", { exact: true }).selectOption("gpt-4.1");
+  await selectTab(page, "Voice");
+  await expect(stt.locator("option[value=whisper-1]")).toBeDisabled();
+  await expect(voice.locator("option[value=alloy]")).toBeDisabled();
+  await expect(stt).toHaveValue("mai-transcribe-2");
+
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await expect.poll(() => api.creates.length).toBe(1);
+  expect(api.creates[0].definition.audio.input.transcription.model).toBe("mai-transcribe-2");
   expect(api.errors).toEqual([]);
 });
 
@@ -80,9 +181,10 @@ test("manual prompt, voice, greeting, storage and avatar options reach the reque
   await page.getByLabel("Fallback greeting").fill("Hello.");
   await page.getByLabel("Greeting tool choice").selectOption("auto");
   await selectTab(page, "Voice");
+  await page.getByLabel("Transcription model").selectOption("whisper-1");
   await page.getByRole("checkbox", { name: /^Video avatar/ }).check();
   await expect(page.getByRole("checkbox", { name: /^Live-reference/ })).not.toBeChecked();
-  await expect(page.getByRole("combobox", { name: "Voice", exact: true }).locator("option[value=alloy]")).toHaveCount(0);
+  await expect(page.getByLabel("Output voice").locator("option[value=alloy]")).toBeDisabled();
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect.poll(() => api.creates.length).toBe(1);
   expect(api.creates[0].definition).toMatchObject({
@@ -90,6 +192,7 @@ test("manual prompt, voice, greeting, storage and avatar options reach the reque
     greeting: { type: "llm_generated", prompt: "Welcome the caller.", fallback_text: "Hello.", tool_choice: "auto" },
   });
   expect(api.creates[0].definition.audio.input.echo_cancellation).toBeUndefined();
+  expect(api.creates[0].definition.audio.input.transcription.model).toBe("whisper-1");
 });
 
 test("hosted agent wrappers preserve target validation and exclude target-owned fields", async ({ page }) => {
@@ -120,7 +223,7 @@ test("greeting belongs to Agent and survives voice edits and authoring-mode swit
   await agentPanel.getByLabel("Greeting text").fill("Welcome back, {{name}}.");
   await selectTab(page, "Voice");
   await expect(page.getByLabel("First message")).not.toBeVisible();
-  await page.getByRole("combobox", { name: "Voice", exact: true }).selectOption("en-US-AndrewNeural");
+  await page.getByLabel("Output voice").selectOption("en-US-AndrewNeural");
   await selectTab(page, "Agent");
   await expect(agentPanel.getByLabel("Greeting text")).toHaveValue("Welcome back, {{name}}.");
   await page.getByRole("button", { name: "Generate", exact: true }).click();
@@ -225,7 +328,7 @@ test("structured input defaults validate before creation and omit inactive greet
 
 test("invalid structured input never opens a socket and changing agents clears the session override", async ({ page }) => {
   const api = await mountStudio(page);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("realtime-agent");
+  await selectSessionAgent(page, "realtime-agent");
   for (const invalid of ["[]", "null", '{"broken":']) {
     await page.getByText("Session settings", { exact: true }).click();
     await page.getByLabel("Structured input JSON").fill(invalid);
@@ -234,7 +337,7 @@ test("invalid structured input never opens a socket and changing agents clears t
     await expect(page.getByRole("status").filter({ hasText: "invalid structured input" })).toBeVisible();
     expect(api.sockets).toHaveLength(0);
   }
-  await page.getByLabel("Session agent", { exact: true }).selectOption("cascaded-agent");
+  await selectSessionAgent(page, "cascaded-agent");
   await page.getByText("Session settings", { exact: true }).click();
   await expect(page.getByLabel("Structured input JSON")).toHaveValue("");
   await page.getByText("Session settings", { exact: true }).click();
@@ -283,6 +386,37 @@ test("agent creation and agent debug panels collapse independently", async ({ pa
   await creationToggle.click();
   await expect(page.getByRole("button", { name: /Agent Creation.*Collapse panel/ })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("button", { name: /Agent Debug.*Expand panel/ })).toHaveAttribute("aria-expanded", "false");
+});
+
+test("desktop Agent Debug and Live conversation columns resize from their shared boundary", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await mountStudio(page, {}, "/demo/?view=handoff");
+  const side = page.locator(".studio-side-column");
+  const playground = page.locator(".playground-column");
+  const separator = page.getByRole("separator", {
+    name: "Resize Agent Debug and Live conversation panels",
+  });
+  const sideBefore = await side.boundingBox();
+  const playgroundBefore = await playground.boundingBox();
+  const handle = await separator.boundingBox();
+
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 180, handle.y + 120);
+  await page.mouse.up();
+
+  const sideAfterDrag = await side.boundingBox();
+  const playgroundAfterDrag = await playground.boundingBox();
+  expect(sideAfterDrag.width).toBeGreaterThan(sideBefore.width + 150);
+  expect(playgroundAfterDrag.width).toBeLessThan(playgroundBefore.width - 150);
+
+  await separator.focus();
+  await page.keyboard.press("ArrowLeft");
+  const sideAfterKeyboard = await side.boundingBox();
+  expect(sideAfterKeyboard.width).toBeLessThan(sideAfterDrag.width);
+
+  await separator.dblclick();
+  await expect(separator).toHaveAttribute("aria-valuenow", "720");
 });
 
 test("agent URLs select without automatically starting a credentialed session", async ({ page }) => {
@@ -350,7 +484,7 @@ test("leaving Generate still drops its late result instead of changing the selec
   const api = await mountStudio(page);
   let release;
   api.generateGate = new Promise((resolve) => { release = resolve; });
-  await page.getByLabel("Session agent", { exact: true }).selectOption("realtime-agent");
+  await selectSessionAgent(page, "realtime-agent");
   await page.getByRole("button", { name: "Generate", exact: true }).click();
   await page.getByRole("button", { name: "Generate agent", exact: true }).click();
   await expect.poll(() => api.generates.length).toBe(1);
@@ -363,7 +497,7 @@ test("leaving Generate still drops its late result instead of changing the selec
 
 test("YAML editing creates a new version and preserves unknown definition fields", async ({ page }) => {
   const api = await mountStudio(page);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("cascaded-agent");
+  await selectSessionAgent(page, "cascaded-agent");
   await expect(page.locator(".selected-agent-meta")).toContainText("en-US-AndrewNeural");
   await page.getByRole("button", { name: "Edit definition" }).click();
   const editor = page.getByLabel("Agent definition YAML");
@@ -381,7 +515,7 @@ test("YAML editing creates a new version and preserves unknown definition fields
 
 test("session overrides affect only the WebSocket and controls lock while connected", async ({ page }) => {
   const api = await mountStudio(page);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("realtime-agent");
+  await selectSessionAgent(page, "realtime-agent");
   await page.getByText("Session settings", { exact: true }).click();
   await page.getByLabel("Voice override", { exact: true }).selectOption("marin");
   await page.getByLabel("Conversation storage override").selectOption("false");
@@ -406,13 +540,15 @@ test("session overrides affect only the WebSocket and controls lock while connec
 
 test("echo-reference modes and WebRTC restrictions remain available", async ({ page }) => {
   const api = await mountStudio(page);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("echo-agent");
+  await selectSessionAgent(page, "echo-agent");
   await page.getByText("Session settings", { exact: true }).click();
   await expect(page.getByLabel("Transport", { exact: true })).toHaveValue("websocket");
   await expect(page.getByLabel("Transport", { exact: true }).locator("option[value=webrtc]")).toBeDisabled();
   await expect(page.getByLabel("Client reference audio").locator("option")).toHaveCount(3);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("cascaded-agent");
-  await expect(page.getByLabel("Voice override", { exact: true }).locator("option[value=marin]")).toHaveCount(0);
+  await selectSessionAgent(page, "cascaded-agent");
+  await expect(
+    page.getByLabel("Voice override", { exact: true }).locator("option[value=marin]"),
+  ).toBeDisabled();
   await page.getByLabel("Transport", { exact: true }).selectOption("webrtc");
   await page.getByText("Session settings", { exact: true }).click();
   await page.getByRole("button", { name: "Connect & start session" }).click();
@@ -482,7 +618,7 @@ test("keyboard tabs move focus without erasing the draft", async ({ page }) => {
   await page.getByRole("tab", { name: "Agent", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Voice", exact: true })).toBeFocused();
-  await expect(page.getByRole("combobox", { name: "Voice", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Output voice")).toBeVisible();
   await expect(page.getByLabel("First message")).not.toBeVisible();
   await page.keyboard.press("Home");
   await expect(page.getByRole("textbox", { name: /^Agent name/ })).toHaveValue("keyboard-draft");
@@ -511,7 +647,7 @@ test("connecting while Create is pending does not relabel the active session", a
   await expect.poll(() => api.creates.length).toBe(1);
   await api.start();
   release();
-  await expect(page.getByLabel("Session agent", { exact: true }).locator("option[value=late-agent]")).toHaveCount(1);
+  await expect(page.locator("datalist option[value=late-agent]")).toHaveCount(1);
   await expect(page.getByLabel("Session agent", { exact: true })).toHaveValue("realtime-agent");
 });
 
@@ -534,6 +670,56 @@ test("MCP approval still sends the native approval response", async ({ page }) =
   await expect.poll(() => api.messages.some((message) =>
     message.item?.type === "mcp_approval_response" && message.item.approval_request_id === "approval-1"
       && message.item.approve === true)).toBe(true);
+});
+
+test("a spoken handoff transfer and target answer remain one user turn", async ({ page }) => {
+  const api = await mountStudio(page);
+  await api.start("mcp-handoff-agent");
+  const input = page.getByLabel("Message your agent");
+  await input.fill("Please transfer me.");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+
+  api.send({ type: "response.created", response: { id: "response-transfer" } });
+  api.send({
+    type: "response.output_text.delta",
+    response_id: "response-transfer",
+    delta: "One moment while I transfer you. ",
+  });
+  api.send({
+    type: "session.handoff.started",
+    handoff_id: "handoff-spoken",
+    edge_id: "entry-tools",
+    from_node_id: "$entrypoint",
+    to_node_id: "tools",
+  });
+  api.send({
+    type: "response.done",
+    response: { id: "response-transfer", status: "completed", output: [] },
+  });
+  api.send({
+    type: "session.handoff.completed",
+    handoff_id: "handoff-spoken",
+    edge_id: "entry-tools",
+    from_node_id: "$entrypoint",
+    to_node_id: "tools",
+  });
+  api.send({ type: "response.created", response: { id: "response-target" } });
+  api.send({
+    type: "response.output_text.delta",
+    response_id: "response-target",
+    delta: "The specialist is ready.",
+  });
+  api.send({
+    type: "response.done",
+    response: { id: "response-target", status: "completed", output: [] },
+  });
+
+  const replies = page.locator(".msg.assistant");
+  await expect(replies).toHaveCount(1);
+  await expect(replies).toContainText(
+    "One moment while I transfer you. The specialist is ready.",
+  );
+  expect(api.errors).toEqual([]);
 });
 
 test("the digit demo client handler executes and renders its comparison", async ({ page }) => {
@@ -567,9 +753,9 @@ test("project search switches to the selected Foundry project", async ({ page })
 
 test("workflow MCP cards test reachability and show response scheduling", async ({ page }) => {
   await mountStudio(page);
-  await page.getByLabel("Session agent", { exact: true }).selectOption("mcp-handoff-agent");
+  await selectSessionAgent(page, "mcp-handoff-agent");
   await page.getByRole("button", { name: /Agent Debug.*Expand panel/ }).click();
-  await page.locator(".gnode").nth(1).click();
+  await page.locator('.runtime-node-card[data-node-id="tools"] .runtime-node-open').click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("scheduling: when_idle");
   await dialog.getByRole("button", { name: "Test", exact: true }).click();
@@ -577,12 +763,124 @@ test("workflow MCP cards test reachability and show response scheduling", async 
   await expect(dialog.locator(".probe-status")).toHaveAttribute("title", "fixture-mcp 1");
 });
 
+test("runtime handoff cards show live dwell time and completed user turns per node", async ({ page }) => {
+  const api = await mountStudio(page);
+  await api.start("mcp-handoff-agent");
+  api.send({
+    type: "session.updated",
+    session: {
+      id: "sess-studio-test",
+      handoff: {
+        active_node_id: "$entrypoint",
+        pipeline_family: "realtime",
+        transfer_count: 0,
+        attempt_count: 0,
+        available_edge_ids: ["entry-tools"],
+        nodes: [
+          { id: "$entrypoint", description: "Top-level session configuration.", implicit: true },
+          { id: "tools", description: "Use the fixture MCP.", implicit: false },
+        ],
+        edges: [{
+          id: "entry-tools",
+          source: "$entrypoint",
+          target: "tools",
+          target_response: "auto",
+        }],
+      },
+    },
+  });
+
+  const entry = page.locator('.runtime-node-card[data-node-id="$entrypoint"]');
+  const tools = page.locator('.runtime-node-card[data-node-id="tools"]');
+  await expect(page.locator(".runtime-node-card")).toHaveCount(2);
+  await expect(entry).toHaveClass(/active/);
+  await expect(entry).not.toHaveClass(/unvisited/);
+  await expect(tools).toHaveClass(/unvisited/);
+  await expect.poll(() => tools.evaluate((element) => (
+    getComputedStyle(element, "::after").content
+  ))).toBe('"NOT VISITED"');
+  const unvisitedWidth = (await tools.boundingBox()).width;
+  await expect(page.locator(".runtime-node-statline")).toHaveCount(0);
+  await expect(entry.locator(".runtime-node-metrics")).toContainText("Turns 0");
+
+  api.send({ type: "input_audio_buffer.speech_started", item_id: "entry-turn" });
+  api.send({ type: "input_audio_buffer.speech_stopped", item_id: "entry-turn" });
+  api.send({
+    type: "conversation.item.input_audio_transcription.completed",
+    item_id: "entry-turn",
+    transcript: "Please use the tool.",
+  });
+  await expect(entry.locator(".runtime-node-metrics")).toContainText("Turns 1");
+
+  api.send({
+    type: "session.handoff.completed",
+    handoff_id: "handoff-1",
+    edge_id: "entry-tools",
+    from_node_id: "$entrypoint",
+    to_node_id: "tools",
+  });
+  await expect(tools).toHaveClass(/active/);
+  await expect(tools).not.toHaveClass(/unvisited/);
+  await expect.poll(() => tools.evaluate((element) => (
+    getComputedStyle(element).borderTopWidth
+  ))).toBe("3px");
+  await expect.poll(async () => (await tools.boundingBox()).width).toBeGreaterThan(
+    unvisitedWidth + 15,
+  );
+  await expect(entry).not.toHaveClass(/active/);
+  await expect(entry).toHaveClass(/visited/);
+  await expect(entry.locator(".runtime-node-state")).toContainText("VISITED");
+
+  api.send({ type: "input_audio_buffer.speech_started", item_id: "tools-turn" });
+  api.send({ type: "input_audio_buffer.speech_stopped", item_id: "tools-turn" });
+  api.send({
+    type: "conversation.item.input_audio_transcription.completed",
+    item_id: "tools-turn",
+    transcript: "Run the lookup.",
+  });
+  api.answer("Done.");
+  await expect(tools.locator(".runtime-node-metrics")).toContainText("Turns 1");
+  await page.waitForTimeout(2100);
+  await expect(tools.locator(".runtime-node-metrics")).not.toContainText("Dwell 0.0s");
+  await expect(entry.locator(".runtime-node-metrics")).toContainText("%");
+  await expect(tools.locator(".runtime-node-metrics")).toContainText("%");
+
+  await tools.locator(".runtime-node-metrics").click();
+  const breakdown = tools.locator(".runtime-node-breakdown");
+  await expect(breakdown).toContainText("Observed turn latency");
+  await expect(breakdown).toContainText("Average");
+  await expect(breakdown).toContainText("Pipeline estimate");
+  await expect(breakdown).toContainText("Not available");
+});
+
 test("the standalone WebRTC page keeps its independent layout", async ({ page }) => {
   const api = await mountStudio(page);
   await page.goto("/static/demo/webrtc.html");
   await expect(page.locator(".wrtc-shell")).toBeVisible();
   await expect(page.locator(".studio")).toHaveCount(0);
-  await expect(page.locator(".wrtc-field select option")).toHaveCount(5);
+  await expect(page.getByLabel("Agent", { exact: true })).toHaveAttribute(
+    "placeholder",
+    "Select or enter an exact agent name…",
+  );
+  await expect(page.locator("#wrtc-agent-options option")).toHaveCount(4);
+  expect(api.errors).toEqual([]);
+});
+
+test("the standalone WebRTC page resolves an exact agent outside the loaded page", async ({ page }) => {
+  const api = await mountStudio(page, {}, "/demo/", { extraVoiceAgents: 30 });
+  const initialListCount = api.agentListQueries.length;
+  await page.goto("/static/demo/webrtc.html");
+
+  await expect(page.locator("#wrtc-agent-options option")).toHaveCount(25);
+  await page.getByLabel("Agent", { exact: true }).fill("paged-agent-30");
+  await page.getByRole("button", { name: "Start WebRTC session" }).click();
+
+  await expect(page.getByRole("button", { name: "End & review" })).toBeVisible();
+  await expect.poll(() => api.sockets.length).toBe(1);
+  expect(api.agentReads).toEqual(["paged-agent-30"]);
+  expect(api.agentListQueries.slice(initialListCount)).toEqual([
+    "?api-version=v1&kind=voice&limit=25",
+  ]);
   expect(api.errors).toEqual([]);
 });
 
@@ -611,6 +909,11 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 768, height: 1024
     await expect(page.getByRole("button", { name: "Connect & start session" })).toHaveCSS("font-size", "15px");
     await expect(page.getByLabel("Message your agent")).toHaveCSS("font-size", "16px");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    if (viewport.width <= 960) {
+      await expect(page.getByRole("separator", {
+        name: "Resize Agent Debug and Live conversation panels",
+      })).toBeHidden();
+    }
     const emblem = await page.locator(".voice-emblem").boundingBox();
     expect(emblem.width).toBe(emblem.height);
     for (const name of ["Agent", "Voice", "Tools", "Workflow", "Demos"]) {

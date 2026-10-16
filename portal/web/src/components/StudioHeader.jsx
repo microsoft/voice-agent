@@ -80,6 +80,7 @@ export function StudioHeader({ cfg, disabled }) {
       <nav className="portal-page-nav" aria-label="Portal pages">
         <span>Live session</span>
         <a href="/templates">Templates</a>
+        <a href="/handoff/">Handoff Graph</a>
       </nav>
       <div className="studio-backend">
         <label htmlFor="studio-backend">Foundry project</label>

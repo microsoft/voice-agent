@@ -2,7 +2,8 @@
 """Report source dashboard changes and their portal synchronization targets.
 
 The existing UPSTREAM.json remains authoritative for voice_demo. SOURCE_SYNC.json
-adds the independently owned template_view mappings. This tool is read-only.
+adds the independently owned template_view and handoff_view mappings. This tool
+is read-only.
 """
 
 from __future__ import annotations
@@ -125,6 +126,20 @@ def mappings(
                 "owner": "template_view",
             }
         )
+    for item in sync.get("handoff_mappings", []):
+        source_root = roots[item.get("root", "handoff_view")].rstrip("/")
+        result.append(
+            {
+                "source": (
+                    PurePosixPath(source_root)
+                    / PurePosixPath(item["source"])
+                ).as_posix(),
+                "destination": item.get("destination", ""),
+                "destination_root": item.get("destination_root", "portal"),
+                "action": item["action"],
+                "owner": "handoff_view",
+            }
+        )
     for item in sync.get("sample_mappings", []):
         source_root = roots[item["root"]].rstrip("/")
         result.append(
@@ -143,6 +158,10 @@ def mappings(
             }
         )
     return result
+
+
+def effective_mappings(items: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    return {item["source"]: item for item in items}
 
 
 def changed_paths(
@@ -251,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         upstream, sync = load_manifests()
         all_mappings = mappings(upstream, sync)
-        by_source = {item["source"]: item for item in all_mappings}
+        by_source = effective_mappings(all_mappings)
         roots = [
             *sync["source"]["roots"].values(),
         ]
@@ -281,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
                 pending = True
 
         drifted = []
-        for item in all_mappings:
+        for item in by_source.values():
             drift = exact_drift(args.source, args.ref, item)
             if drift is not None:
                 drifted.append((item, drift))

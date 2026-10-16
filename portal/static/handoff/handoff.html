@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Handoff Graph · Voice Agents</title>
+  <link rel="stylesheet" href="/static/handoff/handoff.css?v=20261016-portal-1">
+</head>
+<body>
+  <div class="app">
+    <header class="product-nav">
+      <a class="brand" href="/" aria-label="Voice Agent portal">
+        <span class="brand-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <span>Voice Agent <b>Studio</b></span>
+      </a>
+      <nav aria-label="Portal pages">
+        <a href="/">Live session</a>
+        <a href="/templates/">Templates</a>
+        <span aria-current="page">Handoff Graph</span>
+      </nav>
+      <div class="environment" id="environment">Connecting to Foundry…</div>
+    </header>
+
+    <header class="action-bar">
+      <div class="resource-title">
+        <span class="kicker">Handoff Graph</span>
+        <div class="resource-line">
+          <h1 id="agent-title">No Agent selected</h1>
+          <span id="version-badge" class="badge">Version —</span>
+          <span id="dirty-badge" class="badge quiet">Clean</span>
+          <span id="valid-badge" class="badge quiet">Not loaded</span>
+        </div>
+      </div>
+      <div class="action-status">
+        <p id="operation-status" role="status">Choose a project and Agent, or create a new Agent.</p>
+        <p id="operation-error" role="alert" hidden></p>
+      </div>
+      <div class="primary-actions" aria-label="Definition actions">
+        <button id="validate-action" class="button ghost" type="button">Validate</button>
+        <button id="export-action" class="button ghost" type="button">Export</button>
+        <button id="publish-run-action" class="button publish" type="button" disabled>Publish &amp; run</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="rail" aria-label="Graph outline">
+        <section class="rail-section source-section">
+          <div class="section-heading">
+            <div>
+              <span class="kicker">Foundry source</span>
+              <h2>Working copy</h2>
+            </div>
+            <button id="refresh-agents" class="icon-button" type="button" aria-label="Refresh Agent list" title="Refresh Agent list">↻</button>
+          </div>
+          <div class="source-field-heading">
+            <label for="backend-select">Project</label>
+            <span id="project-load-state" class="source-load-state loading" aria-live="polite">Loading projects…</span>
+          </div>
+          <select id="backend-select" aria-label="Foundry project backend" disabled>
+            <option>Loading available projects…</option>
+          </select>
+          <div class="source-field-heading">
+            <label for="agent-search">Find Agent</label>
+            <span id="agent-load-state" class="source-load-state" aria-live="polite">Waiting for project</span>
+          </div>
+          <input id="agent-search" type="search" autocomplete="off"
+            placeholder="Partial match across all loaded Agents">
+          <label for="agent-select" class="visually-hidden">Voice Agent</label>
+          <select id="agent-select" class="agent-list" size="5" aria-label="Voice Agents"></select>
+          <div class="agent-list-meta">
+            <span id="agent-result-count">0 available</span>
+            <span>Double-click to open</span>
+          </div>
+          <div class="source-action-row">
+            <button id="load-agent" class="button source-open" type="button" disabled>Open selected Agent</button>
+            <button id="new-graph" class="button source-new" type="button">＋ New Agent</button>
+          </div>
+          <div class="rail-graph-fields">
+            <label for="rail-agent-name">Publication name</label>
+            <input id="rail-agent-name" type="text" placeholder="Existing Agent name" disabled>
+            <div class="rail-field-row">
+              <div>
+                <label for="rail-max-transfers">Max transfers</label>
+                <input id="rail-max-transfers" type="number" min="1" disabled>
+              </div>
+              <div>
+                <label for="rail-max-attempts">Max attempts</label>
+                <input id="rail-max-attempts" type="number" min="1" disabled>
+              </div>
+            </div>
+            <button id="runtime-settings" class="button runtime-settings-button full" type="button" disabled>
+              ⚙ Agent runtime settings
+            </button>
+          </div>
+        </section>
+
+        <section class="rail-section outline-section">
+          <div class="section-heading">
+            <div>
+              <span class="kicker">Topology</span>
+              <h2>Graph objects</h2>
+            </div>
+          </div>
+          <div class="topology-tabs" role="tablist" aria-label="Graph object type">
+            <button id="nodes-tab" type="button" role="tab" aria-selected="true">
+              Nodes <span id="node-count" class="count">0</span>
+            </button>
+            <button id="edges-tab" type="button" role="tab" aria-selected="false">
+              Edges <span id="edge-count" class="count">0</span>
+            </button>
+          </div>
+          <div id="node-outline" class="outline" role="listbox" aria-label="Graph nodes"></div>
+          <div id="edge-outline" class="outline edge-outline" role="listbox" aria-label="Graph edges" hidden></div>
+          <div class="rail-button-grid">
+            <button id="add-node" class="button accent-soft" type="button" disabled>＋ Node</button>
+            <button id="add-edge" class="button accent-soft" type="button" disabled>↗ Edge</button>
+          </div>
+        </section>
+
+        <section class="rail-section problems">
+          <div class="section-heading">
+            <h3>Problems</h3>
+            <span id="problem-count" class="count">0</span>
+          </div>
+          <div id="problem-list" class="problem-list"></div>
+        </section>
+      </aside>
+
+      <section class="canvas-panel" aria-label="Handoff graph canvas">
+        <div class="canvas-meta">
+          <div class="canvas-copy">
+            <span id="canvas-label">Definition canvas</span>
+            <small id="canvas-help">Top-to-bottom flow keeps routes readable. Drag cards to fine-tune or connect handles.</small>
+          </div>
+          <div class="canvas-meta-actions">
+            <button id="template-action" class="canvas-action canvas-template" type="button">
+              <span class="template-spark" aria-hidden="true">✦</span>
+              <span class="canvas-action-label">Load from templates</span>
+            </button>
+            <button id="layout-action" class="canvas-action canvas-arrange" type="button"
+              aria-label="Arrange nodes from top to bottom" title="Arrange nodes from top to bottom" disabled>
+              <span aria-hidden="true">↧</span>
+              <span class="canvas-action-label">Arrange nodes</span>
+            </button>
+          </div>
+        </div>
+        <div id="canvas" class="canvas" tabindex="0" aria-label="Interactive handoff graph">
+          <div class="canvas-grid" aria-hidden="true"></div>
+          <svg id="edge-layer" class="edge-layer" aria-hidden="true">
+            <defs>
+              <linearGradient id="selected-edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#0f9f76"></stop>
+                <stop offset="50%" stop-color="#2563eb"></stop>
+                <stop offset="100%" stop-color="#a83fb1"></stop>
+              </linearGradient>
+              <marker id="edge-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,4 L0,8 z"></path>
+              </marker>
+              <marker id="edge-arrow-jump" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,4 L0,8 z"></path>
+              </marker>
+              <marker id="edge-arrow-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,4 L0,8 z"></path>
+              </marker>
+            </defs>
+            <g id="edge-transform"></g>
+          </svg>
+          <div id="node-transform" class="node-transform"></div>
+          <div id="canvas-empty" class="canvas-empty">
+            <span class="empty-orbit" aria-hidden="true"></span>
+            <strong>No definition loaded</strong>
+            <p>Open an existing Agent or choose New Agent to start a local definition.</p>
+          </div>
+        </div>
+        <div class="canvas-toolbar" role="toolbar" aria-label="Canvas controls">
+          <button id="add-node-canvas" class="canvas-primary" type="button" disabled>＋ Add node</button>
+          <span class="toolbar-divider"></span>
+          <button id="undo-action" type="button" aria-label="Undo" title="Undo" disabled>↶</button>
+          <button id="redo-action" type="button" aria-label="Redo" title="Redo" disabled>↷</button>
+          <span class="toolbar-divider"></span>
+          <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <output id="zoom-level" aria-live="polite">100%</output>
+          <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">＋</button>
+          <button id="fit-action" type="button">Fit</button>
+        </div>
+      </section>
+    </main>
+
+    <section id="publish-progress" class="publish-progress" aria-label="Publish and run progress" hidden>
+      <div class="publish-progress-shell" role="dialog" aria-modal="true" aria-labelledby="publish-progress-title">
+        <header class="publish-progress-header">
+          <div>
+            <span class="kicker">Foundry release</span>
+            <h2 id="publish-progress-title">Publish &amp; run</h2>
+            <p id="publish-progress-summary" role="status">Preparing publication…</p>
+          </div>
+          <button id="close-publish-progress" class="icon-button" type="button"
+            aria-label="Close publish progress" disabled>×</button>
+        </header>
+        <div class="publish-progress-overview">
+          <div>
+            <span>Target Agent</span>
+            <strong id="publish-progress-agent">—</strong>
+          </div>
+          <div>
+            <span>Foundry Project</span>
+            <strong id="publish-progress-project">—</strong>
+          </div>
+        </div>
+        <ol class="publish-progress-steps">
+          <li data-publish-step="validate">
+            <span class="publish-step-indicator" aria-hidden="true"></span>
+            <div><strong>Validate working copy</strong><small>Check graph topology and required Agent fields.</small></div>
+          </li>
+          <li data-publish-step="mcp">
+            <span class="publish-step-indicator" aria-hidden="true"></span>
+            <div><strong>Refresh MCP connection</strong><small>Update the selected Project with the current managed MCP target and credential.</small></div>
+          </li>
+          <li data-publish-step="publish">
+            <span class="publish-step-indicator" aria-hidden="true"></span>
+            <div><strong>Publish Agent version</strong><small>Create an immutable release through the server-held Foundry credential.</small></div>
+          </li>
+          <li data-publish-step="verify">
+            <span class="publish-step-indicator" aria-hidden="true"></span>
+            <div><strong>Verify published version</strong><small>Read the release back and confirm the exact definition is available.</small></div>
+          </li>
+          <li data-publish-step="open">
+            <span class="publish-step-indicator" aria-hidden="true"></span>
+            <div><strong>Open Live session</strong><small>Launch the verified Agent with its runtime handoff graph expanded.</small></div>
+          </li>
+        </ol>
+        <footer class="publish-progress-footer">
+          <p id="publish-progress-error" role="alert" hidden></p>
+          <button id="publish-progress-done" class="button secondary" type="button" hidden>Close</button>
+        </footer>
+      </div>
+    </section>
+
+    <section id="node-mcp-dialog" class="node-mcp-dialog" aria-label="Node MCP connections" hidden>
+      <div class="node-mcp-dialog-shell" role="dialog" aria-modal="true" aria-labelledby="node-mcp-dialog-title">
+        <header class="node-mcp-dialog-header">
+          <div class="node-mcp-dialog-title-group">
+            <span class="node-mcp-dialog-icon" aria-hidden="true">
+              <svg class="ui-icon" viewBox="0 0 24 24">
+                <rect x="3" y="7" width="6" height="10" rx="2"></rect>
+                <rect x="15" y="7" width="6" height="10" rx="2"></rect>
+                <path d="M9 12h6M6 10v4M18 10v4"></path>
+              </svg>
+            </span>
+            <div>
+              <span class="kicker">Node integration</span>
+              <h2 id="node-mcp-dialog-title">MCP connections</h2>
+              <p id="node-mcp-dialog-subtitle"></p>
+            </div>
+          </div>
+          <button id="close-node-mcp-dialog" class="icon-button" type="button" aria-label="Close MCP connections">×</button>
+        </header>
+        <div id="node-mcp-dialog-body" class="node-mcp-dialog-body"></div>
+      </div>
+    </section>
+
+    <section id="template-picker" class="template-picker" aria-label="Load from templates" hidden>
+      <div class="template-picker-shell" role="dialog" aria-modal="true" aria-labelledby="template-picker-title">
+        <header class="template-picker-header">
+          <div>
+            <span class="template-picker-kicker">Curated starting points</span>
+            <h2 id="template-picker-title">Load a proven workflow into this canvas</h2>
+            <p>Selecting a template replaces the local working copy. Nothing is published until you choose Publish &amp; run.</p>
+          </div>
+          <button id="close-template-picker" class="icon-button" type="button" aria-label="Close template picker">×</button>
+        </header>
+        <div class="template-picker-toolbar">
+          <p id="template-picker-status" role="status">Loading the template catalog…</p>
+          <div>
+            <a class="template-page-link" href="/templates/" target="_blank" rel="noreferrer">Open full Templates page</a>
+            <button id="reload-template-picker" type="button">Reload</button>
+          </div>
+        </div>
+        <div id="template-picker-grid" class="template-picker-grid" aria-live="polite"></div>
+        <footer class="template-picker-footer">
+          <span aria-hidden="true">✦</span>
+          The selected definition uses this Dashboard's model and its configured MCP Project connection.
+        </footer>
+      </div>
+    </section>
+
+    <section id="node-editor" class="node-editor" aria-label="Node setup" hidden>
+      <div class="node-editor-shell">
+        <header class="node-editor-header">
+          <div class="editor-title-cluster">
+            <span id="node-editor-kind-icon" class="editor-kind-icon" aria-hidden="true"></span>
+            <div>
+              <span id="node-editor-kind-label" class="editor-kind-badge node-kind">Node</span>
+              <h2 id="node-editor-title">Configure node</h2>
+              <p>Graph defines topology. This workspace defines the selected node behavior.</p>
+            </div>
+          </div>
+          <div class="editor-header-actions">
+            <button id="close-node-editor" class="button secondary" type="button">Back to graph</button>
+            <button id="delete-node-editor" class="button danger-action" type="button" hidden>Delete node</button>
+            <button id="done-node-editor" class="button publish" type="button">Save node</button>
+          </div>
+        </header>
+        <div id="node-editor-content" class="node-editor-content">
+          <div id="node-editor-body" class="node-editor-body"></div>
+          <aside id="node-component-panel" class="node-component-panel" aria-label="Component configuration" hidden>
+            <header>
+              <div>
+                <span class="kicker" id="component-panel-kicker">Component</span>
+                <h3 id="component-panel-title">Configure component</h3>
+              </div>
+              <button id="close-component-panel" class="icon-button" type="button" aria-label="Close component configuration">×</button>
+            </header>
+            <div id="node-component-panel-body" class="node-component-panel-body"></div>
+          </aside>
+        </div>
+        <footer class="node-editor-footer">
+          <span>Changes stay local until you publish.</span>
+        </footer>
+      </div>
+    </section>
+
+    <section id="edge-editor" class="edge-editor" aria-label="Edge setup" hidden>
+      <div class="edge-editor-shell">
+        <header class="edge-editor-header">
+          <div class="editor-title-cluster">
+            <span class="editor-kind-icon edge-kind-icon" aria-hidden="true">↗</span>
+            <div>
+              <span class="editor-kind-badge edge-kind">Edge</span>
+              <h2 id="edge-editor-title">Configure edge</h2>
+              <p>Define when and how the conversation transfers between nodes.</p>
+            </div>
+          </div>
+          <div class="editor-header-actions">
+            <button id="close-edge-editor" class="button secondary" type="button">Back to graph</button>
+            <button id="delete-edge-editor" class="button danger-action" type="button">Delete edge</button>
+            <button id="done-edge-editor" class="button publish" type="button">Save edge</button>
+          </div>
+        </header>
+        <div id="edge-editor-body" class="edge-editor-body"></div>
+      </div>
+    </section>
+
+    <section id="definition-drawer" class="definition-drawer" aria-label="Generated definition" hidden>
+      <div class="drawer-heading">
+        <div>
+          <span class="kicker">Canonical Agent definition</span>
+          <h2>Export now, publish here or through the Foundry API later</h2>
+        </div>
+        <div class="definition-tabs" role="tablist" aria-label="Definition format">
+          <button type="button" role="tab" data-format="yaml" aria-selected="true">YAML</button>
+          <button type="button" role="tab" data-format="json" aria-selected="false">JSON</button>
+        </div>
+        <div class="drawer-actions">
+          <button id="copy-definition" class="button ghost compact" type="button">Copy</button>
+          <button id="download-definition" class="button ghost compact" type="button">Download</button>
+          <button id="copy-publish-body" class="button accent-soft compact" type="button">Copy publish body</button>
+          <button id="close-definition" class="icon-button" type="button" aria-label="Close definition drawer">×</button>
+        </div>
+      </div>
+      <div class="definition-drawer-body">
+        <aside class="export-guide" aria-label="How to publish this export">
+          <span class="kicker">Publication contract</span>
+          <h3>This export is the <code>definition</code>, not the entire API request.</h3>
+          <p id="export-format-guidance"></p>
+          <ol>
+            <li>Choose the destination Agent name. The name belongs in the URL, not in this file.</li>
+            <li>
+              Send <code id="export-api-path">POST /agents/&lt;agent-name&gt;/versions?api-version=v1</code>.
+            </li>
+            <li>Wrap the exported object in the request below and send it as JSON.</li>
+          </ol>
+          <pre class="publish-body-example" aria-label="Foundry version request example">{
+  "definition": { "...": "this export" },
+  "description": "Optional version description",
+  "metadata": {},
+  "draft": false
+}</pre>
+          <div class="export-guide-notes">
+            <p><strong>Release:</strong> use <code>"draft": false</code>.</p>
+            <p><strong>Draft:</strong> use <code>"draft": true</code>.</p>
+            <p><strong>Required headers:</strong> <code>Authorization</code>, <code>Content-Type: application/json</code>, and <code id="export-feature-header">Foundry-Features</code>.</p>
+          </div>
+          <p class="export-guide-shortcut">
+            The page-level <strong>Publish &amp; run</strong> button builds this wrapper automatically.
+            <strong>Copy publish body</strong> copies a complete JSON request body for external publication.
+          </p>
+        </aside>
+        <div class="definition-output-pane">
+          <div class="definition-output-heading">
+            <span>Exported definition</span>
+            <strong id="export-format-label">YAML</strong>
+          </div>
+          <pre id="definition-output" tabindex="0"></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <template id="metric-template">
+    <div class="metric">
+      <span></span>
+      <strong></strong>
+    </div>
+  </template>
+
+  <script type="module" src="/static/handoff/handoff-app.js?v=20261016-portal-1"></script>
+</body>
+</html>

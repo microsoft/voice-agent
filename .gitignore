@@ -1,5 +1,6 @@
 .venv/
 .local-mcp-and-ui/
+DevTunnels/
 samples/.env
 samples/.env.tip
 samples/subagent/**/.env

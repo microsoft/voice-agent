@@ -65,8 +65,9 @@ It exits `1` with `--check` for drift or an advanced upstream revision, and `2`
 for an invalid manifest/Git operation.
 
 `source_sync_status.py` adds the source dashboard's independently owned
-`template_view` tree and defaults to the source working tree, so an Agent can
-inspect uncommitted dashboard changes before a source commit exists. It combines
+`template_view` and `handoff_view` trees and defaults to the source working tree,
+so an Agent can inspect uncommitted dashboard changes before a source commit
+exists. It combines
 the complete `voice_demo` mapping from `UPSTREAM.json` with the additional
 exact/adapted/omitted mappings in `SOURCE_SYNC.json`. Exact mappings must remain
 byte-identical; adapted mappings name the portal file that needs a small
@@ -142,6 +143,14 @@ not belong to the portal synchronization surface.
   static paths, public documentation, and publishing. Its catalog remains an
   explicit allowlist rooted under `VoiceAgent/samples/`; MCP config and token
   paths remain confined under `VoiceAgent/shared_mcp/`.
+- The Dashboard may load Templates with `embedded=1` and hide the inner
+  standalone header because its outer shell already owns page navigation. The
+  Portal always renders Templates as a top-level page and must retain that
+  header; Template CSS is therefore an adapted mapping, not an exact copy.
+- The Portal ships Handoff Graph as a top-level standalone destination. Keep
+  its validation/layout core and CSS exact where possible, but retain Portal
+  navigation, loopback security, allowlisted static routes, explicit-connect
+  runtime behavior, and version-only readback compatibility as adapters.
 - Source template config uses `connection_mode: user_provided` with the stable
   Envoy Finance and UMW v3 routes. It dynamically reuses the selected Project's
   connection or accepts a one-time password input to configure it; the

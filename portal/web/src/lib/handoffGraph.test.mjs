@@ -62,8 +62,11 @@ test("carries the prompt each node actually runs with", () => {
   assert.equal(byId[ENTRYPOINT_NODE_ID].instructions, "You are the front-line agent.");
   assert.deepEqual(byId[ENTRYPOINT_NODE_ID].tools, ["store"]);
   assert.equal(byId[ENTRYPOINT_NODE_ID].model, "gpt-realtime");
+  assert.equal(byId[ENTRYPOINT_NODE_ID].stt, "native-realtime-audio");
   assert.match(byId.billing.instructions, /billing specialist/);
   assert.equal(byId.billing.voice, "en-US-EmmaNeural");
+  assert.equal(byId.billing.model, "gpt-realtime");
+  assert.equal(byId.billing.stt, "native-realtime-audio");
   assert.equal(byId.billing.toolChoice, "auto");
 });
 

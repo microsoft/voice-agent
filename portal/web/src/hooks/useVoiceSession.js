@@ -24,6 +24,13 @@ import {
 } from "../lib/chatMessages.mjs";
 import { activeHandoffNode, handoffMessage, shouldStartSessionResources } from "../lib/handoff.mjs";
 import {
+  activateHandoffNode,
+  createHandoffRuntimeMetrics,
+  recordHandoffLatency,
+  recordHandoffUserTurn,
+  stopHandoffRuntimeMetrics,
+} from "../lib/handoffRuntimeMetrics.mjs";
+import {
   COMPLETED_FUNCTION_ITEM_EVENTS,
   appendTranscript,
   functionCallFromArgumentsDone,
@@ -40,21 +47,26 @@ import {
 } from "../lib/clientFunctions.mjs";
 import {
   addResponseUsage,
+  abortServerContinuation,
   applyResponseServerTiming,
   canFinalizeAfterToolFailure,
   createTurnTracker,
   describeMcpTool,
   elapsedMetricMs,
   finishToolCall,
+  inputPcmSentAtMs,
   indexSessionTools,
   markFirstAudio,
   markFirstPlayback,
   markFirstSpeech,
   markFirstToken,
+  markServerContinuationPending,
+  markServerContinuationTargetReady,
   markSpeechStopped,
   markTimeoutTriggered,
   pendingToolCallCount,
   pcmVoiceOffsetsMs,
+  recordInputPcmPacket,
   shouldFinalizeOnResponseDone,
   snapshotTurnMetrics,
   startAssistantResponse,
@@ -109,6 +121,9 @@ export function useVoiceSession() {
   const [handoffState, setHandoffState] = useState(null);
   const [handoffTrail, setHandoffTrail] = useState([]);
   const [takenEdgeIds, setTakenEdgeIds] = useState([]);
+  const [handoffRuntimeMetrics, setHandoffRuntimeMetrics] = useState(
+    createHandoffRuntimeMetrics,
+  );
 
   const wsRef = useRef(null);
   const audioRef = useRef(null);
@@ -130,8 +145,15 @@ export function useVoiceSession() {
   const sessionToolIndexRef = useRef({});
   const transcriptionTimingRef = useRef(new Map());
   const activeUserItemIdRef = useRef(null);
+  const activeHandoffNodeRef = useRef(null);
+  const userTurnNodeByItemRef = useRef(new Map());
+  const countedUserTurnIdsRef = useRef(new Set());
+  const pendingAudioTurnNodeRef = useRef(null);
+  const turnNodeIdRef = useRef(null);
   const latestInputVoiceAtRef = useRef(null);
   const activeInputVoiceAtRef = useRef(null);
+  const inputPcmPacketsRef = useRef([]);
+  const inputPcmTimelineEndMsRef = useRef(0);
   const lastAssistantSpeechEndAtRef = useRef(null);
   // Client-executed `function` tools. `clientFunctionsRef` is the name -> handler
   // registry the app installs; the rest is the per-session state needed to answer a call exactly
@@ -149,7 +171,23 @@ export function useVoiceSession() {
   const verboseRef = useRef(false);
   const sessionReadyRef = useRef(false);
   const clientCloseRequestedRef = useRef(false);
+  const sessionFailureRef = useRef("");
   verboseRef.current = verbose;
+
+  const setRuntimeActiveNode = useCallback((nodeId, atMs = monotonicNow()) => {
+    const id = String(nodeId || "");
+    activeHandoffNodeRef.current = id || null;
+    setActiveHandoffNodeId(id || null);
+    if (id) {
+      setHandoffRuntimeMetrics((current) => activateHandoffNode(current, id, atMs));
+    }
+  }, []);
+
+  const countRuntimeUserTurn = useCallback((nodeId) => {
+    const id = String(nodeId || activeHandoffNodeRef.current || "");
+    if (!id) return;
+    setHandoffRuntimeMetrics((current) => recordHandoffUserTurn(current, id));
+  }, []);
 
   // ---- message helpers (setMessages by id, like the sample's setMessages) ----
   /* Messages carry the same clock as protocol frames. The transcript and the event stream are read
@@ -190,6 +228,7 @@ export function useVoiceSession() {
 
   const beginTurn = useCallback((startedAtMs = monotonicNow(), startSource = "server_vad") => {
     turnTrackerRef.current = createTurnTracker(startedAtMs, startSource);
+    turnNodeIdRef.current = activeHandoffNodeRef.current;
     currentAssistantId.current = null;
   }, []);
 
@@ -198,6 +237,19 @@ export function useVoiceSession() {
     const assistantId = turn.assistantId || currentAssistantId.current;
     if (assistantId) {
       const metrics = { ...snapshotTurnMetrics(turn), complete: true };
+      const observedLatencyMs = metrics.endToEndMs ?? metrics.ttfaMs ?? metrics.ttftMs;
+      const metricNodeId = turnNodeIdRef.current || activeHandoffNodeRef.current;
+      if (
+        metricNodeId
+        && !["agent_playback_end", "idle_timeout"].includes(metrics.startSource)
+        && Number.isFinite(observedLatencyMs)
+      ) {
+        setHandoffRuntimeMetrics((current) => recordHandoffLatency(
+          current,
+          metricNodeId,
+          observedLatencyMs,
+        ));
+      }
       setMessages((prev) => prev.map((message) => (
         message.id === assistantId && message.type === "assistant"
           ? { ...message, metrics: { ...(message.metrics || {}), ...metrics } }
@@ -205,6 +257,7 @@ export function useVoiceSession() {
       )));
     }
     turnTrackerRef.current = createTurnTracker();
+    turnNodeIdRef.current = null;
     currentAssistantId.current = null;
   }, []);
 
@@ -556,17 +609,22 @@ export function useVoiceSession() {
     const audio = ensureAudio();
     try {
       await audio.startRecording((bytes) => {
-        const receivedAtMs = monotonicNow();
         const channels = clientReferenceEcRef.current ? 2 : 1;
         const voice = pcmVoiceOffsetsMs(bytes, { channels });
-        if (voice.lastVoicedMs != null) {
-          const lastVoicedAtMs = receivedAtMs - voice.durationMs + voice.lastVoicedMs;
-          latestInputVoiceAtRef.current = lastVoicedAtMs;
-          if (isUserSpeaking.current) activeInputVoiceAtRef.current = lastVoicedAtMs;
-        }
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: uint8ToBase64(bytes) }));
+          const packetSentAtMs = monotonicNow();
+          inputPcmTimelineEndMsRef.current = recordInputPcmPacket(
+            inputPcmPacketsRef.current,
+            inputPcmTimelineEndMsRef.current,
+            voice.durationMs,
+            packetSentAtMs,
+          );
+          if (voice.lastVoicedMs != null) {
+            latestInputVoiceAtRef.current = packetSentAtMs;
+            if (isUserSpeaking.current) activeInputVoiceAtRef.current = packetSentAtMs;
+          }
         }
       });
       audio.setMuted(false);
@@ -798,7 +856,7 @@ export function useVoiceSession() {
         sessionToolIndexRef.current = indexSessionTools((evt.session && evt.session.tools) || []);
         const activeNode = activeHandoffNode(evt.session);
         setHandoffState((evt.session && evt.session.handoff) || null);
-        setActiveHandoffNodeId(activeNode);
+        setRuntimeActiveNode(activeNode);
         if (activeNode) logStatus(`Active handoff node: ${activeNode}`);
         setSessionReady(true);
         setStatus({ text: "ready - listening", kind: "ok" });
@@ -836,12 +894,14 @@ export function useVoiceSession() {
         break;
       }
       case "session.handoff.started":
+        markServerContinuationPending(turnTrackerRef.current);
         upsertHandoff(evt);
         setStatus({ text: "handoff in progress...", kind: "warn" });
         break;
       case "session.handoff.completed":
         upsertHandoff(evt);
-        setActiveHandoffNodeId(evt.to_node_id || null);
+        markServerContinuationTargetReady(turnTrackerRef.current);
+        setRuntimeActiveNode(evt.to_node_id || null);
         setTakenEdgeIds((previous) => (
           evt.edge_id && !previous.includes(evt.edge_id) ? [...previous, evt.edge_id] : previous
         ));
@@ -854,7 +914,11 @@ export function useVoiceSession() {
         break;
       case "session.handoff.aborted":
         upsertHandoff(evt);
-        setActiveHandoffNodeId(evt.from_node_id || null);
+        if (abortServerContinuation(turnTrackerRef.current)) {
+          attachTurnMetrics();
+          markTurn("agent", "");
+        }
+        setRuntimeActiveNode(evt.from_node_id || null);
         setStatus({ text: `handoff aborted: ${evt.reason || "error"}`, kind: "err" });
         break;
       case "session.avatar.connecting":
@@ -902,6 +966,9 @@ export function useVoiceSession() {
         isUserSpeaking.current = true;
         lastAssistantSpeechEndAtRef.current = null;
         activeUserItemIdRef.current = userItemId;
+        const turnNodeId = activeHandoffNodeRef.current;
+        if (userItemId) userTurnNodeByItemRef.current.set(userItemId, turnNodeId);
+        else pendingAudioTurnNodeRef.current = turnNodeId;
         activeInputVoiceAtRef.current = (
           latestInputVoiceAtRef.current != null && now - latestInputVoiceAtRef.current <= 1500
             ? latestInputVoiceAtRef.current
@@ -930,13 +997,32 @@ export function useVoiceSession() {
           });
         }
         isUserSpeaking.current = false;
-        const lastVoicedAtMs = activeInputVoiceAtRef.current;
+        const lastPcmSentAtMs = inputPcmSentAtMs(
+          inputPcmPacketsRef.current,
+          evt.audio_end_ms,
+        );
+        const lastVoicedAtMs = lastPcmSentAtMs ?? activeInputVoiceAtRef.current;
         const hasRecentVoice = lastVoicedAtMs != null && now - lastVoicedAtMs <= 10000;
         beginTurn(
           hasRecentVoice ? lastVoicedAtMs : now,
-          hasRecentVoice ? "user_last_voiced" : "server_vad",
+          hasRecentVoice
+            ? (lastPcmSentAtMs != null ? "user_pcm_sent" : "user_last_voiced")
+            : "server_vad",
         );
         markSpeechStopped(turnTrackerRef.current, userItemId, now);
+        const turnNodeId = userItemId
+          ? userTurnNodeByItemRef.current.get(userItemId)
+          : pendingAudioTurnNodeRef.current;
+        if (userItemId) {
+          if (!countedUserTurnIdsRef.current.has(userItemId)) {
+            countedUserTurnIdsRef.current.add(userItemId);
+            countRuntimeUserTurn(turnNodeId);
+          }
+        } else if (turnNodeId) {
+          countRuntimeUserTurn(turnNodeId);
+          pendingAudioTurnNodeRef.current = null;
+          turnNodeIdRef.current = null;
+        }
         activeInputVoiceAtRef.current = null;
         setStatus({ text: "thinking...", kind: "warn" });
         logEvent("input_audio_buffer.speech_stopped");
@@ -971,6 +1057,10 @@ export function useVoiceSession() {
       case "conversation.item.input_audio_transcription.completed":
         markTurn("user", evt.transcript || "");
         if (evt.item_id) {
+          if (!countedUserTurnIdsRef.current.has(evt.item_id)) {
+            countedUserTurnIdsRef.current.add(evt.item_id);
+            countRuntimeUserTurn(userTurnNodeByItemRef.current.get(evt.item_id));
+          }
           const timing = transcriptionTimingRef.current.get(evt.item_id);
           const sttStart = timing && (
             timing.speechStartedAtMs != null
@@ -988,6 +1078,7 @@ export function useVoiceSession() {
           // realtime session a function call for the same turn may already be waiting on it.
           recordUserTranscript(evt.transcript, "azure-speech (client-side input transcription)");
           transcriptionTimingRef.current.delete(evt.item_id);
+          userTurnNodeByItemRef.current.delete(evt.item_id);
           if (activeUserItemIdRef.current === evt.item_id) activeUserItemIdRef.current = null;
         }
         break;
@@ -1268,8 +1359,10 @@ export function useVoiceSession() {
           logEvent("ignored benign error: " + code);
           break;
         }
+        const message = (evt.error && evt.error.message) || "see log";
+        if (code === "portal_bridge_error") sessionFailureRef.current = message;
         logError("Voice Live error: " + JSON.stringify(evt.error || evt));
-        setStatus({ text: "error: " + ((evt.error && evt.error.message) || "see log"), kind: "err" });
+        setStatus({ text: "error: " + message, kind: "err" });
         break;
       }
       default:
@@ -1291,6 +1384,8 @@ export function useVoiceSession() {
     applyAvatarAnswer,
     applyWebRtcAnswer,
     cleanupWebRtc,
+    countRuntimeUserTurn,
+    setRuntimeActiveNode,
     startAvatarConnection,
     startMic,
     upsertHandoff,
@@ -1373,10 +1468,13 @@ export function useVoiceSession() {
     setSessionReady(false);
     sessionReadyRef.current = false;
     clientCloseRequestedRef.current = false;
+    sessionFailureRef.current = "";
     setActiveHandoffNodeId(null);
+    activeHandoffNodeRef.current = null;
     setHandoffState(null);
     setHandoffTrail([]);
     setTakenEdgeIds([]);
+    setHandoffRuntimeMetrics(createHandoffRuntimeMetrics());
     cleanupAvatar();
     cleanupWebRtc();
     isUserSpeaking.current = false;
@@ -1385,8 +1483,14 @@ export function useVoiceSession() {
     sessionToolIndexRef.current = {};
     transcriptionTimingRef.current.clear();
     activeUserItemIdRef.current = null;
+    userTurnNodeByItemRef.current.clear();
+    countedUserTurnIdsRef.current.clear();
+    pendingAudioTurnNodeRef.current = null;
+    turnNodeIdRef.current = null;
     latestInputVoiceAtRef.current = null;
     activeInputVoiceAtRef.current = null;
+    inputPcmPacketsRef.current = [];
+    inputPcmTimelineEndMsRef.current = 0;
     lastAssistantSpeechEndAtRef.current = null;
     resetClientFunctionState();
     setStatus({ text: "connecting...", kind: "warn" });
@@ -1419,21 +1523,33 @@ export function useVoiceSession() {
       recordFrame("down", evt);
       handleEvent(evt);
     };
-    ws.onerror = () => { logError("WebSocket error"); setStatus({ text: "error", kind: "err" }); };
+    ws.onerror = () => {
+      if (sessionFailureRef.current) return;
+      sessionFailureRef.current = "The portal WebSocket failed before the backend returned details.";
+      logError("WebSocket error");
+      setStatus({ text: `error: ${sessionFailureRef.current}`, kind: "err" });
+    };
     ws.onclose = async (e) => {
       logStatus(`WebSocket closed (code ${e.code}${e.reason ? `, ${e.reason}` : ""})`);
       setSessionReady(false);
       sessionReadyRef.current = false;
       setSessionId(null);
       setActiveHandoffNodeId(null);
+      activeHandoffNodeRef.current = null;
+      setHandoffRuntimeMetrics((current) => stopHandoffRuntimeMetrics(current, monotonicNow()));
       isUserSpeaking.current = false;
       currentAssistantId.current = null;
       turnTrackerRef.current = createTurnTracker();
       sessionToolIndexRef.current = {};
       transcriptionTimingRef.current.clear();
       activeUserItemIdRef.current = null;
+      userTurnNodeByItemRef.current.clear();
+      countedUserTurnIdsRef.current.clear();
+      pendingAudioTurnNodeRef.current = null;
       latestInputVoiceAtRef.current = null;
       activeInputVoiceAtRef.current = null;
+      inputPcmPacketsRef.current = [];
+      inputPcmTimelineEndMsRef.current = 0;
       lastAssistantSpeechEndAtRef.current = null;
       resetClientFunctionState();
       cleanupAvatar();
@@ -1450,7 +1566,7 @@ export function useVoiceSession() {
         await audio.waitForPlaybackComplete();
       }
       if (!clientCloseRequestedRef.current) {
-        setStatus(describeSessionClose(e.code, e.reason));
+        setStatus(describeSessionClose(e.code, e.reason, sessionFailureRef.current));
       }
       setIsConnected(false);
       if (audioRef.current === audio && audio) {
@@ -1489,6 +1605,7 @@ export function useVoiceSession() {
     lastAssistantSpeechEndAtRef.current = null;
     beginTurn(monotonicNow(), "text_input");
     markTurn("user", trimmed);
+    countRuntimeUserTurn(activeHandoffNodeRef.current);
     const item = {
       type: "conversation.item.create",
       item: { type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
@@ -1502,7 +1619,7 @@ export function useVoiceSession() {
     // Typed turns never pass through speech recognition, so record them here: a client function
     // asking for "what the user actually said" must still work when the demo is driven by text.
     recordUserTranscript(trimmed, "typed text (no speech recognition)");
-  }, [addMessage, beginTurn, markTurn, recordFrame, recordUserTranscript]);
+  }, [addMessage, beginTurn, countRuntimeUserTurn, markTurn, recordFrame, recordUserTranscript]);
 
   // Answer an MCP approval request: send the `mcp_approval_response` item upstream and
   // let Voice Live run (or skip) the tool. Do NOT send `response.create` here or when the call
@@ -1526,7 +1643,7 @@ export function useVoiceSession() {
 
   return {
     status, sessionId, conversationId, activeHandoffNodeId, isConnected, sessionReady, micMuted, messages, verbose,
-    handoffState, handoffTrail, takenEdgeIds,
+    handoffState, handoffTrail, takenEdgeIds, handoffRuntimeMetrics,
     events, clearEvents,
     avatarActive, avatarStatus, avatarStream,
     webrtcActive, webrtcStatus, webrtcStream,

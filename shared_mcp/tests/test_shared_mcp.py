@@ -211,7 +211,13 @@ class SharedMcpTests(unittest.TestCase):
         report_instructions = elevator_nodes["report_issue"]["config"][
             "instructions"
         ]
+        open_call_instructions = elevator_nodes["open_call"]["config"][
+            "instructions"
+        ]
         intent_router_instructions = elevator_nodes["intent_router"]["config"][
+            "instructions"
+        ]
+        query_instructions = elevator_nodes["query_issue"]["config"][
             "instructions"
         ]
         next_request_instructions = elevator_nodes["next_request"]["config"][
@@ -265,12 +271,44 @@ class SharedMcpTests(unittest.TestCase):
             report_instructions,
         )
         self.assertIn(
+            "address-and-postal-code turn is speech only",
+            report_instructions,
+        )
+        self.assertIn(
+            "caller_confirmed=false; false is invalid",
+            report_instructions,
+        )
+        self.assertIn(
+            "fresh random UUID v4",
+            open_call_instructions,
+        )
+        self.assertNotIn(
+            "d3f47b29-8912-4c3d-bc22-72f8c8a7c90e",
+            open_call_instructions,
+        )
+        self.assertIn(
             "directly to human_handoff as an emergency",
             intent_router_instructions,
         )
         self.assertIn(
             "highest priority",
             intent_router_instructions,
+        )
+        self.assertIn(
+            "handoff is the only business next step",
+            intent_router_instructions,
+        )
+        self.assertIn(
+            "outgoing edge owns the first safety question",
+            intent_router_instructions,
+        )
+        self.assertIn(
+            "incoming edge owns",
+            query_instructions,
+        )
+        self.assertIn(
+            "Wait for the\n  caller's answer.",
+            query_instructions,
         )
         self.assertIn(
             "Your service ticket is [ticket_id]. Do you need",
@@ -290,6 +328,11 @@ class SharedMcpTests(unittest.TestCase):
         self.assertEqual(
             elevator_edges["next_request_to_finalize"]["transfer_message"],
             goodbye,
+        )
+        self.assertTrue(
+            elevator_edges["intent_router_to_report_issue"]["transfer_message"].startswith(
+                "I understand this needs careful attention."
+            )
         )
         self.assertIn("spoken_message", human_handoff_instructions)
         self.assertIn("human_finalize", human_handoff_instructions)

@@ -9,6 +9,7 @@ import ipaddress
 import json
 import re
 import socket
+import sys
 import time
 import uuid
 from dataclasses import dataclass
@@ -33,6 +34,9 @@ VOICE_AGENT_ROOT = ROOT.parent
 SAMPLES_DIR = VOICE_AGENT_ROOT / "samples"
 SHARED_MCP_DIR = VOICE_AGENT_ROOT / "shared_mcp"
 DOCS_DIR = VOICE_AGENT_ROOT / "docs"
+sys.path.insert(0, str(SAMPLES_DIR))
+from voice_agent_definition import materialize_handoff_instruction_inheritance
+
 DEFAULT_TEMPLATE_CONFIG = ROOT / "templates.config.json"
 ARM_TOKEN_SCOPE = "https://management.azure.com/.default"
 ARM_MANAGEMENT_BASE = "https://management.azure.com"
@@ -306,6 +310,7 @@ def materialize_template(
             tool["project_connection_id"] = connection_id
             tool.pop("authorization", None)
             tool.pop("headers", None)
+    materialize_handoff_instruction_inheritance(definition)
     return definition
 
 
@@ -1020,7 +1025,8 @@ async def get_template(request: web.Request) -> web.Response:
     template_id = request.match_info["template_id"]
     source = catalog.source(template_id)
     detail = catalog.detail(template_id)
-    if source is None or detail is None:
+    document = catalog.document(template_id)
+    if source is None or detail is None or document is None:
         raise web.HTTPNotFound(text="Unknown template.")
     model_override = request.app[MODEL_OVERRIDE_KEY]
     if model_override and not source.lock_runtime:
@@ -1029,6 +1035,19 @@ async def get_template(request: web.Request) -> web.Response:
             for item in group["items"]:
                 if item["label"] == "Model":
                     item["value"] = model_override
+    definition = copy.deepcopy(document["definition"])
+    if model_override and not source.lock_runtime:
+        definition["model"] = model_override
+    for tool in iter_mcp_tools(definition):
+        if source.mcp_server_url:
+            tool["server_url"] = source.mcp_server_url
+        if source.mcp_connection_id:
+            tool["project_connection_id"] = source.mcp_connection_id
+        tool.pop("authorization", None)
+        tool.pop("headers", None)
+    materialize_handoff_instruction_inheritance(definition)
+    detail["definition"] = definition
+    detail["suggested_agent_name"] = template_agent_name("", template_id)
     return web.json_response(detail)
 
 
@@ -1253,13 +1272,91 @@ async def probe_published_mcp(request: web.Request) -> web.Response:
     })
 
 
-async def reject_browser_mcp_token(_: web.Request) -> web.Response:
-    raise web.HTTPConflict(
-        text=(
-            "Portal Templates use the managed Local Dev Tunnel connection; "
-            "browser-provided MCP tokens are disabled."
+async def ensure_template_mcp_connection(
+    cfg: AgentsConfig,
+    source: TemplateSource,
+    definition: dict[str, Any],
+) -> str:
+    if not list(iter_mcp_tools(definition)):
+        return ""
+    if (
+        not source.mcp_server_url
+        or not source.mcp_connection_id
+        or (
+            source.connection_mode == "managed"
+            and (
+                source.mcp_token_file is None
+                or not source.mcp_token_file.is_file()
+            )
         )
-    )
+    ):
+        raise ValueError(
+            "The local MCP config is not ready. Run "
+            "VoiceAgent/shared_mcp/scripts/e2e-local.sh and reload templates."
+        )
+    if source.connection_mode == "managed":
+        assert source.mcp_token_file is not None
+        bearer_token = normalize_bearer_token(
+            source.mcp_token_file.read_text(encoding="utf-8")
+        )
+        validate_mcp_probe_url(source.mcp_server_url)
+        await asyncio.to_thread(
+            create_mcp_connection,
+            cfg,
+            connection_name=source.mcp_connection_id,
+            server_url=source.mcp_server_url,
+            bearer_token=bearer_token,
+        )
+    return source.mcp_connection_id
+
+
+async def configure_template_mcp(request: web.Request) -> web.Response:
+    raw_body = await request.read()
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except json.JSONDecodeError as error:
+            raise web.HTTPBadRequest(text="Expected a JSON object.") from error
+        if not isinstance(body, dict):
+            raise web.HTTPBadRequest(text="Expected a JSON object.")
+        if "token" in body:
+            raise web.HTTPConflict(
+                text=(
+                    "Portal Templates use the managed Local Dev Tunnel connection; "
+                    "browser-provided MCP tokens are disabled."
+                )
+            )
+        if body:
+            raise web.HTTPBadRequest(
+                text="Client-provided MCP configuration is not supported."
+            )
+
+    cfg = await _cfg(request)
+    template_id = request.match_info["template_id"]
+    catalog = _catalog(request)
+    document = catalog.document(template_id)
+    source = catalog.source(template_id)
+    if document is None or source is None:
+        raise web.HTTPNotFound(text="Unknown template.")
+    try:
+        require_template_backend(source, cfg.backend)
+        connection_name = await ensure_template_mcp_connection(
+            cfg,
+            source,
+            document["definition"],
+        )
+    except ValueError as error:
+        raise web.HTTPBadRequest(text=str(error)) from error
+    except Exception as error:
+        return web.json_response(
+            {"error": f"{type(error).__name__}: {error}."},
+            status=502,
+        )
+    return web.json_response({
+        "configured": bool(connection_name),
+        "connection_name": connection_name,
+        "backend": cfg.backend,
+    })
 
 
 async def publish_template(request: web.Request) -> web.Response:
@@ -1276,44 +1373,11 @@ async def publish_template(request: web.Request) -> web.Response:
             raise ValueError("Expected a JSON object.")
         name = template_agent_name(str(body.get("name") or ""), template_id)
         require_template_backend(source, cfg.backend)
-        mcp_tools = list(iter_mcp_tools(document["definition"]))
-        connection_name = ""
-        if mcp_tools:
-            if (
-                not source.mcp_server_url
-                or not source.mcp_connection_id
-                or (
-                    source.connection_mode == "managed"
-                    and (
-                        source.mcp_token_file is None
-                        or not source.mcp_token_file.is_file()
-                    )
-                )
-            ):
-                raise ValueError(
-                    "The local MCP config is not ready. Run "
-                    "VoiceAgent/shared_mcp/scripts/e2e-local.sh and reload templates."
-                )
-            connection_name = source.mcp_connection_id
-            bearer_token = (
-                normalize_bearer_token(
-                    source.mcp_token_file.read_text(encoding="utf-8")
-                )
-                if (
-                    source.connection_mode == "managed"
-                    and source.mcp_token_file is not None
-                )
-                else ""
-            )
-            validate_mcp_probe_url(source.mcp_server_url)
-            if source.connection_mode == "managed":
-                await asyncio.to_thread(
-                    create_mcp_connection,
-                    cfg,
-                    connection_name=connection_name,
-                    server_url=source.mcp_server_url,
-                    bearer_token=bearer_token,
-                )
+        connection_name = await ensure_template_mcp_connection(
+            cfg,
+            source,
+            document["definition"],
+        )
         definition = materialize_template(
             document,
             model=(
@@ -1373,7 +1437,7 @@ def install_template_routes(
     )
     app.router.add_post(
         "/api/templates/{template_id}/mcp/configure",
-        reject_browser_mcp_token,
+        configure_template_mcp,
     )
     app.router.add_post("/api/templates/{template_id}/publish", publish_template)
     app.router.add_get("/static/{asset}", template_asset)

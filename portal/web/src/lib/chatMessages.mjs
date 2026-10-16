@@ -12,7 +12,10 @@ export function insertBeforeMessage(messages, message, beforeId) {
   return next;
 }
 
-export function describeSessionClose(code, reason = "") {
+export function describeSessionClose(code, reason = "", sessionError = "") {
+  if (sessionError) {
+    return { text: `error: ${sessionError}`, kind: "err" };
+  }
   if (code === 1001 && reason === "Conversation ended by agent") {
     return { text: "conversation ended by agent", kind: "ok" };
   }

@@ -6,6 +6,10 @@ This sample publishes a fictional inbound elevator-service Voice Agent through
 the preview `azure-ai-projects` unified Agents API. It demonstrates:
 
 - a 9-node, 17-edge handoff graph;
+- one shared policy inherited by every node, with only node-specific workflow
+  instructions authored in each node;
+- concise, specific emotional acknowledgement before the next workflow step,
+  without invented emotions, facts, promises, or tool results;
 - a deterministic five-question safety check;
 - filesystem-backed mock Zendesk create and exact-ID status-query contracts;
 - caller-visible ticket review and explicit confirmation before creation;
@@ -16,6 +20,14 @@ the preview `azure-ai-projects` unified Agents API. It demonstrates:
 
 The committed `agent.json` is portable. It contains no MCP URL, Project
 connection ID, bearer token, subscription ID, tenant ID, or real customer data.
+Its top-level `instructions` hold the shared safety, truthfulness, and
+conversational-response policy. Every handoff node enables
+`inherit_from_base_instructions`, so its `instructions` contain only the
+current node's objective, actions, and completion condition.
+The sample and Portal publishers expand that inheritance at the publication
+boundary for Foundry service deployments that do not yet accept the inheritance
+field. The authored definition stays concise while the deployed Agent receives
+the same combined instructions.
 The Portal Template uses this repository's `shared_mcp` runtime. The Portal
 creates or updates the required RemoteTool connection in the customer's
 selected Foundry Project; it does not rely on a pre-existing connection.

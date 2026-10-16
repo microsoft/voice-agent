@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft. All rights reserved.
 // All service, socket, and WebRTC boundaries below are synthetic/local only.
 import { test, expect } from "@playwright/test";
-import { CONFIG, mountStudio, resource } from "./studio-fixtures.mjs";
+import { CONFIG, mountStudio, resource, selectSessionAgent } from "./studio-fixtures.mjs";
 
 async function generate(page, { store = false, draft = false } = {}) {
   const api = await mountStudio(page, { defaultStore: false });
@@ -45,11 +45,11 @@ test("generated preference survives refresh and selection while existing-agent o
   await generate(page);
   await page.getByRole("button", { name: "Refresh agents", exact: true }).click();
   await expect(page.getByRole("button", { name: "Refresh agents", exact: true })).toBeEnabled();
-  await page.getByLabel("Session agent", { exact: true }).selectOption("realtime-agent");
+  await selectSessionAgent(page, "realtime-agent");
   await page.locator(".session-settings > summary").click();
   const storage = page.getByRole("combobox", { name: "Conversation storage override", exact: true });
   await expect(storage).toHaveValue("");
-  await page.getByLabel("Session agent", { exact: true }).selectOption("generated-privacy-agent");
+  await selectSessionAgent(page, "generated-privacy-agent");
   if (await page.locator(".session-settings").getAttribute("open") === null) {
     await page.locator(".session-settings > summary").click();
   }
@@ -170,7 +170,7 @@ test("known historical IDs can still be opened when listing is unavailable", asy
 
 async function endWebRtc(page, api, capturedId = null) {
   await page.goto("/static/demo/webrtc.html");
-  await page.getByRole("combobox", { name: "Agent", exact: true }).selectOption(agentName);
+  await page.getByLabel("Agent", { exact: true }).fill(agentName);
   await page.getByRole("button", { name: "Start WebRTC session" }).click();
   await expect.poll(() => api.sockets.length).toBe(1);
   if (capturedId) await expect(page.locator(".wrtc-stage")).toContainText(capturedId);

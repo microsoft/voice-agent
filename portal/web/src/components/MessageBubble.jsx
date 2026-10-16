@@ -372,6 +372,7 @@ function LatencyDialog({ metrics, allMessages, currentMessageId, onClose }) {
   const phases = metrics.atomicPhases || [];
   const ticks = latencyRulerTicks(metrics.endToEndMs);
   const origin = {
+    user_pcm_sent: "final user PCM packet sent",
     user_last_voiced: "last voiced microphone PCM",
     server_vad: "server speech_stopped (proxy)",
     text_input: "text input sent",

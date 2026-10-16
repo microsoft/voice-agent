@@ -1,10 +1,10 @@
 # Voice Agent portal
 
 A standalone local port of the upstream **Voice Agent studio**, **Templates
-catalog**, and **WebRTC demo**. Configure agents, edit their definitions as
-YAML, publish the checked-in sample templates, and connect to your own Azure
-Foundry project. No checkout of the upstream repository, internal dashboard,
-or private package feed is needed.
+catalog**, **Handoff Graph editor**, and **WebRTC demo**. Configure agents, edit
+their definitions as YAML or as a visual graph, publish the checked-in sample
+templates, and connect to your own Azure Foundry project. No checkout of the
+upstream repository, internal dashboard, or private package feed is needed.
 
 The first port is pinned to upstream commit
 `e713a37c4cdb3282157cbaf46b6d425bcd984c05` on `main`.
@@ -28,7 +28,7 @@ Running the portal locally does not run the Azure voice service locally.
 
 > [!IMPORTANT]
 > To use **Templates** with the repository's local MCP, do not follow the
-> portal-only commands below. Start the complete stack from `VoiceAgent/`:
+> portal-only commands below. Start the complete stack from the repository root:
 >
 > ```bash
 > ./scripts/setup-local-examples.sh \
@@ -44,10 +44,14 @@ Running the portal locally does not run the Azure voice service locally.
 
 ## Set up
 
+Use a complete checkout of this repository, not a copy of `portal/` alone.
+The shared helpers and templates in [samples/](../samples/) and the guide in
+[docs/](../docs/) are included here; no sibling repository is required.
+
 From the repository root, in PowerShell:
 
 ```powershell
-cd VoiceAgent\portal
+cd portal
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
@@ -56,7 +60,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 macOS / Linux:
 
 ```bash
-cd VoiceAgent/portal
+cd portal
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 [ -f .env ] || cp .env.example .env
@@ -114,15 +118,53 @@ operations.
 
 ## Using the portal
 
-- The header has two main tabs. **Live session** provides the full Voice Agent
-  studio. **Templates** provides the Finance sample catalog and workflow graph.
+- The header has three main destinations. **Live session** provides the full
+  Voice Agent studio, **Templates** provides the sample catalog, and
+  **Handoff Graph** provides visual authoring, validation, deterministic
+  YAML/JSON export, and release publication.
+- Handoff Graph can load any configured Template into a temporary working copy.
+  Example 1 has Realtime and Cascade Luna runtime variants, so the three sample
+  projects appear as four selectable catalog cards.
+- **Publish & run** publishes the edited definition, verifies it with an API
+  readback, and opens Live session with the runtime graph expanded. For a
+  Template working copy, publication first refreshes that Project's managed MCP
+  connection with the current local Dev Tunnel target and server-held bearer.
+  It is the Handoff Graph page's single publication action. A progress dialog
+  reports validation, MCP refresh, version publication, readback verification,
+  and Live session launch; failures stop on the owning step without discarding
+  the local working copy.
+  The Portal intentionally preserves its explicit-connect policy: select
+  **Connect & start session** when you are ready to use microphone/audio.
+- In **Edit node**, the Transcriber, Model, and Voice comparison tables show a
+  highlighted disclaimer and label their columns **Latency (estimated)** and
+  **Cost (estimated)**. The figures are based on internal experiments and are
+  for estimation only; usage scenarios, sales discounts, prompt length, and
+  other factors affect actual latency and pricing.
+- Live session renders the runtime handoff topology with the same layered
+  cards, pipeline badges, route curves, and active-node treatment as Handoff
+  Graph authoring. Every node accumulates **Dwell** wall-clock time while it is
+  active and **User turns** attributed to that node. Re-entering a node adds to
+  the existing totals and increments its visit count. Spoken turns are assigned
+  to the node that was active when speech started; typed turns are assigned
+  when they are sent. Runtime numbers refresh every two seconds with a flip
+  transition; **Share** divides 100% of elapsed active-node time across the
+  visited nodes. Click the bottom metric strip to inspect observed Average,
+  P50, P95, and latest turn latency plus the shared editor catalog's estimated
+  STT/LLM/TTS latency and cost. On desktop, drag the divider between **Agent
+  Debug** and **Live conversation** to give either side more room; arrow keys
+  resize the focused divider and a double-click restores the default width.
+- Before a runtime path reaches a node, its full card is covered by a gray
+  **NOT VISITED** veil. Reached nodes remove the veil and use a larger emerald
+  double frame, tinted surface, and stronger shadow; the current node is larger
+  again with the highest-contrast **LIVE** treatment.
 - The Templates allowlist is `templates.config.json`. It exposes the sibling
   `example1_finance_with_handoff` as separate Realtime and Cascade Luna cards,
   and also detects `example2_finance_with_OTP_and_Officer_Search` and
   `example3_elevator_service_with_safety_zendesk_and_handoff`. Select
   **Reload** to reread their configured Agent files.
 - Template MCP readiness and publishing use the local files generated by
-  `VoiceAgent/shared_mcp/scripts/e2e-local.sh`. MCP tokens remain server-side.
+  [shared_mcp/scripts/e2e-local.sh](../shared_mcp/scripts/e2e-local.sh).
+  MCP tokens remain server-side.
   Publishing creates or updates each Template's project connection and creates
   a new `local-only-*` Agent in the portal's configured Foundry project. A
   customer may use a newly created Project; none of the checked-in Templates
@@ -130,9 +172,21 @@ operations.
   connection depends on this machine's Dev Tunnel runtime and is not generally
   usable by another developer.
 - Choose an existing agent or create one. The browser sends service-shaped
-  REST requests through the local authenticated backend.
+  REST requests through the local authenticated backend. Agent pickers load the
+  first 25 Voice Agents and fetch later cursor pages only when you select
+  **Load more agents**, so projects with large Agent catalogs become usable
+  without waiting for a full catalog scan. In Studio, **Session agent** is a
+  searchable name field: loaded names appear as suggestions, while Enter or
+  **Search** resolves an exact Agent name even when it is on a later page.
   Creation uses `POST /agents/<name>/versions` and flat `voice` / `voice_type`
   audio fields, matching this repository's current REST/Projects SDK samples.
+  The Voice tab keeps **Input transcription (STT)** separate from
+  **Speech output (TTS / voice)**. Changing the model disables incompatible
+  transcription and voice choices instead of silently publishing an invalid
+  combination. Realtime models still select a transcription model for
+  transcript events even though the model itself consumes audio directly.
+  The Playground keeps search, Agent metadata, session settings, and connection
+  actions in compact rows so the transcript retains most of the runtime page.
 - Agent links select an agent but never start a session automatically.
   Press **Connect & start session** explicitly; legacy `autostart=1` is ignored.
 - Use a headset and grant microphone permission for real audio. WebSocket PCM,
@@ -158,8 +212,12 @@ operations.
   ID and click **Open conversation**. No transcript, tool result, or audio is
   fetched just because a shared agent has a newer conversation.
 
-The standalone WebRTC page is **http://127.0.0.1:9527/webrtc** and uses the same
-configured Foundry project. Its media helper uses Google's public STUN server
+The standalone Handoff Graph page is
+**http://127.0.0.1:9527/handoff/**. The standalone WebRTC page is
+**http://127.0.0.1:9527/webrtc** and uses the same
+configured Foundry project. Its Agent field also accepts an exact name outside
+the loaded pages and resolves that resource directly before starting. Its media
+helper uses Google's public STUN server
 (`stun:stun.l.google.com:19302`) for network discovery; ensure that dependency is
 appropriate for your environment. Avatar ICE settings still come from the
 configured service. Use fictitious identity/contact details in the digit demo.
@@ -213,6 +271,13 @@ data directory (5 MiB, three backups). HTTP access logging remains disabled
 because raw request URLs can contain structured input; portal API and bridge
 events are logged only after sensitive query values are redacted.
 
+Backend failures are returned to the active page instead of being visible only
+in `server.log`. HTTP APIs return a JSON error with a request ID, and the voice
+WebSocket sends a structured `portal_bridge_error` event before it closes.
+The same request ID appears in the browser message and server log so the two
+sides can be correlated. Credential-shaped values are redacted from propagated
+exception text.
+
 ## Develop and validate
 
 Frontend development requires **Node.js 22+**. From this directory:
@@ -238,6 +303,8 @@ Azure credential and upstream transport with test fixtures. It drives creation,
 YAML edits, WebSocket responses, persisted-data retrieval, and microphone startup
 through a synthetic browser device. The application has no test/offline runtime
 mode. These tests do not prove a real Azure conversation.
+The browser fixture supplies synthetic MCP configuration and a temporary bearer
+file; it does not require a running Dev Tunnel or local MCP credentials.
 
 The static UI fixture uses `8098`. Both test servers are stopped by Playwright;
 neither test helper is used by `demo_server.py`.

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tools.source_sync_status import (
     SYNC_MANIFEST,
+    effective_mappings,
     exact_drift,
     porcelain_paths,
     safe_relative,
@@ -14,6 +15,19 @@ from tools.source_sync_status import (
 
 
 class SourceSyncStatusTests(unittest.TestCase):
+    def test_later_mapping_overrides_runtime_provenance_action(self) -> None:
+        original = {
+            "source": "web/src/config.js",
+            "destination": "web/src/config.js",
+            "action": "copied",
+        }
+        adapted = {**original, "action": "adapted"}
+
+        self.assertEqual(
+            {"web/src/config.js": adapted},
+            effective_mappings([original, adapted]),
+        )
+
     def test_safe_relative_rejects_parent_escape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
@@ -72,6 +86,31 @@ class SourceSyncStatusTests(unittest.TestCase):
         self.assertIn("../shared_mcp", mcp["review_targets"])
         self.assertIn("templates.config.json", mcp["review_targets"])
 
+    def test_manifest_tracks_handoff_authoring_surface(self) -> None:
+        manifest = json.loads(
+            SYNC_MANIFEST.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            "tests/voice-agent-tests/voice-agents-tests-dashboard/handoff_view",
+            manifest["source"]["roots"]["handoff_view"],
+        )
+        mappings = {
+            item["source"]: item
+            for item in manifest["handoff_mappings"]
+        }
+        self.assertEqual(
+            "adapted",
+            mappings["static/handoff-core.mjs"]["action"],
+        )
+        self.assertEqual(
+            "adapted",
+            mappings["static/handoff.css"]["action"],
+        )
+        self.assertEqual(
+            "static/handoff/handoff-app.js",
+            mappings["static/handoff-app.js"]["destination"],
+        )
+
     def test_manifest_tracks_template_inputs_and_public_sample_definitions(
         self,
     ) -> None:
@@ -86,11 +125,12 @@ class SourceSyncStatusTests(unittest.TestCase):
             "adapted",
             mappings["template_config"]["action"],
         )
-        for root in (
-            "template_example1",
-            "template_example2",
-        ):
-            self.assertEqual("exact", mappings[root]["action"])
+        expected_actions = {
+            "template_example1": "adapted",
+            "template_example2": "exact",
+        }
+        for root, action in expected_actions.items():
+            self.assertEqual(action, mappings[root]["action"])
             self.assertEqual(
                 "voice_agent",
                 mappings[root]["destination_root"],
