@@ -51,6 +51,9 @@ enabled. The deployment publishes exactly `index.html`, `styles.css`,
 the local server, tests, documentation, and all other repository files.
 No dependency installation or build command is needed. All asset URLs are
 relative, so the page works under a repository subpath.
+During deployment, the workflow stamps the footer with the short commit hash
+and a link to that exact source commit. Local previews show
+**Local preview (not deployed)** instead.
 
 For this repository, the published address is
 **https://microsoft.github.io/voice-agent/** after the first successful
