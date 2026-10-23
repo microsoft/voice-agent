@@ -80,7 +80,8 @@ Playground because they act as the signed-in user.
 - "I'd like a women's haircut with Jessica on Saturday." Expect a question
   about new or existing client, then up to three 60-minute times within opening
   hours returned by `mock_tool_call_find_meeting_times`.
-- Pick a time and give an email. Expect the service, stylist, date, time, $65,
+- Pick a time and give `dana.test20261020@example.com`. Expect the service,
+  stylist, date, time, $65,
   and 60 minutes read back. After "yes", expect one
   `mock_tool_call_create_event` call, the booking reported, and a reminder
   offer. If the booking fails, expect that said plainly and an offer to read

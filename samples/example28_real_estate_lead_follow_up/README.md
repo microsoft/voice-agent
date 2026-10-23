@@ -84,8 +84,9 @@ Playground because they act as the signed-in user.
 - "We want three bedrooms in Redmond under 900k. Can I see 14 Maple Court
   Saturday?" Expect listed features only, then up to three 45-minute times
   returned by `mock_tool_call_find_meeting_times`.
-- Pick a time and give "Dana Test, dana.test20261020@example.com" and a phone
-  number. Expect the address, date, time, time zone, and email read back. After
+- Pick a time and give "Dana Test, dana.test20261020@example.com" and the phone
+  number "+1 425 555 0123". Expect the address, date, time, time zone, and
+  email read back. After
   "yes", expect one `mock_tool_call_create_event` call, the invite reported as
   sent, and an offer to save your details as a CRM lead with the data read back.
 - "Yes, save it." Expect a Salesforce search and a new lead created because the

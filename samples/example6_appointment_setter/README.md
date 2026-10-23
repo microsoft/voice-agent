@@ -108,8 +108,9 @@ The example uses `gpt-realtime` with `azure_semantic_vad`, `profile: normal`,
   and one `mock_tool_call_salesforce_create_lead` call. If the invite fails,
   expect the agent to say it could not be created and read the meeting details
   back.
-- In a new call, "I'm not ready yet, follow up next month." Expect the nurture
-  path: name, company, email, and follow-up time read back, then after "yes" a
+- In a new call, "I'm not ready yet, follow up next month. Dana Test, Fabrikam,
+  dana.test20261020@example.com." Expect the nurture path: name, company,
+  email, and follow-up time read back, then after "yes" a
   Salesforce search and a lead for a new email. Expect no claim that case
   studies or a brief were sent.
 

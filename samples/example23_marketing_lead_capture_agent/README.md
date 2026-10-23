@@ -96,7 +96,8 @@ Playground because they act as the signed-in user.
   `mock_tool_call_salesforce_create_lead`, each once, and the lead reported as
   saved. Say "No" instead: expect no CRM call and that your details will not be
   kept for follow-up; the booking stands.
-- "Just browsing; send me the pricing overview." Expect your details read back,
+- "Just browsing; send me the pricing overview. Dana Test, Fabrikam,
+  dana.test20261020@example.com." Expect your details read back,
   and after "yes" a lead and "the team will follow up", never "sent".
 - Use `rose@edge.com` in the nurture path. Expect the contact found and no new
   lead.

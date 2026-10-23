@@ -97,7 +97,8 @@ The example uses `gpt-realtime` with `azure_semantic_vad`, `profile: normal`,
   `mock_tool_call_zendesk_create_ticket` call and a new four-digit ticket
   number; ticket 3 is not changed.
 - In a new call, "My data sync keeps failing, escalate it, high urgency."
-  Expect questions for any missing name or contact, then a read-back. Say "no,
+  Expect questions for any missing name or contact (give "Dana Test,
+  dana.test20261020@example.com"), then a read-back. Say "no,
   not yet": expect nothing filed. After a later "yes", expect one
   `mock_tool_call_zendesk_create_ticket` call and a four-digit ticket number.
 - "Check my account: jrogers@burlington.com." Expect the email spelled back, a
