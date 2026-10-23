@@ -194,6 +194,24 @@ class TemplateCatalogTests(unittest.TestCase):
         self.assertIn("mock_tool_call_zendesk_create_ticket", allowed)
         self.assertNotIn("mock_tool_call_zendesk_add_comment", allowed)
 
+    def test_mock_tool_examples_use_persona_voices(self) -> None:
+        male_personas = {"Marco", "Finn", "Kai", "Max"}
+        for template_id, folder, *_ in MOCK_TOOL_TEMPLATES:
+            with self.subTest(template_id=template_id):
+                definition = json.loads(
+                    (ROOT.parent / "samples" / folder / "agent.json").read_text(encoding="utf-8")
+                )["definition"]
+                persona = definition["instructions"].split("You are ", 1)[1].split(",", 1)[0]
+                expected = (
+                    "en-US-Brian:DragonHDOmniLatestNeural"
+                    if persona in male_personas
+                    else "en-US-Emma:DragonHDOmniLatestNeural"
+                )
+                self.assertEqual(
+                    {"type": "azure-standard", "name": expected},
+                    definition["audio"]["output"]["voice"],
+                )
+
     def test_tool_map_suggestion_and_per_system_rewrite(self) -> None:
         required = [
             "mock_tool_call_find_meeting_times",

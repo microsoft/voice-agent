@@ -259,6 +259,23 @@ publish operations, including the template catalog consumed by Handoff Graph.
   Pre-runtime-update source bytes and manifests are retained separately and
   are not selectable versions. These parameter changes are not a new live
   latency, interruption or listening acceptance.
+- The `example5_*` through `example34_*` templates set a per-template output
+  voice that matches the persona and language: en-US female personas use
+  `en-US-Emma:DragonHDOmniLatestNeural` and male personas (Marco, Finn, Kai,
+  Max) use `en-US-Brian:DragonHDOmniLatestNeural`. Hindi uses
+  `hi-IN-Diya:DragonLatestNeural`, Chinese uses
+  `zh-CN-Xiaoqi:DragonLatestNeural` (female) or
+  `zh-CN-Yunfan:DragonLatestNeural` (male), and Indian English keeps
+  `en-IN-Diya:DragonHDLatestNeural`. These Dragon voices are in preview and are
+  not available in every region; for example, the Hindi and Chinese Dragon
+  voices are missing in `centralindia`, while all of them exist in `westus2`
+  and `eastus`. The portal does not know your Project's region and does not
+  substitute a voice, so a session in a region without the voice can fail.
+  Check the public list at
+  `https://<region>.tts.speech.microsoft.com/synthesize/list/cognitive-service/voices?showHidden=true`
+  and, if the voice is missing, change the Agent's voice in the Editor to the
+  default for its language: `en-US-Ava:DragonHDLatestNeural`, or
+  `en-IN-Diya:DragonHDLatestNeural` for Indian languages.
 - Template MCP readiness calls `initialize` and `tools/list` against the hosted
   endpoint without an Authorization header and checks every declared tool.
   Publishing sets that endpoint on every MCP tool, including handoff nodes,
