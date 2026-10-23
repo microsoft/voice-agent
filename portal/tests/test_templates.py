@@ -100,6 +100,7 @@ class TemplateCatalogTests(unittest.TestCase):
             "profile": "normal",
             "auto_truncate": True,
             "interrupt_response": True,
+            "prefix_padding_ms": 800,
             "silence_duration_ms": 400,
         }
 
@@ -176,6 +177,22 @@ class TemplateCatalogTests(unittest.TestCase):
                 self.assertEqual(
                     authored["handoff"]["nodes"], definition["handoff"]["nodes"],
                 )
+
+    def test_customer_support_matches_reference_privacy_and_ticket_rules(self) -> None:
+        agent = json.loads(
+            (ROOT.parent / "samples" / "example5_customer_support" / "agent.json").read_text(encoding="utf-8")
+        )
+        nodes = {node["id"]: node["config"] for node in agent["definition"]["handoff"]["nodes"]}
+        self.assertIn("share its title and company", nodes["account_billing"]["instructions"])
+        self.assertIn("Never read back phone numbers", nodes["account_billing"]["instructions"])
+        self.assertIn("Never change an existing ticket", nodes["resolve_or_escalate"]["instructions"])
+        allowed = [
+            name
+            for tool in template_portal.iter_mcp_tools(nodes["resolve_or_escalate"])
+            for name in tool["allowed_tools"]
+        ]
+        self.assertIn("mock_tool_call_zendesk_create_ticket", allowed)
+        self.assertNotIn("mock_tool_call_zendesk_add_comment", allowed)
 
     def test_tool_map_suggestion_and_per_system_rewrite(self) -> None:
         required = [

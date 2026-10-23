@@ -94,7 +94,7 @@ so they cannot be connected in the shared Playground and stay on mock data
 there; use a Work IQ Toolbox in your own Foundry Project instead.
 
 The example uses `gpt-realtime` with `azure_semantic_vad`, `profile: normal`,
-and `silence_duration_ms: 400`.
+`prefix_padding_ms: 800`, and `silence_duration_ms: 400`.
 
 ## Try these turns
 
@@ -111,6 +111,8 @@ and `silence_duration_ms: 400`.
   one at a time and the message read back. Say "no, don't send it": expect no
   email. After a later "yes", expect one
   `mock_tool_call_send_email_with_attachments` call to `meganb@contoso.com`.
+  If the send fails, expect it reported as not sent and an offer to read the
+  unsent message back, with no retry.
 - "Put me through to Isaiah Langer." Expect no directory match and an offer of
   the closest department.
 
