@@ -237,7 +237,7 @@ publish operations, including the template catalog consumed by Handoff Graph.
   `example3_elevator_service_with_safety_zendesk_and_handoff`. The
   `example5_customer_support`, `example6_appointment_setter`, and
   `example7_receptionist_messaging` handoff examples, and the 27
-  ElevenLabs-converted `example8_*` through `example34_*` handoff examples,
+  reference-template `example8_*` through `example34_*` handoff examples,
   call mock tools on the public `/mcp/mock-tool-call` route by default and
   need no MCP setup. Each card has a **Version** selector: **Default** loads
   the configured Agent file;

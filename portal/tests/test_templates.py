@@ -41,7 +41,7 @@ ORIGINAL_TEMPLATES = [
     ("appointment-setter-example", "example6_appointment_setter", 7, 12),
     ("receptionist-messaging-example", "example7_receptionist_messaging", 6, 14),
 ]
-# ElevenLabs-converted examples bound to the shared mock-tool-call MCP server.
+# Reference-template examples bound to the shared mock-tool-call MCP server.
 CONVERTED_TEMPLATES = [
     ("appointment-scheduler-example", "example8_appointment_scheduler", 6, 11),
     ("assessment-quiz-agent-example", "example9_assessment_quiz_agent", 5, 8),

@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-The ElevenLabs-converted Templates (Examples 5 to 34) call **mock tools** by
+The reference workflow Templates (Examples 5 to 34) call **mock tools** by
 default: the `mock-tool-call` MCP server on the shared no-auth MCP service. The
 mocks take the same arguments and return the same fields as real Salesforce,
 Zendesk, Twilio, and Microsoft 365 tools, but they use fictional data and never
