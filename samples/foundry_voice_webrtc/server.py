@@ -37,7 +37,7 @@ LANGUAGES = {"en-US": "English", "es-ES": "Spanish"}
 HD_VOICES = {f"en-US-{name}:DragonHDLatestNeural" for name in ("Tessa", "Tyler", "Paige", "Colin", "Brian", "Emma")} | {
     "en-IN-Diya:DragonHDLatestNeural", "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-Xiaoke:DragonHDFlashLatestNeural"}
 NATIVE_VOICES = {"ava", "andrew", "emma", "clara", "liam", "natasha", "rayn", "alvaro", "dalia", "jorge"}
-MODELS = {"gpt-realtime-2.1", "azure-realtime", "gpt-4.1"}
+MODELS = {"gpt-realtime-2.1", "azure-realtime", "gpt-5.4"}
 MAX_RECORDING_BYTES = 128 * 1024 * 1024
 MAX_LOG_BYTES = 16 * 1024 * 1024
 
@@ -485,7 +485,7 @@ def model_definition(definition, model):
     input_audio, output = audio.setdefault("input", {}), audio.setdefault("output", {})
     transcription = input_audio.get("transcription")
     if isinstance(transcription, dict):
-        transcription["model"] = "azure-speech" if model == "gpt-4.1" else "whisper-1"
+        transcription["model"] = "azure-speech" if model == "gpt-5.4" else "whisper-1"
     # Azure owns turn detection so the requested headset denoiser remains usable.
     detection = input_audio.get("turn_detection")
     if isinstance(detection, dict) and detection.get("type") in {"server_vad", "semantic_vad"}:

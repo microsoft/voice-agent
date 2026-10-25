@@ -23,7 +23,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
     def definition(self):
         return json.loads(Path(__file__).with_name("personalized-agent.json").read_text())
 
-    def agent(self, model="gpt-4.1", version="1"):
+    def agent(self, model="gpt-5.4", version="1"):
         definition = self.definition()
         definition["model"] = model
         return {"versions": {"latest": {"version": version, "definition": definition,
@@ -36,19 +36,20 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(original, snapshot)
         self.assertEqual(native["audio"]["output"]["voice_type"], "azure-realtime-native")
         self.assertEqual(native["audio"]["output"]["voice"], "ava")
-        restored = model_definition(native, "gpt-4.1")
+        restored = model_definition(native, "gpt-5.4")
         self.assertEqual(restored["audio"]["output"]["voice"], "en-US-Tyler:DragonHDLatestNeural")
         self.assertEqual(restored["audio"]["input"]["transcription"]["model"], "azure-speech")
         for model in MODELS:
             result = model_definition(original, model)
             self.assertEqual(result["instructions"], original["instructions"])
+            self.assertEqual(result["greeting"], original["greeting"])
             self.assertEqual(result["tools"], original["tools"])
             self.assertEqual(result["audio"]["input"]["noise_reduction"], original["audio"]["input"]["noise_reduction"])
 
     def test_explicitly_disabled_turn_detection_is_preserved(self):
         original = self.definition()
         original["audio"]["input"]["turn_detection"] = None
-        self.assertIsNone(model_definition(original, "gpt-4.1")["audio"]["input"]["turn_detection"])
+        self.assertIsNone(model_definition(original, "gpt-5.4")["audio"]["input"]["turn_detection"])
 
     async def test_save_new_model_version_then_enable_without_deleting(self):
         cfg = Settings("https://example.services.ai.azure.com/api/projects/demo", "demo-agent")
@@ -78,7 +79,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
                 with patch("server.aiohttp.ClientSession", return_value=service):
                     response = await client.post("/api/agent/model",
                         headers={"Origin": str(client.make_url("")).rstrip("/")},
-                        json={"model": "gpt-4.1", "version": version})
+                        json={"model": "gpt-5.4", "version": version})
                     self.assertEqual(response.status, expected)
             self.assertFalse(any("/versions" in url for url, _ in service.writes))
 
@@ -89,14 +90,15 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         async with TestClient(TestServer(app)) as client:
             origin = {"Origin": str(client.make_url("")).rstrip("/")}
             for body in ({}, [], {"model": "unknown", "version": "1"},
-                         {"model": "gpt-4.1", "version": "1", "definition": {}}):
+                         {"model": "gpt-4.1", "version": "1"},
+                         {"model": "gpt-5.4", "version": "1", "definition": {}}):
                 response = await client.post("/api/agent/model", headers=origin, json=body)
                 self.assertEqual(response.status, 400)
-            response = await client.post("/api/agent/model", json={"model": "gpt-4.1", "version": "1"})
+            response = await client.post("/api/agent/model", json={"model": "gpt-5.4", "version": "1"})
             self.assertEqual(response.status, 403)
             app[ACTIVE].active = True
             response = await client.post("/api/agent/model", headers=origin,
-                                         json={"model": "gpt-4.1", "version": "1"})
+                                         json={"model": "gpt-5.4", "version": "1"})
             self.assertEqual(response.status, 409)
             tokens.get_token.assert_not_awaited()
 
@@ -113,5 +115,5 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("instructions: |", result["yaml"])
         settings = yaml.safe_load(result["yaml"])
         self.assertEqual(settings["version"], "1")
-        self.assertEqual(settings["definition"]["model"], "gpt-4.1")
+        self.assertEqual(settings["definition"]["model"], "gpt-5.4")
         self.assertEqual(redact_settings({"api-key": "secret"}), {"api-key": "[redacted]"})

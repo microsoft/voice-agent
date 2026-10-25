@@ -125,7 +125,7 @@ sample without adding cross-replica creation coordination.
 ### Models, versions, and Agent YAML
 
 The **Version** line shows the saved Agent's current version. End the call, choose
-`gpt-realtime-2.1`, `azure-realtime`, or `gpt-4.1`, then select **Save new version**.
+`gpt-realtime-2.1`, `azure-realtime`, or `gpt-5.4`, then select **Save new version**.
 This publishes and enables a new version without deleting previous versions.
 Instructions, tools, metadata, and other configuration are preserved except for
 model-dependent transcription, turn-detection, and output-voice compatibility
@@ -222,6 +222,13 @@ Messages are limited to 4,000 characters;
 the Send button waits while you are speaking or the agent is generating a reply.
 Mute the microphone to converse by text without spoken replies to typed messages.
 Session startup still requires microphone permission, even if you only plan to type.
+
+Spoken turns reserve a **You** bubble when speech starts, showing **Listening...**
+and then **Transcribing...** until text arrives. Azure Realtime can start its
+reply before input transcription finishes; updating the reserved bubble keeps
+the question above its answer rather than sorting by text arrival time. Partial
+user transcripts stream into the same bubble. Transcription failures or a call
+ending before any transcript arrives are shown explicitly.
 
 Authentication uses `AzureCliCredential` and the scope
 `https://ai.azure.com/.default`. Run the server as the Windows/OS user who ran

@@ -15,7 +15,7 @@ function updateAgentControls() {
   $('recreate-agent').disabled = busy || !config?.configured || !config?.agentRecreateAllowed || agentAvailability !== 'ready';
   $('agent-model-choice').disabled = busy || agentAvailability !== 'ready';
   $('save-model').disabled = busy || agentAvailability !== 'ready' || !savedVersion ||
-    !['gpt-realtime-2.1', 'azure-realtime', 'gpt-4.1'].includes($('agent-model-choice').value) ||
+    !['gpt-realtime-2.1', 'azure-realtime', 'gpt-5.4'].includes($('agent-model-choice').value) ||
     $('agent-model-choice').value === savedModel;
   $('show-settings').disabled = preparingAgent || agentAvailability !== 'ready';
   $('download-conversation').disabled = Boolean(call) || downloading || !latestDownload;
@@ -33,7 +33,7 @@ function applyAgentDetails(result) {
   savedModel = typeof result.model === 'string' ? result.model : null;
   savedVersion = typeof result.version === 'string' ? result.version : null;
   $('agent-version').textContent = savedVersion || (result.exists === false ? 'Not created' : 'Unavailable');
-  $('agent-model-choice').value = ['gpt-realtime-2.1', 'azure-realtime', 'gpt-4.1'].includes(savedModel) ?
+  $('agent-model-choice').value = ['gpt-realtime-2.1', 'azure-realtime', 'gpt-5.4'].includes(savedModel) ?
     savedModel : 'gpt-realtime-2.1';
   updateVoiceChoices(savedModel);
   $('agent-model').textContent = typeof result.model === 'string' && result.model.trim() ?
@@ -218,7 +218,7 @@ function showError(message) { $('error').textContent = message; $('error').hidde
 function state(title, hint, badge) {
   $('status').textContent = title; $('hint').textContent = hint; $('connection').textContent = badge;
 }
-function transcript(id, role, text, append = false) {
+function transcript(id, role, text, append = false, pending = false) {
   if (!id || !text) return;
   $('empty')?.remove();
   let entry = messages.get(id);
@@ -228,8 +228,15 @@ function transcript(id, role, text, append = false) {
     entry = document.createElement('p'); box.append(label, entry); $('transcript').append(box);
     messages.set(id, entry);
   }
-  entry.textContent = append ? entry.textContent + text : text;
+  entry.textContent = append && entry.className !== 'transcribing' ? entry.textContent + text : text;
+  entry.className = pending ? 'transcribing' : '';
+  entry.setAttribute('aria-busy', String(pending));
   $('transcript').scrollTop = $('transcript').scrollHeight;
+}
+function reserveUserTranscript(id, text = 'Transcribing...') {
+  if (!messages.has(id) || messages.get(id).className === 'transcribing') {
+    transcript(id, 'user', text, false, true);
+  }
 }
 function stop(title = 'Conversation ended', hint = 'Start again whenever you’re ready.') {
   const old = call; call = null;
@@ -237,6 +244,13 @@ function stop(title = 'Conversation ended', hint = 'Start again whenever you’r
     clearTimeout(old.timeout); clearTimeout(old.disconnectTimer); clearInterval(old.clock);
     old.abort.abort(); old.ws?.close(); old.peer?.close(); old.audio?.dispose();
     old.mic?.getTracks().forEach(t => t.stop()); old.remote?.getTracks().forEach(t => t.stop());
+  }
+  for (const entry of messages.values()) {
+    if (entry.className === 'transcribing') {
+      entry.textContent = 'Speech transcription unavailable.';
+      entry.className = '';
+      entry.setAttribute('aria-busy', 'false');
+    }
   }
   $('remote-audio').pause(); $('remote-audio').srcObject = null;
   $('orb').className = 'orb'; $('play').hidden = true;
@@ -349,14 +363,22 @@ async function handleEvent(session, event) {
   } else if (['bridge.error','rtc.call.error','error'].includes(type)) {
     throw new Error(event.error?.message || 'Azure could not start this voice session.');
   } else if (type === 'input_audio_buffer.speech_started') {
+    reserveUserTranscript(event.item_id, 'Listening...');
     session.userSpeaking = true;
     updateTextInput();
     session.interruptedResponse = session.responseId;
     session.audio?.interrupt();
     $('orb').className = 'orb active'; $('status').textContent = 'Listening to you';
   } else if (type === 'input_audio_buffer.speech_stopped') {
+    reserveUserTranscript(event.item_id);
     session.userSpeaking = false;
     updateTextInput();
+  } else if (type === 'input_audio_buffer.committed') {
+    reserveUserTranscript(event.item_id);
+  } else if (['conversation.item.created', 'conversation.item.added'].includes(type) && event.item?.role === 'user') {
+    const text = Array.isArray(event.item.content) ? event.item.content.map(part => part.text || part.transcript || '').join('') : '';
+    if (text) transcript(event.item.id, 'user', text);
+    else reserveUserTranscript(event.item.id);
   } else if (['response.audio.delta', 'response.output_audio.delta'].includes(type) && session.audio) {
     const responseId = event.response_id || session.responseId;
     if (event.delta && !session.userSpeaking && (!session.interruptedResponse || responseId !== session.interruptedResponse)) {
@@ -367,9 +389,12 @@ async function handleEvent(session, event) {
     $('orb').className = 'orb speaking'; $('status').textContent = 'Your agent is speaking';
   } else if (type === 'output_audio_buffer.stopped' || type === 'output_audio_buffer.cleared') {
     $('orb').className = 'orb active'; $('status').textContent = 'Listening';
+  } else if (type === 'conversation.item.input_audio_transcription.delta') {
+    transcript(event.item_id, 'user', event.delta, true);
   } else if (type === 'conversation.item.input_audio_transcription.completed') {
-    transcript(event.item_id, 'user', event.transcript);
+    transcript(event.item_id, 'user', event.transcript || 'No speech recognized.');
   } else if (type === 'conversation.item.input_audio_transcription.failed') {
+    transcript(event.item_id, 'user', 'Speech transcription failed.');
     showError('Speech transcription failed for this turn. Check the transcription setting in Foundry.');
   } else if (/^response\.(output_audio_transcript|audio_transcript|output_text|text)\.(delta|done)$/.test(type)) {
     transcript(event.item_id || event.response_id, 'assistant', event.delta || event.transcript || event.text, type.endsWith('.delta'));

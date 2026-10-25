@@ -118,7 +118,7 @@ test('Choosing Azure Realtime previews native voices; saving updates actual mode
   assert.equal(ui.element('agent-model').textContent, 'azure-realtime');
   assert.equal(ui.element('agent-version').textContent, '2');
   assert.equal(ui.element('save-model').disabled, true);
-  ui.element('agent-model-choice').value = 'gpt-4.1';
+  ui.element('agent-model-choice').value = 'gpt-5.4';
   ui.element('agent-model-choice').onchange();
   assert.equal(ui.element('voice').hidden, false);
   assert.equal(ui.element('native-voice').hidden, true);
@@ -127,14 +127,35 @@ test('Choosing Azure Realtime previews native voices; saving updates actual mode
 test('Agent settings are fetched as read-only YAML and rendered as text', async () => {
   const yaml = 'name: demo-agent\nversion: "2"\ninstructions: <script>not markup</script>';
   const ui = await setup('websocket', {fetch:async url=>({ok:true, json:async()=>url === '/api/config' ?
-    {configured:true} : url === '/api/agent/settings' ? {yaml, model:'gpt-4.1', version:'2'} :
-    {exists:true, model:'gpt-4.1', version:'2'}})});
+    {configured:true} : url === '/api/agent/settings' ? {yaml, model:'gpt-5.4', version:'2'} :
+    {exists:true, model:'gpt-5.4', version:'2'}})});
   await ui.element('show-settings').onclick();
   assert.equal(ui.element('settings-yaml').textContent, yaml);
   assert.equal(ui.element('settings-dialog').open, true);
   assert.match(ui.element('settings-version').textContent, /Version: 2/);
   ui.element('close-settings').onclick();
   assert.equal(ui.element('settings-dialog').open, false);
+});
+
+test('GPT-5.4 replaces GPT-4.1 and saves a new version with HD voice controls', async () => {
+  const writes = [];
+  const ui = await setup('websocket', {fetch:async (url, options)=>{
+    if (url === '/api/agent/model') writes.push(JSON.parse(options.body));
+    return {ok:true, json:async()=>url === '/api/config' ? {configured:true} :
+      {exists:true, model:url === '/api/agent/model' ? 'gpt-5.4' : 'azure-realtime',
+        version:url === '/api/agent/model' ? '3' : '2'}};
+  }});
+  ui.stop();
+  ui.element('agent-model-choice').value = 'gpt-5.4';
+  ui.element('agent-model-choice').onchange();
+  assert.equal(ui.element('voice').hidden, false);
+  assert.equal(ui.element('native-voice').hidden, true);
+  assert.equal(ui.element('agent-model').textContent, 'azure-realtime');
+  assert.equal(ui.element('save-model').disabled, false);
+  await ui.element('save-model').onclick();
+  assert.deepEqual(writes, [{model:'gpt-5.4', version:'2'}]);
+  assert.equal(ui.element('agent-model').textContent, 'gpt-5.4');
+  assert.equal(ui.element('agent-version').textContent, '3');
 });
 
 test('Conversation download waits for End and posts only its session capability', async () => {
@@ -169,6 +190,8 @@ test('Recording notice is visible before the conversation controls', async () =>
   assert.match(html, /Audio is saved by default/);
   assert.ok(html.indexOf('id="recording-notice"') < html.indexOf('id="start"'));
   assert.match(html, /id="agent-version"/);
+  assert.match(html, /<option value="gpt-5.4">gpt-5.4<\/option>/);
+  assert.doesNotMatch(html, /<option value="gpt-4.1">/);
   assert.match(html, /value="en-IN-Diya:DragonHDLatestNeural"/);
   assert.match(html, /value="zh-CN-Xiaoqi:DragonHDFlashLatestNeural"/);
   assert.match(html, /value="zh-CN-Xiaoke:DragonHDFlashLatestNeural"/);
@@ -419,6 +442,90 @@ for (const transport of ['websocket', 'webrtc']) {
 }
 
 for (const transport of ['websocket', 'webrtc']) {
+  for (const stream of ['audio_transcript', 'output_audio_transcript']) {
+    test(`${transport}: ${stream} replies stay below delayed user transcription`, async () => {
+      const ui = await setup(transport);
+      await ui.handleEvent(ui.session, {type:`response.${stream}.done`, item_id:'greeting', transcript:'Hello!'});
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.speech_started', item_id:'question'});
+      const question = ui.element('transcript').children[1];
+      assert.equal(question.children[0].textContent, 'You');
+      assert.equal(question.children[1].textContent, 'Listening...');
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.speech_stopped', item_id:'question'});
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.committed', item_id:'question'});
+      await ui.handleEvent(ui.session, {type:'conversation.item.added', item:{
+        id:'question', role:'user', content:[{type:'input_audio', transcript:null}],
+      }});
+      assert.equal(question.children[1].textContent, 'Transcribing...');
+      await ui.handleEvent(ui.session, {type:`response.${stream}.delta`, item_id:'reply', delta:'It is sunny.'});
+      await ui.handleEvent(ui.session, {type:'conversation.item.input_audio_transcription.delta',
+        item_id:'question', delta:'What is '});
+      await ui.handleEvent(ui.session, {type:'conversation.item.input_audio_transcription.delta',
+        item_id:'question', delta:'the weather?'});
+      assert.equal(question.children[1].textContent, 'What is the weather?');
+      await ui.handleEvent(ui.session, {type:'conversation.item.input_audio_transcription.completed',
+        item_id:'question', transcript:'What is the weather today?'});
+      await ui.handleEvent(ui.session, {type:`response.${stream}.done`, item_id:'reply', transcript:'It is sunny.'});
+      const rows = ui.element('transcript').children;
+      assert.equal(rows.length, 3);
+      assert.equal(rows[1], question, 'Final transcription must update the original bubble');
+      assert.equal(rows[1].children[1].textContent, 'What is the weather today?');
+      assert.equal(rows[2].children[1].textContent, 'It is sunny.');
+      assert.equal(rows[1].children[1].className, '');
+    });
+  }
+
+  for (const earlyEvent of [
+    {type:'input_audio_buffer.committed', item_id:'question'},
+    {type:'conversation.item.created', item:{id:'question', role:'user', content:[{type:'input_audio'}]}},
+    {type:'conversation.item.added', item:{id:'question', role:'user', content:[{type:'input_audio'}]}},
+  ]) {
+    test(`${transport}: ${earlyEvent.type} reserves user position when speech-start ID is absent`, async () => {
+      const ui = await setup(transport);
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.speech_started'});
+      await ui.handleEvent(ui.session, earlyEvent);
+      await ui.handleEvent(ui.session, {type:'response.output_text.done', item_id:'reply', text:'Four.'});
+      await ui.handleEvent(ui.session, {type:'conversation.item.input_audio_transcription.completed',
+        item_id:'question', transcript:'What is two plus two?'});
+      const rows = ui.element('transcript').children;
+      assert.equal(rows.length, 2);
+      assert.equal(rows[0].children[0].textContent, 'You');
+      assert.equal(rows[0].children[1].textContent, 'What is two plus two?');
+      assert.equal(rows[1].children[1].textContent, 'Four.');
+    });
+  }
+
+  test(`${transport}: multiple user transcripts completing out of order keep their turn positions`, async () => {
+    const ui = await setup(transport);
+    for (const number of [1, 2]) {
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.speech_started', item_id:`question-${number}`});
+      await ui.handleEvent(ui.session, {type:'response.output_text.done', item_id:`reply-${number}`, text:`Answer ${number}`});
+    }
+    for (const number of [2, 1]) {
+      await ui.handleEvent(ui.session, {type:'conversation.item.input_audio_transcription.completed',
+        item_id:`question-${number}`, transcript:`Question ${number}`});
+    }
+    assert.deepEqual(ui.element('transcript').children.map(row=>row.children[1].textContent),
+      ['Question 1', 'Answer 1', 'Question 2', 'Answer 2']);
+  });
+
+  test(`${transport}: failed, empty, and unfinished transcripts resolve in their reserved bubble`, async () => {
+    for (const outcome of ['failed', 'empty', 'stopped']) {
+      const ui = await setup(transport);
+      await ui.handleEvent(ui.session, {type:'input_audio_buffer.speech_started', item_id:'question'});
+      await ui.handleEvent(ui.session, {type:'response.output_text.done', item_id:'reply', text:'Answer'});
+      if (outcome === 'stopped') ui.stop();
+      else await ui.handleEvent(ui.session, {type:`conversation.item.input_audio_transcription.${outcome === 'failed' ? 'failed' : 'completed'}`,
+        item_id:'question', transcript:''});
+      const rows = ui.element('transcript').children;
+      assert.equal(rows.length, 2);
+      assert.equal(rows[0].children[1].textContent, outcome === 'failed' ? 'Speech transcription failed.' :
+        outcome === 'empty' ? 'No speech recognized.' : 'Speech transcription unavailable.');
+      assert.equal(rows[0].children[1].className, '');
+      assert.equal(rows[1].children[1].textContent, 'Answer');
+      if (outcome === 'failed') assert.match(ui.element('error').textContent, /Speech transcription failed/);
+    }
+  });
+
   test(`${transport}: sends text and a response request over the bridge socket`, async () => {
     const ui = await setup(transport);
     ui.element('text-input').value = '  Hello <world>  ';
@@ -442,6 +549,8 @@ for (const transport of ['websocket', 'webrtc']) {
     ]);
     assert.equal(ui.element('text-input').value, '');
     assert.equal(ui.element('transcript').children[0].children[1].textContent, 'Hello <world>');
+    await ui.handleEvent(ui.session, {type:'conversation.item.created', item:ui.sent[0].item});
+    assert.equal(ui.element('transcript').children.length, 1, 'Server echo must not duplicate a typed message');
     ui.element('text-input').value = 'Next';
     ui.element('text-input').oninput();
     assert.equal(ui.element('send-text').disabled, true);
