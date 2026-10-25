@@ -10,7 +10,11 @@
     "language_policy": {"description": "Application-selected language policy.", "required": true, "schema": {"type": "string"}},
     "greeting_text": {"description": "Application-selected opening greeting.", "required": true, "schema": {"type": "string"}}
   },
-  "greeting": {"type": "template", "text": "{{greeting_text}}"},
+  "greeting": {
+    "type": "llm_generated",
+    "prompt": "Give a brief, friendly greeting. Use the supplied display name if present; otherwise greet without a name. Follow the session language policy. Do not invent personal details.",
+    "tool_choice": "none"
+  },
   "audio": {
     "input": {
       "noise_reduction": {"type": "azure_deep_noise_suppression_headset"},

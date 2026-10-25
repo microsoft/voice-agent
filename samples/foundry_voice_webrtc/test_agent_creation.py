@@ -189,6 +189,7 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         agent = self.agent()
         definition = agent["versions"]["latest"]["definition"]
         definition["instructions"] = definition["instructions"].partition("\n\nWEATHER LOOKUP")[0]
+        definition["greeting"] = {"type": "template", "text": "{{greeting_text}}"}
         definition.pop("tools")
         client = Client([Response(200, agent), Response(404), Response(404), Response(200)],
                         [Response(201), Response(204)], [Response(200)])
@@ -199,6 +200,7 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         definition = agent["versions"]["latest"]["definition"]
         definition["model"] = "gpt-4.1-mini"
         definition["instructions"] = definition["instructions"].partition("\n\nTURN FOCUS AND CAPABILITIES")[0]
+        definition["greeting"] = {"type": "template", "text": "{{greeting_text}}"}
         client = Client([Response(200, agent), Response(404), Response(404), Response(200)],
                         [Response(201), Response(204)], [Response(200)])
         self.assertTrue((await recreate_configured_agent(client, self.config(), {}))["recreated"])
@@ -207,9 +209,19 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         agent = self.agent()
         agent["versions"]["latest"]["definition"]["instructions"] = (
             agent["versions"]["latest"]["definition"]["instructions"].partition("\n\nAGENT IDENTITY")[0])
+        agent["versions"]["latest"]["definition"]["greeting"] = {"type": "template", "text": "{{greeting_text}}"}
         client = Client([Response(200, agent), Response(404), Response(404), Response(200)],
                         [Response(201), Response(204)], [Response(200)])
         self.assertTrue((await recreate_configured_agent(client, self.config(), {}))["recreated"])
+
+    async def test_custom_greeting_without_ownership_metadata_cannot_be_reset(self):
+        agent = self.agent()
+        agent["versions"]["latest"]["definition"]["greeting"]["prompt"] = "A custom greeting."
+        client = Client([Response(200, agent)])
+        with self.assertRaisesRegex(AgentPreparationError, "not recognized"):
+            await recreate_configured_agent(client, self.config(), {})
+        self.assertEqual(client.removals, [])
+        self.assertEqual(client.writes, [])
 
     async def test_denied_or_unavailable_project_never_creates(self):
         for statuses in ((403,), (401,), (500,), (404, 404), (404, 403)):

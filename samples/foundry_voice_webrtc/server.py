@@ -600,7 +600,9 @@ async def recreate_configured_agent(client, cfg, headers):
             # Also recognize the earlier demo versions published before ownership metadata.
             owned = ((latest.get("metadata") or {}).get("sample") == "foundry_voice_webrtc"
                      or (all(definition.get(key) == demo[key] for key in
-                             ("kind", "model_type", "greeting", "structured_inputs"))
+                             ("kind", "model_type", "structured_inputs"))
+                         and definition.get("greeting") in (
+                             demo["greeting"], {"type": "template", "text": "{{greeting_text}}"})
                          and definition.get("instructions") in {
                              demo["instructions"], demo["instructions"].partition("\n\nWEATHER LOOKUP")[0],
                              demo["instructions"].partition("\n\nTURN FOCUS AND CAPABILITIES")[0],

@@ -79,11 +79,17 @@ class PersonalizationTests(unittest.TestCase):
         self.assertEqual(next_values["user_context"], "")
         self.assertEqual(next_values["language_policy"], values["language_policy"])
 
-    def test_definition_declares_all_inputs_and_renders_greeting(self):
+    def test_definition_declares_inputs_and_generates_personalized_greeting(self):
         definition = json.loads(Path(__file__).with_name("personalized-agent.json").read_text())
         values = json.loads(personalization_header(frame()))
         self.assertEqual(set(definition["structured_inputs"]), set(values))
-        self.assertEqual(definition["greeting"]["text"], "{{greeting_text}}")
+        self.assertEqual(definition["greeting"], {
+            "type": "llm_generated",
+            "prompt": "Give a brief, friendly greeting. Use the supplied display name if present; otherwise greet without a name. Follow the session language policy. Do not invent personal details.",
+            "tool_choice": "none",
+        })
+        self.assertIn("Display name: {{display_name}}", definition["instructions"])
+        self.assertIn("{{language_policy}}", definition["instructions"])
         self.assertEqual(definition["audio"]["input"]["transcription"]["language"], "en-US")
         self.assertEqual(definition["audio"]["input"]["noise_reduction"],
                          {"type": "azure_deep_noise_suppression_headset"})

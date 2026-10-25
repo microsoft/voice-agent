@@ -245,18 +245,27 @@ and enter synthetic data such as display name `Alex` and context
 from its language setting; you can override it before connecting.
 
 **English-only instructions** are enabled by default. Even with Spanish selected,
-the greeting is "Hello, Alex! How can I help you?" when a name is supplied
-(or "Hello! How can I help you?" without one), and the instructions require English
-spoken/written replies. For non-English requests, the Agent is instructed to ask
+the AI-generated greeting and spoken/written replies are instructed to use English.
+The greeting uses the supplied display name when present, or no name when absent;
+its wording can vary. For non-English requests, the Agent is instructed to ask
 in English to continue in English, without fulfilling or translating the request.
 Unclear audio should prompt repetition rather than an assumed language.
 Uncheck English-only to demonstrate a Spanish greeting and default replies.
 
 The example declares string `structured_inputs`: `display_name`, `user_context`,
 `client_language`, `language_policy`, and `greeting_text`. The backend constructs
-the policy and greeting from validated selections, rather than accepting arbitrary
-browser instructions. The saved Agent references those fields using Handlebars;
-its template greeting uses `{{greeting_text}}`.
+the language policy from validated selections, rather than accepting arbitrary
+browser instructions. The saved instructions reference the name, context, and
+policy using Handlebars before the greeting is generated.
+
+The saved `llm_generated` greeting uses this prompt:
+
+> Give a brief, friendly greeting. Use the supplied display name if present; otherwise greet without a name. Follow the session language policy. Do not invent personal details.
+
+Greeting tool calls are disabled. The backend continues supplying `greeting_text`
+for compatibility with older saved Agents using a template greeting; the new
+AI-generated greeting does not use that fixed text. Existing Agents keep their
+saved greeting unless explicitly updated or reset.
 
 The browser sends a bounded initialization frame over its local socket **before**
 SDP or audio. The backend validates it and sends ASCII JSON in
