@@ -165,6 +165,9 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definition["tools"], [self.weather.return_value])
         self.assertIn("WEATHER LOOKUP", definition["instructions"])
         self.assertIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
+        self.assertIn("You are Foundry Voice Agent.", definition["instructions"])
+        self.assertIn("identify yourself as Foundry Voice Agent, not ChatGPT", definition["instructions"])
+        self.assertIn("Do not repeat your identity in ordinary replies", definition["instructions"])
         self.assertIn(":enable?", client.writes[1][0])
 
     async def test_failed_weather_setup_never_publishes_an_agent(self):
@@ -199,6 +202,15 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         client = Client([Response(200, agent), Response(404), Response(404), Response(200)],
                         [Response(201), Response(204)], [Response(200)])
         self.assertTrue((await recreate_configured_agent(client, self.config(), {}))["recreated"])
+
+    async def test_previous_prompt_without_identity_or_ownership_metadata_can_be_reset(self):
+        agent = self.agent()
+        agent["versions"]["latest"]["definition"]["instructions"] = (
+            agent["versions"]["latest"]["definition"]["instructions"].partition("\n\nAGENT IDENTITY")[0])
+        client = Client([Response(200, agent), Response(404), Response(404), Response(200)],
+                        [Response(201), Response(204)], [Response(200)])
+        self.assertTrue((await recreate_configured_agent(client, self.config(), {}))["recreated"])
+
     async def test_denied_or_unavailable_project_never_creates(self):
         for statuses in ((403,), (401,), (500,), (404, 404), (404, 403)):
             client = Client([Response(status) for status in statuses])

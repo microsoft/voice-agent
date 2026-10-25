@@ -603,7 +603,8 @@ async def recreate_configured_agent(client, cfg, headers):
                              ("kind", "model_type", "greeting", "structured_inputs"))
                          and definition.get("instructions") in {
                              demo["instructions"], demo["instructions"].partition("\n\nWEATHER LOOKUP")[0],
-                             demo["instructions"].partition("\n\nTURN FOCUS AND CAPABILITIES")[0]}))
+                             demo["instructions"].partition("\n\nTURN FOCUS AND CAPABILITIES")[0],
+                             demo["instructions"].partition("\n\nAGENT IDENTITY")[0]}))
             if not owned:
                 raise AgentPreparationError("The configured Agent is not recognized as this sample's demo Agent. It was not deleted.")
         elif response.status != 404:

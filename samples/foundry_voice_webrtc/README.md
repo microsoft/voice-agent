@@ -102,6 +102,8 @@ default. Before creation it shows `gpt-realtime-2.1 (after setup)`; a failed loo
 shows `Unavailable`. New demo Agents answer only the latest request, avoid
 repeating earlier capability lists or adding routine follow-up questions, and
 do not claim reminder or messaging tools that are not connected.
+When asked to introduce itself, the Agent identifies itself as **Foundry Voice
+Agent**, not ChatGPT, without repeating that identity in ordinary replies.
 The saved setup uses managed **gpt-realtime-2.1**, Whisper input transcription,
 and the selected Azure Speech HD output voice. Azure semantic turn detection
 keeps the headset noise-reduction processing on the service-owned audio path;
