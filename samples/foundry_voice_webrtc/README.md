@@ -47,8 +47,18 @@ A deer and fawn stroll along the foreground, occasionally pausing to graze,
 while a small group of ducks drifts across the water with subtle wakes. These
 decorative animals are hidden in fog, snow, and heavier precipitation; they are
 not live wildlife observations. All movement shares the scenery pause control.
+Snow-capped Mount Rainier and a distant Space Needle silhouette anchor the
+background. Their colors soften at night and in fog. Seattle's coordinates and
+the current UTC time drive an approximate geometric solar-position calculation:
+the sun moves east to west, daylight fades gradually through dawn and dusk,
+and twilight adds a warm horizon glow. Cloud cover and precipitation reduce
+brightness, while stars appear on clearer nights. This uses the device clock,
+not its timezone or the weather report's older timestamp. Atmospheric refraction,
+terrain occlusion, and the Moon's position are not modeled. The scene is a stylized
+Seattle composition, not an exact geographic viewpoint.
 Choose **Scenery only** to hide the interface and enjoy the landscape; the
 floating **Show panels** and **Pause scenery** buttons remain accessible.
+These compact icon buttons have descriptive tooltips and accessible names.
 **Show panels** or Escape restores the interface and previous scroll position.
 Hiding panels does not end or mute an active voice session.
 The weather request goes directly from the browser to `api.open-meteo.com`

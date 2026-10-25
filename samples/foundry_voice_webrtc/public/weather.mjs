@@ -1,5 +1,61 @@
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=47.6062&longitude=-122.3321&current=temperature_2m,is_day,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&timezone=America%2FLos_Angeles';
 
+const radians = Math.PI / 180;
+const smoothstep = (low, high, value) => {
+  const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+};
+
+// NOAA-style geometric solar coordinates; UTC avoids browser timezone and DST offsets.
+export function solarPosition(date) {
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) throw new Error('Solar position requires a valid date');
+  const centuries = (timestamp / 86400000 + 2440587.5 - 2451545) / 36525;
+  const longitude = (280.46646 + centuries * (36000.76983 + centuries * 0.0003032)) % 360;
+  const anomaly = (357.52911 + centuries * (35999.05029 - 0.0001537 * centuries)) * radians;
+  const eccentricity = 0.016708634 - centuries * (0.000042037 + 0.0000001267 * centuries);
+  const center = Math.sin(anomaly) * (1.914602 - centuries * (0.004817 + 0.000014 * centuries)) +
+    Math.sin(2 * anomaly) * (0.019993 - 0.000101 * centuries) + Math.sin(3 * anomaly) * 0.000289;
+  const omega = (125.04 - 1934.136 * centuries) * radians;
+  const apparent = (longitude + center - 0.00569 - 0.00478 * Math.sin(omega)) * radians;
+  const obliquity = (23 + (26 + (21.448 - centuries * (46.815 + centuries *
+    (0.00059 - centuries * 0.001813))) / 60) / 60 + 0.00256 * Math.cos(omega)) * radians;
+  const declination = Math.asin(Math.sin(obliquity) * Math.sin(apparent));
+  const y = Math.tan(obliquity / 2) ** 2, l = longitude * radians;
+  const equation = 4 / radians * (y * Math.sin(2 * l) - 2 * eccentricity * Math.sin(anomaly) +
+    4 * eccentricity * y * Math.sin(anomaly) * Math.cos(2 * l) -
+    0.5 * y * y * Math.sin(4 * l) - 1.25 * eccentricity ** 2 * Math.sin(2 * anomaly));
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() +
+    date.getUTCSeconds() / 60 + date.getUTCMilliseconds() / 60000;
+  const solarMinutes = ((utcMinutes + equation + 4 * -122.3321) % 1440 + 1440) % 1440;
+  const hourAngle = (solarMinutes / 4 - 180) * radians, latitude = 47.6062 * radians;
+  const altitude = Math.asin(Math.max(-1, Math.min(1, Math.sin(latitude) * Math.sin(declination) +
+    Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle)))) / radians;
+  const azimuth = (Math.atan2(Math.sin(hourAngle),
+    Math.cos(hourAngle) * Math.sin(latitude) - Math.tan(declination) * Math.cos(latitude)) / radians + 180) % 360;
+  return { altitude, azimuth };
+}
+
+export function solarLighting(date, weather) {
+  const sun = solarPosition(date);
+  const daylight = smoothstep(-9, 6, sun.altitude);
+  return {
+    ...sun, daylight,
+    brightness: daylight * (1 - weather.cloud * 0.3) * (1 - Math.min(weather.wet / 25, 0.2)),
+    twilight: smoothstep(-10, -1, sun.altitude) * (1 - smoothstep(0, 14, sun.altitude)),
+    sunVisibility: smoothstep(-0.9, -0.1, sun.altitude) * (1 - weather.cloud) ** 2,
+  };
+}
+
+function blendColor(night, day, amount, alpha = 1) {
+  const channels = [0, 2, 4].map(offset => {
+    const a = parseInt(night.slice(offset, offset + 2), 16);
+    const b = parseInt(day.slice(offset, offset + 2), 16);
+    return Math.round(a + (b - a) * amount);
+  });
+  return `rgba(${channels.join(',')},${alpha})`;
+}
+
 export function parseWeather(data) {
   const c = data?.current;
   for (const key of ['temperature_2m', 'is_day', 'precipitation', 'weather_code', 'cloud_cover', 'wind_speed_10m', 'wind_direction_10m']) {
@@ -64,6 +120,8 @@ function startWeather() {
     if (showScenery) panelScroll = window.scrollY;
     document.body.classList.toggle('scenery-only', showScenery);
     viewButton.textContent = showScenery ? 'Show panels' : 'Scenery only';
+    viewButton.title = `${viewButton.textContent}. Active calls continue.`;
+    viewButton.setAttribute('aria-label', viewButton.textContent);
     viewButton.setAttribute('aria-pressed', String(showScenery));
     window.scrollTo({ top: showScenery ? 0 : panelScroll, behavior: 'instant' });
     viewButton.focus({ preventScroll: true });
@@ -92,22 +150,36 @@ function startWeather() {
   function render(ctx, width, height) {
     ctx.clearRect(0, 0, width, height);
     if (!weather) return;
-    const w = weather;
+    const light = solarLighting(new Date(), weather);
+    const w = { ...weather, day: light.altitude > -0.833 };
+    const brightness = light.brightness;
     const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, w.day ? (w.cloud > 0.65 ? '#718b98' : '#8fbacc') : '#182c40');
-    sky.addColorStop(0.65, w.day ? '#dce5df' : '#536773');
-    sky.addColorStop(1, w.day ? '#edf0df' : '#a0afa7');
+    sky.addColorStop(0, blendColor('0b182d', '8fbacc', brightness));
+    sky.addColorStop(0.65, blendColor('243b55', 'dce5df', brightness));
+    sky.addColorStop(1, blendColor('394c61', 'edf0df', brightness));
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, width, height);
 
-    const sunX = width * 0.77, sunY = height * 0.16;
+    const sunX = width * ((light.azimuth - 70) / 220);
+    const sunY = height * (0.74 - 0.68 * Math.sin(Math.max(0, light.altitude) * radians));
+    const dusk = ctx.createRadialGradient(sunX, height * 0.74, 0, sunX, height * 0.74, width * 0.7);
+    dusk.addColorStop(0, `rgba(239,143,93,${light.twilight * (1 - w.cloud * 0.7) * 0.65})`);
+    dusk.addColorStop(1, 'rgba(239,143,93,0)');
+    ctx.fillStyle = dusk; ctx.fillRect(0, 0, width, height);
+    if (light.daylight < 0.4) {
+      ctx.fillStyle = `rgba(226,237,250,${(1 - light.daylight / 0.4) * (1 - w.cloud) * 0.65})`;
+      for (let star = 0; star < 45; star++) {
+        const p = particles[star];
+        ctx.beginPath(); ctx.arc(p.x * width, p.y * height * 0.58, 0.6 + p.depth * 0.4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, width * 0.48);
-    halo.addColorStop(0, `rgba(255,241,190,${w.day ? (1 - w.cloud) * 0.75 : 0.08})`);
+    halo.addColorStop(0, `rgba(255,223,166,${light.sunVisibility * 0.65})`);
     halo.addColorStop(1, 'rgba(255,241,190,0)');
     ctx.fillStyle = halo; ctx.fillRect(0, 0, width, height);
-    if (w.cloud < 0.8) {
-      ctx.fillStyle = w.day ? '#fff5d5' : '#e0e6e1';
-      ctx.beginPath(); ctx.arc(sunX, sunY, w.day ? 27 : 16, 0, Math.PI * 2); ctx.fill();
+    if (light.sunVisibility > 0) {
+      ctx.fillStyle = blendColor('f4ac73', 'fff5d5', smoothstep(0, 18, light.altitude), light.sunVisibility);
+      ctx.beginPath(); ctx.arc(sunX, sunY, 15, 0, Math.PI * 2); ctx.fill();
     }
     const { horizontal, drift } = weatherMotion(w, time);
     for (let layer = 0; layer < 3; layer++) {
@@ -122,8 +194,8 @@ function startWeather() {
           const radius = 65 + particles[i + puff].depth * 30;
           const cloud = ctx.createRadialGradient(px, py - 12, 0, px, py, radius);
           const alpha = w.cloud * (0.12 + depth * 0.12);
-          cloud.addColorStop(0, `rgba(${w.day ? '248,248,239' : '133,151,168'},${alpha})`);
-          cloud.addColorStop(0.55, `rgba(${w.day ? '183,198,201' : '75,94,116'},${alpha * 0.7})`);
+          cloud.addColorStop(0, blendColor('56677f', 'f8f8ef', brightness, alpha));
+          cloud.addColorStop(0.55, blendColor('2e405a', 'b7c6c9', brightness, alpha * 0.7));
           cloud.addColorStop(1, 'rgba(150,170,181,0)');
           ctx.fillStyle = cloud; ctx.fillRect(px - radius, py - radius, radius * 2, radius * 2);
         }
@@ -148,9 +220,37 @@ function startWeather() {
       }
       ctx.lineCap = 'butt';
     }
+    // A broad volcanic summit and glacier fingers suggest distant Mount Rainier.
+    ctx.save();
+    ctx.translate(width * 0.7, height * 0.61);
+    ctx.scale(Math.min(width * 0.32, 430), Math.min(height * 0.25, 230));
+    ctx.globalAlpha = w.fog ? 0.18 : 0.78 - w.cloud * 0.25;
+    ctx.fillStyle = blendColor('34485f', '819da7', brightness);
+    ctx.beginPath(); ctx.moveTo(-1, 1);
+    ctx.lineTo(-0.64, 0.72); ctx.lineTo(-0.35, 0.36); ctx.lineTo(-0.19, 0.2);
+    ctx.bezierCurveTo(-0.14, 0.02, -0.07, 0.08, -0.04, 0.04);
+    ctx.bezierCurveTo(0.03, -0.02, 0.13, 0.04, 0.19, 0.13);
+    ctx.lineTo(0.36, 0.34); ctx.lineTo(0.56, 0.57); ctx.lineTo(1, 1);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = blendColor('71849c', 'e1e9e7', brightness);
+    ctx.beginPath(); ctx.moveTo(-0.35, 0.36); ctx.lineTo(-0.19, 0.2);
+    ctx.bezierCurveTo(-0.14, 0.02, -0.07, 0.08, -0.04, 0.04);
+    ctx.bezierCurveTo(0.03, -0.02, 0.13, 0.04, 0.19, 0.13);
+    ctx.lineTo(0.36, 0.34); ctx.lineTo(0.53, 0.55); ctx.lineTo(0.25, 0.4);
+    ctx.lineTo(0.32, 0.65); ctx.lineTo(0.12, 0.42); ctx.lineTo(0.06, 0.71);
+    ctx.lineTo(-0.04, 0.42); ctx.lineTo(-0.22, 0.62); ctx.lineTo(-0.17, 0.39);
+    ctx.lineTo(-0.45, 0.58); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = blendColor('455f7a', '9fb6c0', brightness); ctx.lineWidth = 0.012;
+    for (let glacier = 0; glacier < 4; glacier++) {
+      const x = -0.12 + glacier * 0.07;
+      ctx.beginPath(); ctx.moveTo(x, 0.17);
+      ctx.quadraticCurveTo(x - 0.04, 0.3, x * 2, 0.43); ctx.stroke();
+    }
+    ctx.restore();
     // Hazy mountain ridges and a darker evergreen shoreline give the scene depth.
     for (let layer = 0; layer < 3; layer++) {
-      ctx.fillStyle = ['#78949650', '#62877c60', '#345c4b65'][layer];
+      ctx.fillStyle = blendColor(['304154', '263f46', '19362f'][layer],
+        ['789496', '62877c', '345c4b'][layer], brightness, 0.4 + layer * 0.08);
       ctx.beginPath(); ctx.moveTo(0, height);
       for (let x = 0; x <= width + 4; x += 4) {
         const y = height * (0.76 + layer * 0.065) +
@@ -160,17 +260,38 @@ function startWeather() {
       }
       ctx.lineTo(width, height); ctx.closePath(); ctx.fill();
     }
+    ctx.save();
+    ctx.translate(width * 0.2, height * 0.86);
+    const landmarkScale = Math.min(height * 0.2, width * 0.25, 160);
+    ctx.scale(landmarkScale, landmarkScale);
+    ctx.globalAlpha = w.fog ? 0.3 : 0.7;
+    ctx.fillStyle = blendColor('263a50', '536e76', brightness);
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = 0.018;
+    // The Space Needle's tapered supports, saucer deck, and antenna stay small on the horizon.
+    for (const foot of [-0.07, 0, 0.07]) {
+      ctx.beginPath(); ctx.moveTo(foot, 0);
+      ctx.bezierCurveTo(foot * 0.6, -0.3, -foot * 0.2, -0.5, foot * 0.55, -0.76);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.ellipse(0, -0.77, 0.115, 0.022, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(-0.065, -0.82, 0.13, 0.04);
+    ctx.beginPath(); ctx.moveTo(-0.13, -0.82);
+    ctx.quadraticCurveTo(0, -0.94, 0.13, -0.82); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 0.009;
+    ctx.beginPath(); ctx.moveTo(0, -0.88); ctx.lineTo(0, -1); ctx.stroke();
+    ctx.restore();
     const waterline = height * 0.86;
     const water = ctx.createLinearGradient(0, waterline, 0, height);
-    water.addColorStop(0, w.day ? '#9bb5b5' : '#354e63');
-    water.addColorStop(1, w.day ? '#526f73' : '#1c3445');
+    water.addColorStop(0, blendColor('263e55', '9bb5b5', brightness));
+    water.addColorStop(1, blendColor('142b3c', '526f73', brightness));
     ctx.fillStyle = water; ctx.fillRect(0, waterline, width, height - waterline);
     for (let i = 0; i < 65; i++) {
       const p = particles[i], depth = (i + 1) / 65;
       const x = p.x * width + Math.sin(time * (0.4 + depth) + i) * (1 + w.wind * 0.08);
       const y = waterline + depth * (height - waterline);
       const reflection = Math.max(0, 1 - Math.abs(x - sunX) / (width * 0.3));
-      ctx.strokeStyle = `rgba(224,235,226,${(0.04 + reflection * 0.16) * (1 - w.cloud * 0.6)})`;
+      ctx.strokeStyle = `rgba(224,235,226,${(0.025 + reflection * 0.16) * (0.2 + light.sunVisibility * 0.8)})`;
       ctx.lineWidth = 0.5 + depth;
       ctx.beginPath(); ctx.moveTo(x, y);
       ctx.lineTo(x + 6 + depth * 32, y); ctx.stroke();
@@ -179,7 +300,7 @@ function startWeather() {
       for (let duck = 0; duck < 3; duck++) {
         const x = wrap(width * 0.28 + time * 5 - duck * 21, width + 80) - 40;
         const y = height * 0.905 + duck * 3 + Math.sin(time * 1.2 + duck) * 0.8;
-        ctx.fillStyle = w.day ? '#344b49b3' : '#1c333cbb';
+        ctx.fillStyle = blendColor('1c333c', '344b49', brightness, 0.73);
         ctx.beginPath(); ctx.ellipse(x, y, 6, 2.6, 0, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(x + 4, y - 3.5, 2, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.moveTo(x + 5, y - 4);
@@ -188,7 +309,7 @@ function startWeather() {
         ctx.beginPath(); ctx.ellipse(x - 7, y + 2, 12, 2.4, 0, 0.3, Math.PI - 0.3); ctx.stroke();
       }
     }
-    ctx.fillStyle = w.day ? '#405442' : '#203a32';
+    ctx.fillStyle = blendColor('172c29', '405442', brightness);
     ctx.beginPath(); ctx.moveTo(0, height);
     for (let x = 0; x <= width + 8; x += 8) {
       ctx.lineTo(x, height * 0.955 + Math.sin(x * 0.008) * 3);
@@ -198,7 +319,8 @@ function startWeather() {
       const x = i * width / 69, y = height * 0.96 + Math.sin(i * 1.7) * 14;
       const size = 18 + particles[i].depth * 38;
       const sway = treeSway(w, time, i * 0.2) * size * 0.14;
-      ctx.fillStyle = '#294c3d70'; ctx.strokeStyle = '#34504465'; ctx.lineWidth = 1;
+      ctx.fillStyle = blendColor('162e29', '294c3d', brightness, 0.65);
+      ctx.strokeStyle = blendColor('1c332d', '345044', brightness, 0.65); ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sway, y - size); ctx.stroke();
       for (let branch = 1; branch <= 9; branch++) {
         const top = y - size + branch * size / 11;
@@ -220,7 +342,7 @@ function startWeather() {
       const bend = treeSway(w, time, tree * 1.6) * size * 0.16;
       const tipX = root + side * size * 0.2 + bend;
       const tipY = height - size;
-      ctx.strokeStyle = w.day ? '#394b3cce' : '#1b302dd9';
+      ctx.strokeStyle = blendColor('1b302d', '394b3c', brightness, 0.85);
       ctx.lineWidth = 7;
       ctx.beginPath(); ctx.moveTo(root, height);
       ctx.bezierCurveTo(root, height - size * 0.45, tipX - bend * 0.4, tipY + size * 0.25, tipX, tipY);
@@ -244,7 +366,8 @@ function startWeather() {
           ctx.save(); ctx.translate(x, y);
           ctx.rotate(side * -0.5 + flutter * 0.55);
           ctx.scale(1, 0.65 + flutter * 0.25);
-          ctx.fillStyle = (w.day ? ['#697448d9', '#9b8048cf', '#62774cda'] : ['#344c3ed9', '#53523ad9', '#2a493ed9'])[leaf % 3];
+          ctx.fillStyle = blendColor(['344c3e', '53523a', '2a493e'][leaf % 3],
+            ['697448', '9b8048', '62774c'][leaf % 3], brightness, 0.85);
           ctx.beginPath(); ctx.ellipse(0, 0, 7 + seed.depth * 4, 3 + seed.depth * 2, 0, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
@@ -256,7 +379,7 @@ function startWeather() {
         const scale = deer ? 0.62 : 0.95;
         const x = wrap(width * 0.12 + pose.distance - deer * 50, width + 160) - 80;
         ctx.save(); ctx.translate(x, height * 0.987); ctx.scale(scale, scale);
-        ctx.fillStyle = w.day ? '#4b4b36e0' : '#203530e6';
+        ctx.fillStyle = blendColor('203530', '4b4b36', brightness, 0.9);
         ctx.strokeStyle = ctx.fillStyle; ctx.lineCap = 'round';
         for (let leg = 0; leg < 4; leg++) {
           const hip = leg < 2 ? -10 : 10;
@@ -280,7 +403,8 @@ function startWeather() {
     }
     if (w.fog) {
       const fog = ctx.createLinearGradient(0, height * 0.4, 0, height);
-      fog.addColorStop(0, '#e4e9e600'); fog.addColorStop(1, '#e4e9e6ca');
+      fog.addColorStop(0, '#e4e9e600');
+      fog.addColorStop(1, blendColor('4c6073', 'e4e9e6', brightness, 0.8));
       ctx.fillStyle = fog; ctx.fillRect(0, 0, width, height);
     }
     if (w.wet > 0 || w.snow) {
@@ -334,6 +458,8 @@ function startWeather() {
     paint();
     if (!paused && !document.hidden && weather) frame = requestAnimationFrame(tick);
     button.textContent = paused ? 'Play scenery' : 'Pause scenery';
+    button.title = button.textContent;
+    button.setAttribute('aria-label', button.textContent);
     button.setAttribute('aria-pressed', String(paused));
   }
   function resize() {

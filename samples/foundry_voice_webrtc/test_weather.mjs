@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion } from './public/weather.mjs';
+import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion, solarPosition, solarLighting } from './public/weather.mjs';
 
 const current = {
   temperature_2m: 12, is_day: 1, precipitation: 0,
@@ -82,4 +82,47 @@ test('wildlife walks, stops to graze, and resumes without teleporting', () => {
     assert.ok(Math.abs(after.grazing - before.grazing) < 0.01);
   }
   assert.notEqual(wildlifeMotion(10).distance, wildlifeMotion(10, 2).distance);
+});
+
+test('Seattle solar position agrees with USNO sunrise, sunset, and civil twilight', () => {
+  // USNO one-day data for Seattle, 2026-10-25, UTC-7; geometric sunrise is about -0.833 degrees.
+  for (const [timestamp, expected] of [
+    ['2026-10-25T14:11:00Z', -6],
+    ['2026-10-25T14:43:00Z', -0.833],
+    ['2026-10-26T01:03:00Z', -0.833],
+    ['2026-10-26T01:35:00Z', -6],
+  ]) {
+    assert.ok(Math.abs(solarPosition(new Date(timestamp)).altitude - expected) < 0.2, timestamp);
+  }
+  assert.ok(Math.abs(solarPosition(new Date('2026-10-25T19:53:00Z')).azimuth - 180) < 0.3);
+  assert.ok(solarPosition(new Date('2026-10-25T14:43:00Z')).azimuth < 180);
+  assert.ok(solarPosition(new Date('2026-10-26T01:03:00Z')).azimuth > 180);
+  assert.deepEqual(solarPosition(new Date('2026-10-25T07:43:00-07:00')),
+    solarPosition(new Date('2026-10-25T14:43:00Z')));
+  assert.throws(() => solarPosition(new Date('invalid')), /valid date/);
+});
+
+test('solar lighting follows seasons and blends smoothly through twilight with weather dimming', () => {
+  const clear = { cloud: 0, wet: 0 };
+  const noon = new Date('2026-10-25T20:00:00Z');
+  const night = solarLighting(new Date('2026-10-25T07:00:00Z'), clear);
+  const dawn = solarLighting(new Date('2026-10-25T14:40:00Z'), clear);
+  const day = solarLighting(noon, clear);
+  assert.equal(night.daylight, 0);
+  assert.equal(night.sunVisibility, 0);
+  assert.ok(dawn.daylight > 0 && dawn.daylight < 1);
+  assert.ok(dawn.twilight > 0.8);
+  assert.equal(day.daylight, 1);
+  assert.ok(solarLighting(noon, { cloud: 1, wet: 0 }).brightness < day.brightness);
+  assert.equal(solarLighting(noon, { cloud: 1, wet: 0 }).sunVisibility, 0);
+  assert.ok(solarLighting(noon, { cloud: 0, wet: 3 }).brightness < day.brightness);
+  assert.ok(solarPosition(new Date('2026-06-21T20:00:00Z')).altitude >
+    solarPosition(new Date('2026-12-21T20:00:00Z')).altitude + 40);
+  for (let minute = 0; minute < 120; minute++) {
+    const t = Date.parse('2026-10-25T14:00:00Z') + minute * 60000;
+    const a = solarLighting(new Date(t), clear);
+    const b = solarLighting(new Date(t + 60000), clear);
+    assert.ok(Math.abs(b.daylight - a.daylight) < 0.03);
+    assert.ok(Math.abs(b.twilight - a.twilight) < 0.04);
+  }
 });
