@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion, solarPosition, solarLighting } from './public/weather.mjs';
+import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion, solarPosition, solarLighting, gullPose } from './public/weather.mjs';
 
 const current = {
   temperature_2m: 12, is_day: 1, precipitation: 0,
@@ -82,6 +82,26 @@ test('wildlife walks, stops to graze, and resumes without teleporting', () => {
     assert.ok(Math.abs(after.grazing - before.grazing) < 0.01);
   }
   assert.notEqual(wildlifeMotion(10).distance, wildlifeMotion(10, 2).distance);
+});
+
+test('seagulls circle smoothly within the scene and alternate wingbeats with gliding', () => {
+  for (let bird = 0; bird < 3; bird++) {
+    for (let time = 0; time < 100; time++) {
+      const pose = gullPose(time, bird);
+      const next = gullPose(time + 0.01, bird);
+      assert.ok(pose.x >= 0.15 && pose.x <= 0.85);
+      assert.ok(pose.y >= 0.3 && pose.y <= 0.46);
+      assert.ok(pose.scale >= 0.55 && pose.scale <= 1);
+      assert.ok(Math.abs(next.x - pose.x) < 0.001);
+      assert.ok(Math.abs(next.y - pose.y) < 0.001);
+    }
+  }
+  assert.notEqual(gullPose(1).wing, gullPose(1.1).wing);
+  assert.equal(gullPose(4).wing, gullPose(5).wing);
+  assert.notEqual(gullPose(1, 0).x, gullPose(1, 1).x);
+  for (const time of [2, 3, 9, 18]) {
+    assert.ok(Math.abs(gullPose(time - 0.001).wing - gullPose(time + 0.001).wing) < 0.1);
+  }
 });
 
 test('Seattle solar position agrees with USNO sunrise, sunset, and civil twilight', () => {

@@ -109,6 +109,20 @@ export function wildlifeMotion(time, phase = 0) {
   };
 }
 
+export function gullPose(time, bird = 0) {
+  const orbit = time * 0.13 + bird * 2.1;
+  const depth = (Math.sin(orbit) + 1) / 2;
+  const cycle = (time + bird) % 9;
+  const flapping = smoothstep(0, 0.6, cycle) * (1 - smoothstep(2, 3, cycle));
+  return {
+    x: 0.5 + Math.sin(orbit) * 0.35,
+    y: 0.38 + Math.sin(orbit * 2 + bird) * 0.08,
+    scale: 0.55 + depth * 0.45,
+    bank: Math.cos(orbit) * 0.3,
+    wing: -2 + flapping * (Math.sin(time * 5 + bird) * 7 + 2),
+  };
+}
+
 function startWeather() {
   const canvas = document.getElementById('weather-scene');
   const ctx = canvas.getContext('2d');
@@ -219,6 +233,32 @@ function startWeather() {
         ctx.stroke();
       }
       ctx.lineCap = 'butt';
+    }
+    if (light.daylight > 0.2 && !w.fog && !w.snow && w.wet < 1) {
+      for (let bird = 0; bird < 3; bird++) {
+        const pose = gullPose(time, bird);
+        ctx.save(); ctx.translate(pose.x * width, pose.y * height);
+        ctx.rotate(pose.bank); ctx.scale(pose.scale, pose.scale);
+        const wingColor = blendColor('87939f', 'e7ece8', brightness);
+        const tipColor = blendColor('283643', '48535a', brightness);
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = wingColor;
+          ctx.beginPath(); ctx.moveTo(0, -2);
+          ctx.quadraticCurveTo(side * 10, pose.wing - 4, side * 23, pose.wing);
+          ctx.quadraticCurveTo(side * 14, pose.wing + 4, 0, 3);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = tipColor;
+          ctx.beginPath(); ctx.moveTo(side * 17, pose.wing - 1);
+          ctx.lineTo(side * 23, pose.wing); ctx.lineTo(side * 17, pose.wing + 2);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = wingColor;
+        ctx.beginPath(); ctx.ellipse(0, 0, 2.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, -5, 2.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = blendColor('82775c', 'ccaa62', brightness);
+        ctx.beginPath(); ctx.moveTo(-1, -6); ctx.lineTo(0, -9); ctx.lineTo(1, -6); ctx.fill();
+        ctx.restore();
+      }
     }
     // A broad volcanic summit and glacier fingers suggest distant Mount Rainier.
     ctx.save();

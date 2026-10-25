@@ -43,6 +43,8 @@ loose leaves tumble across the scene in breezes. Tree movement increases with
 wind strength and stops in calm conditions.
 A small flock crosses the daytime sky with alternating wingbeats and gliding;
 birds are hidden at night and during fog, snow, or heavier precipitation.
+Three closer seagulls with pale bodies and dark wingtips circle above the water,
+banking through their turns and alternating wingbeats with gliding.
 A deer and fawn stroll along the foreground, occasionally pausing to graze,
 while a small group of ducks drifts across the water with subtle wakes. These
 decorative animals are hidden in fog, snow, and heavier precipitation; they are
