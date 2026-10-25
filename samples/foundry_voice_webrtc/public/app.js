@@ -5,7 +5,7 @@ let config, call = null;
 const messages = new Map();
 let preparingAgent = false;
 let agentAvailability = 'unknown';
-let savedModel = null, savedVersion = null, latestDownload = null, downloading = false;
+let savedModel = null, savedVersion = null, savedTranscription = null, latestDownload = null, downloading = false;
 
 function updateAgentControls() {
   const busy = Boolean(call) || preparingAgent;
@@ -14,9 +14,11 @@ function updateAgentControls() {
     agentAvailability === 'error' ? 'Retry setup & start' : 'Start conversation';
   $('recreate-agent').disabled = busy || !config?.configured || !config?.agentRecreateAllowed || agentAvailability !== 'ready';
   $('agent-model-choice').disabled = busy || agentAvailability !== 'ready';
+  $('agent-transcription-choice').disabled = busy || agentAvailability !== 'ready';
   $('save-model').disabled = busy || agentAvailability !== 'ready' || !savedVersion ||
     !['gpt-realtime-2.1', 'azure-realtime', 'gpt-5.4'].includes($('agent-model-choice').value) ||
-    $('agent-model-choice').value === savedModel;
+    !$('agent-transcription-choice').value ||
+    ($('agent-model-choice').value === savedModel && $('agent-transcription-choice').value === savedTranscription);
   $('show-settings').disabled = preparingAgent || agentAvailability !== 'ready';
   $('download-conversation').disabled = Boolean(call) || downloading || !latestDownload;
 }
@@ -32,6 +34,10 @@ function updateVoiceChoices(model) {
 function applyAgentDetails(result) {
   savedModel = typeof result.model === 'string' ? result.model : null;
   savedVersion = typeof result.version === 'string' ? result.version : null;
+  savedTranscription = typeof result.transcriptionModel === 'string' ? result.transcriptionModel : null;
+  $('agent-transcription').textContent = savedTranscription ?
+    savedTranscription + (result.exists === false ? ' (after setup)' : '') : 'Unavailable';
+  $('agent-transcription-choice').value = savedTranscription || '';
   $('agent-version').textContent = savedVersion || (result.exists === false ? 'Not created' : 'Unavailable');
   $('agent-model-choice').value = ['gpt-realtime-2.1', 'azure-realtime', 'gpt-5.4'].includes(savedModel) ?
     savedModel : 'gpt-realtime-2.1';
@@ -54,7 +60,8 @@ async function saveAgentModel() {
   try {
     const response = await fetch('/api/agent/model', {method:'POST', signal:AbortSignal.timeout(95000),
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:$('agent-model-choice').value, version:savedVersion})});
+      body:JSON.stringify({model:$('agent-model-choice').value, version:savedVersion,
+        transcriptionModel:$('agent-transcription-choice').value})});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not save the model version.');
     applyAgentDetails(result);
@@ -74,7 +81,7 @@ async function showAgentSettings() {
     const result = await response.json();
     if (!response.ok || typeof result.yaml !== 'string') throw new Error(result.error || 'Could not read Agent settings.');
     $('settings-yaml').textContent = result.yaml;
-    $('settings-version').textContent = `Model: ${result.model || 'Unavailable'} · Version: ${result.version || 'Unavailable'}`;
+    $('settings-version').textContent = `Model: ${result.model || 'Unavailable'} · Transcription: ${result.transcriptionModel || 'Unavailable'} · Version: ${result.version || 'Unavailable'}`;
     $('settings-dialog').showModal();
   } catch (error) {
     showError(error.message);
@@ -137,6 +144,7 @@ async function inspectAgent() {
   } catch (error) {
     agentAvailability = 'error';
     $('agent-model').textContent = 'Unavailable';
+    $('agent-transcription').textContent = 'Unavailable';
     $('agent-preparation').textContent = 'Could not check the Agent. No Agent was created.';
     state('Agent setup needs attention', 'Review the error, then retry setup.', 'Setup error');
     showError(error.message);
@@ -177,6 +185,7 @@ async function prepareAgent(recreate = false) {
   } catch (error) {
     agentAvailability = 'error';
     $('agent-model').textContent = 'Unavailable';
+    $('agent-transcription').textContent = 'Unavailable';
     $('agent-preparation').textContent = 'Agent preparation failed.';
     throw error;
   } finally {
@@ -483,6 +492,7 @@ $('agent-model-choice').onchange = () => {
   updateVoiceChoices($('agent-model-choice').value);
   updateAgentControls();
 };
+$('agent-transcription-choice').onchange = updateAgentControls;
 $('save-model').onclick = saveAgentModel;
 $('show-settings').onclick = showAgentSettings;
 $('close-settings').onclick = () => $('settings-dialog').close();

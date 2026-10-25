@@ -38,6 +38,13 @@ HD_VOICES = {f"en-US-{name}:DragonHDLatestNeural" for name in ("Tessa", "Tyler",
     "en-IN-Diya:DragonHDLatestNeural", "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-Xiaoke:DragonHDFlashLatestNeural"}
 NATIVE_VOICES = {"ava", "andrew", "emma", "clara", "liam", "natasha", "rayn", "alvaro", "dalia", "jorge"}
 MODELS = {"gpt-realtime-2.1", "azure-realtime", "gpt-5.4"}
+TRANSCRIPTION_MODELS = {
+    "azure-speech", "azure-speech-streaming", "azure-llm-speech",
+    "mai-transcribe", "mai-transcribe-2", "mai-transcribe-2-streaming",
+    "gpt-live-transcribe", "gpt-realtime-whisper", "gpt-transcribe",
+    "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-4o-transcribe-diarize", "whisper-1",
+}
+DEFAULT_TRANSCRIPTION_MODEL = "mai-transcribe-2"
 MAX_RECORDING_BYTES = 128 * 1024 * 1024
 MAX_LOG_BYTES = 16 * 1024 * 1024
 
@@ -358,6 +365,8 @@ async def public_config(request):
                               "personalizationRequired": cfg.personalization_required,
                               "agentRecreateAllowed": cfg.allow_agent_recreate,
                               "models": sorted(MODELS),
+                              "transcriptionModels": sorted(TRANSCRIPTION_MODELS),
+                              "defaultTranscriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
                               "transports": ["websocket", "webrtc"], "defaultTransport": "websocket"})
 
 
@@ -432,6 +441,11 @@ async def lookup_configured_agent(client, cfg, headers, *, include_version=False
             raise AgentPreparationError(f"Agent lookup failed (HTTP {response.status}). Check Foundry permissions; no Agent was created.")
 
 
+def transcription_model(definition):
+    settings = ((definition.get("audio") or {}).get("input") or {}).get("transcription")
+    return settings.get("model") if isinstance(settings, dict) else None
+
+
 async def inspect_configured_agent(client, cfg, headers):
     latest = await lookup_configured_agent(client, cfg, headers, include_version=True)
     definition = latest["definition"] if latest is not None else None
@@ -439,6 +453,7 @@ async def inspect_configured_agent(client, cfg, headers):
     required = set(demo["structured_inputs"])
     return {"agent": cfg.agent, "exists": definition is not None,
             "model": (demo if definition is None else definition).get("model"),
+            "transcriptionModel": transcription_model(demo if definition is None else definition),
             "version": latest.get("version") if latest is not None else None,
             "weatherEnabled": definition is not None and weather_toolbox_attached(definition),
             "personalizationRequired": cfg.personalization_required or (
@@ -471,21 +486,26 @@ async def prepare_configured_agent(client, cfg, headers):
             raise AgentPreparationError(f"Agent enable failed (HTTP {enabled.status}). Retry preparation; an existing version will not be overwritten.")
     required = set(json.loads((ROOT / "personalized-agent.json").read_text())["structured_inputs"])
     return {"agent": cfg.agent, "created": created, "model": definition.get("model"),
+            "transcriptionModel": transcription_model(definition),
             "version": version,
             "weatherEnabled": weather_toolbox_attached(definition),
             "personalizationRequired": cfg.personalization_required or required.issubset(definition.get("structured_inputs") or {})}
 
 
-def model_definition(definition, model):
+def model_definition(definition, model, transcription=None):
     if model not in MODELS:
         raise AgentPreparationError("Choose one of the supported demo models.")
+    if transcription is not None and (not isinstance(transcription, str) or transcription not in TRANSCRIPTION_MODELS):
+        raise AgentPreparationError("Choose one of the supported transcription models.")
     updated = copy.deepcopy(definition)
     updated["model_type"], updated["model"] = "managed", model
     audio = updated.setdefault("audio", {})
     input_audio, output = audio.setdefault("input", {}), audio.setdefault("output", {})
-    transcription = input_audio.get("transcription")
-    if isinstance(transcription, dict):
-        transcription["model"] = "azure-speech" if model == "gpt-5.4" else "whisper-1"
+    if transcription is not None:
+        settings = input_audio.get("transcription")
+        input_audio["transcription"] = {**(settings if isinstance(settings, dict) else {}), "model": transcription}
+    if definition.get("model") == model and definition.get("model_type") == "managed":
+        return updated
     # Azure owns turn detection so the requested headset denoiser remains usable.
     detection = input_audio.get("turn_detection")
     if isinstance(detection, dict) and detection.get("type") in {"server_vad", "semantic_vad"}:
@@ -533,7 +553,8 @@ async def agent_settings(request):
             return web.json_response({"error": "Create the Agent before viewing saved settings."}, status=404)
         text = yaml.dump(redact_settings({"name": cfg.agent, "version": latest.get("version"),
             "definition": latest["definition"]}), Dumper=AgentYamlDumper, sort_keys=False, allow_unicode=True)
-        return web.json_response({"yaml": text, "model": latest["definition"].get("model"), "version": latest.get("version")})
+        return web.json_response({"yaml": text, "model": latest["definition"].get("model"),
+                                  "transcriptionModel": transcription_model(latest["definition"]), "version": latest.get("version")})
     except (AuthenticationError, AgentPreparationError, aiohttp.ClientError, TimeoutError, ValueError) as error:
         LOGGER.warning("Agent settings lookup failed (%s)", type(error).__name__)
         return web.json_response({"error": "Could not read saved Agent settings. Check Foundry access and retry."}, status=502)
@@ -547,10 +568,12 @@ async def change_agent_model(request):
         body = await request.json()
     except ValueError:
         return web.json_response({"error": "Choose a model and the current Agent version."}, status=400)
-    if (not isinstance(body, dict) or set(body) != {"model", "version"}
+    if (not isinstance(body, dict) or set(body) not in ({"model", "version"}, {"model", "version", "transcriptionModel"})
             or not isinstance(body["model"], str) or body["model"] not in MODELS
-            or not isinstance(body["version"], str) or not body["version"]):
-        return web.json_response({"error": "Choose a supported model and the current Agent version."}, status=400)
+            or not isinstance(body["version"], str) or not body["version"]
+            or ("transcriptionModel" in body and (
+                not isinstance(body["transcriptionModel"], str) or body["transcriptionModel"] not in TRANSCRIPTION_MODELS))):
+        return web.json_response({"error": "Choose supported Agent/transcription models and the current Agent version."}, status=400)
     async with request.app[PREPARATION]:
         if request.app[ACTIVE].active:
             return web.json_response({"error": "End the conversation before changing its model."}, status=409)
@@ -563,25 +586,30 @@ async def change_agent_model(request):
                     return web.json_response({"error": "Create the Agent before changing its model."}, status=404)
                 if latest.get("version") != body["version"]:
                     return web.json_response({"error": "The Agent version changed. Reload the page before saving."}, status=409)
-                definition = latest["definition"]
-                if definition.get("model") != body["model"] or definition.get("model_type") != "managed":
-                    definition = model_definition(definition, body["model"])
+                expected_version = latest["version"]
+                definition = model_definition(latest["definition"], body["model"], body.get("transcriptionModel"))
+                if definition != latest["definition"]:
                     url = f"{cfg.project_url()}/agents/{quote(cfg.agent, safe='')}/versions"
                     async with client.post(url, params={"api-version": cfg.api_version}, headers=headers,
                                            json={"definition": definition, "metadata": latest.get("metadata") or {}},
                                            allow_redirects=False) as response:
                         if response.status not in {200, 201}:
                             raise AgentPreparationError(
-                                f"Model change failed (HTTP {response.status}). The model or audio settings may be unavailable in this project. Previous versions were not deleted.")
+                                f"Model change failed (HTTP {response.status}). The Agent/transcription model or audio settings may be unavailable in this project. Previous versions were not deleted.")
                         published = await response.json()
                         if not isinstance(published, dict) or not isinstance(published.get("version"), str):
                             raise AgentPreparationError("A version may have been saved, but its number could not be verified. Reload before retrying.")
+                        expected_version = published["version"]
                 url = f"{cfg.project_url()}/agents/{quote(cfg.agent, safe='')}:enable"
                 async with client.post(url, params={"api-version": cfg.api_version}, headers=headers,
                                        allow_redirects=False) as response:
                     if response.status != 204:
                         raise AgentPreparationError("The model version was saved but could not be enabled. Retry setup before starting a call.")
-                return web.json_response(await inspect_configured_agent(client, cfg, headers))
+                result = await inspect_configured_agent(client, cfg, headers)
+                if (result.get("version") != expected_version or result.get("model") != body["model"]
+                        or ("transcriptionModel" in body and result.get("transcriptionModel") != body["transcriptionModel"])):
+                    raise AgentPreparationError("The saved settings changed or could not be verified. Reload before retrying.")
+                return web.json_response(result)
         except (AuthenticationError, AgentPreparationError) as error:
             LOGGER.warning("Agent model change failed (%s)", type(error).__name__)
             return web.json_response({"error": str(error)}, status=502)

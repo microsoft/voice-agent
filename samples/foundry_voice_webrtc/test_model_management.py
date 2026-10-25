@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, patch
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from server import ACTIVE, MODELS, Settings, create_app, model_definition, redact_settings
+from server import (ACTIVE, DEFAULT_TRANSCRIPTION_MODEL, MODELS, TRANSCRIPTION_MODELS, Settings, create_app,
+                    model_definition, redact_settings, transcription_model)
 from test_agent_creation import Client, Response
 
 
@@ -38,13 +39,99 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(native["audio"]["output"]["voice"], "ava")
         restored = model_definition(native, "gpt-5.4")
         self.assertEqual(restored["audio"]["output"]["voice"], "en-US-Tyler:DragonHDLatestNeural")
-        self.assertEqual(restored["audio"]["input"]["transcription"]["model"], "azure-speech")
+        self.assertEqual(restored["audio"]["input"]["transcription"]["model"], DEFAULT_TRANSCRIPTION_MODEL)
         for model in MODELS:
             result = model_definition(original, model)
             self.assertEqual(result["instructions"], original["instructions"])
             self.assertEqual(result["greeting"], original["greeting"])
             self.assertEqual(result["tools"], original["tools"])
             self.assertEqual(result["audio"]["input"]["noise_reduction"], original["audio"]["input"]["noise_reduction"])
+            self.assertEqual(transcription_model(result), DEFAULT_TRANSCRIPTION_MODEL)
+
+    def test_transcription_catalog_default_and_overrides_match_the_ui(self):
+        import re
+        expected = {"azure-speech", "azure-speech-streaming", "azure-llm-speech", "mai-transcribe",
+                    "mai-transcribe-2", "mai-transcribe-2-streaming", "gpt-live-transcribe",
+                    "gpt-realtime-whisper", "gpt-transcribe", "gpt-4o-transcribe",
+                    "gpt-4o-mini-transcribe", "gpt-4o-transcribe-diarize", "whisper-1"}
+        self.assertEqual(TRANSCRIPTION_MODELS, expected)
+        self.assertEqual(DEFAULT_TRANSCRIPTION_MODEL, "mai-transcribe-2")
+        self.assertEqual(transcription_model(self.definition()), DEFAULT_TRANSCRIPTION_MODEL)
+        html = Path(__file__).with_name("public").joinpath("index.html").read_text(encoding="utf-8")
+        select = re.search(r'<select id="agent-transcription-choice".*?</select>', html, re.S).group()
+        self.assertEqual(set(re.findall(r'<option value="([^"]+)"', select)), expected)
+        self.assertIn('<option value="mai-transcribe-2" selected>', select)
+        original = self.definition()
+        for choice in expected:
+            changed = model_definition(original, original["model"], choice)
+            self.assertEqual(transcription_model(changed), choice)
+            self.assertEqual(changed["audio"]["input"]["transcription"]["language"], "en-US")
+            self.assertEqual(changed["instructions"], original["instructions"])
+            self.assertEqual(changed["audio"]["output"], original["audio"]["output"])
+            for model in MODELS:
+                self.assertEqual(transcription_model(model_definition(changed, model)), choice)
+
+    async def test_transcription_only_versions_preserve_native_voice_and_other_settings(self):
+        cfg = Settings("https://example.services.ai.azure.com/api/projects/demo", "demo-agent")
+        for choice in TRANSCRIPTION_MODELS:
+            with self.subTest(choice=choice):
+                agent = self.agent("azure-realtime")
+                original = agent["versions"]["latest"]["definition"]
+                original["audio"]["output"] = {"voice": "emma", "voice_type": "azure-realtime-native",
+                                              "format": {"type": "audio/pcm", "rate": 24000}}
+                original["audio"]["input"]["transcription"]["model"] = (
+                    "azure-speech" if choice == "whisper-1" else "whisper-1")
+                saved = copy.deepcopy(agent)
+                saved["versions"]["latest"]["version"] = "2"
+                saved["versions"]["latest"]["definition"]["audio"]["input"]["transcription"]["model"] = choice
+                service = ServiceClient([Response(200, agent), Response(200, saved)],
+                                        [Response(201, {"version": "2"}), Response(204)])
+                async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+                    with patch("server.aiohttp.ClientSession", return_value=service):
+                        response = await client.post("/api/agent/model",
+                            headers={"Origin": str(client.make_url("")).rstrip("/")},
+                            json={"model": "azure-realtime", "version": "1", "transcriptionModel": choice})
+                        result = await response.json()
+                self.assertEqual(response.status, 200, result)
+                self.assertEqual(result["version"], "2")
+                self.assertEqual(result["transcriptionModel"], choice)
+                changed = service.writes[0][1]["json"]["definition"]
+                expected = copy.deepcopy(original)
+                expected["audio"]["input"]["transcription"]["model"] = choice
+                self.assertEqual(changed, expected)
+                self.assertEqual(service.writes[0][1]["json"]["metadata"]["custom"], "keep")
+                self.assertEqual(service.removals, [])
+
+    async def test_same_transcription_is_idempotent_and_invalid_choices_never_request_credentials(self):
+        cfg = Settings("https://example.services.ai.azure.com/api/projects/demo", "demo-agent")
+        tokens = AsyncMock()
+        async with TestClient(TestServer(create_app(cfg, tokens))) as client:
+            origin = {"Origin": str(client.make_url("")).rstrip("/")}
+            for choice in ("unknown", None, [], {}, 1, ""):
+                response = await client.post("/api/agent/model", headers=origin,
+                    json={"model": "gpt-5.4", "version": "1", "transcriptionModel": choice})
+                self.assertEqual(response.status, 400)
+            tokens.get_token.assert_not_awaited()
+            agent = self.agent()
+            service = ServiceClient([Response(200, agent), Response(200, agent)], [Response(204)])
+            with patch("server.aiohttp.ClientSession", return_value=service):
+                response = await client.post("/api/agent/model", headers=origin,
+                    json={"model": "gpt-5.4", "version": "1", "transcriptionModel": DEFAULT_TRANSCRIPTION_MODEL})
+            self.assertEqual(response.status, 200)
+            self.assertFalse(any("/versions" in url for url, _ in service.writes))
+
+    async def test_changed_readback_is_not_reported_as_a_successful_transcription_save(self):
+        cfg = Settings("https://example.services.ai.azure.com/api/projects/demo", "demo-agent")
+        service = ServiceClient([Response(200, self.agent()), Response(200, self.agent(version="3"))],
+                                [Response(201, {"version": "2"}), Response(204)])
+        async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+            with patch("server.aiohttp.ClientSession", return_value=service):
+                response = await client.post("/api/agent/model",
+                    headers={"Origin": str(client.make_url("")).rstrip("/")},
+                    json={"model": "gpt-5.4", "version": "1", "transcriptionModel": "azure-speech"})
+                result = await response.json()
+        self.assertEqual(response.status, 502)
+        self.assertIn("could not be verified", result["error"])
 
     def test_explicitly_disabled_turn_detection_is_preserved(self):
         original = self.definition()
@@ -114,6 +201,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("do-not-export", result["yaml"])
         self.assertIn("instructions: |", result["yaml"])
         settings = yaml.safe_load(result["yaml"])
+        self.assertEqual(result["transcriptionModel"], DEFAULT_TRANSCRIPTION_MODEL)
         self.assertEqual(settings["version"], "1")
         self.assertEqual(settings["definition"]["model"], "gpt-5.4")
         self.assertEqual(redact_settings({"api-key": "secret"}), {"api-key": "[redacted]"})

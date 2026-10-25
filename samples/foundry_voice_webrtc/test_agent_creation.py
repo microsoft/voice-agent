@@ -88,6 +88,7 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["exists"], exists)
             self.assertEqual(result["model"], "gpt-realtime-2.1")
             self.assertEqual(result["version"], "1" if exists else None)
+            self.assertEqual(result["transcriptionModel"], "mai-transcribe-2")
             self.assertEqual(client.writes, [])
             self.assertEqual(client.removals, [])
         self.weather.assert_not_awaited()

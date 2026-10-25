@@ -32,7 +32,9 @@ async function setup(transport, overrides = {}) {
     }, body:makeElement() },
     window: { addEventListener() {} }, WebSocket: { OPEN: 1 },
     crypto: webcrypto,
-    fetch: async () => ({ ok: true, json: async () => ({ configured: true, agent:'demo-agent', exists:true }) }),
+    fetch: async () => ({ ok: true, json: async () => ({
+      configured: true, agent:'demo-agent', exists:true, transcriptionModel:'mai-transcribe-2',
+    }) }),
     clearTimeout() {}, clearInterval() {}, setInterval: () => 1, setTimeout: () => 1, AbortController, AbortSignal,
     validateAudioSession() {},
     session,
@@ -104,6 +106,7 @@ test('Choosing Azure Realtime previews native voices; saving updates actual mode
     if (url === '/api/agent/model') writes.push(JSON.parse(options.body));
     return {ok:true, json:async()=>url === '/api/config' ? {configured:true} :
       {exists:true, model:url === '/api/agent/model' ? 'azure-realtime' : 'gpt-realtime-2.1',
+        transcriptionModel:'mai-transcribe-2',
         version:url === '/api/agent/model' ? '2' : '1'}};
   }});
   ui.stop();
@@ -114,7 +117,7 @@ test('Choosing Azure Realtime previews native voices; saving updates actual mode
   assert.equal(ui.element('agent-model').textContent, 'gpt-realtime-2.1');
   assert.equal(ui.element('agent-version').textContent, '1');
   await ui.element('save-model').onclick();
-  assert.deepEqual(writes, [{model:'azure-realtime', version:'1'}]);
+  assert.deepEqual(writes, [{model:'azure-realtime', version:'1', transcriptionModel:'mai-transcribe-2'}]);
   assert.equal(ui.element('agent-model').textContent, 'azure-realtime');
   assert.equal(ui.element('agent-version').textContent, '2');
   assert.equal(ui.element('save-model').disabled, true);
@@ -143,6 +146,7 @@ test('GPT-5.4 replaces GPT-4.1 and saves a new version with HD voice controls', 
     if (url === '/api/agent/model') writes.push(JSON.parse(options.body));
     return {ok:true, json:async()=>url === '/api/config' ? {configured:true} :
       {exists:true, model:url === '/api/agent/model' ? 'gpt-5.4' : 'azure-realtime',
+        transcriptionModel:'mai-transcribe-2',
         version:url === '/api/agent/model' ? '3' : '2'}};
   }});
   ui.stop();
@@ -153,9 +157,53 @@ test('GPT-5.4 replaces GPT-4.1 and saves a new version with HD voice controls', 
   assert.equal(ui.element('agent-model').textContent, 'azure-realtime');
   assert.equal(ui.element('save-model').disabled, false);
   await ui.element('save-model').onclick();
-  assert.deepEqual(writes, [{model:'gpt-5.4', version:'2'}]);
+  assert.deepEqual(writes, [{model:'gpt-5.4', version:'2', transcriptionModel:'mai-transcribe-2'}]);
   assert.equal(ui.element('agent-model').textContent, 'gpt-5.4');
   assert.equal(ui.element('agent-version').textContent, '3');
+});
+
+test('A transcription-only selection publishes a new version and reports the actual saved choice', async () => {
+  const writes = [];
+  const ui = await setup('websocket', {fetch:async (url, options)=>{
+    if (url === '/api/agent/model') writes.push(JSON.parse(options.body));
+    return {ok:true, json:async()=>url === '/api/config' ? {configured:true} :
+      {exists:true, model:'gpt-realtime-2.1', version:url === '/api/agent/model' ? '2' : '1',
+        transcriptionModel:url === '/api/agent/model' ? 'mai-transcribe-2' : 'whisper-1'}};
+  }});
+  ui.stop();
+  assert.equal(ui.element('agent-transcription').textContent, 'whisper-1');
+  assert.equal(ui.element('agent-transcription-choice').value, 'whisper-1');
+  assert.equal(ui.element('save-model').disabled, true);
+  ui.element('agent-transcription-choice').value = 'mai-transcribe-2';
+  ui.element('agent-transcription-choice').onchange();
+  assert.equal(ui.element('agent-transcription').textContent, 'whisper-1');
+  assert.equal(ui.element('save-model').disabled, false);
+  await ui.element('save-model').onclick();
+  assert.deepEqual(writes, [{model:'gpt-realtime-2.1', version:'1', transcriptionModel:'mai-transcribe-2'}]);
+  assert.equal(ui.element('agent-transcription').textContent, 'mai-transcribe-2');
+  assert.equal(ui.element('agent-version').textContent, '2');
+  assert.equal(ui.element('save-model').disabled, true);
+});
+
+test('Transcription defaults are planned before creation; active calls and save failures do not overwrite saved labels', async () => {
+  const planned = await setup('websocket', {fetch:async url=>({ok:true, json:async()=>url === '/api/config' ?
+    {configured:true} : {exists:false, model:'gpt-realtime-2.1', transcriptionModel:'mai-transcribe-2'}})});
+  assert.equal(planned.element('agent-transcription').textContent, 'mai-transcribe-2 (after setup)');
+  assert.equal(planned.element('agent-transcription-choice').value, 'mai-transcribe-2');
+  const ui = await setup('websocket', {fetch:async url=>({ok:url !== '/api/agent/model',
+    json:async()=>url === '/api/config' ? {configured:true} : url === '/api/agent/model' ?
+      {error:'Transcription model unavailable'} :
+      {exists:true, model:'gpt-5.4', version:'1', transcriptionModel:'mai-transcribe-2'}})});
+  ui.markReady(ui.session);
+  ui.element('agent-transcription-choice').value = 'azure-llm-speech';
+  ui.element('agent-transcription-choice').onchange();
+  assert.equal(ui.element('agent-transcription-choice').disabled, true);
+  assert.equal(ui.element('save-model').disabled, true);
+  ui.stop();
+  await ui.element('save-model').onclick();
+  assert.match(ui.element('error').textContent, /Transcription model unavailable/);
+  assert.equal(ui.element('agent-transcription').textContent, 'mai-transcribe-2');
+  assert.equal(ui.element('agent-version').textContent, '1');
 });
 
 test('Conversation download waits for End and posts only its session capability', async () => {

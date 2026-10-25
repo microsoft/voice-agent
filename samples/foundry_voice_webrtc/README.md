@@ -104,7 +104,7 @@ repeating earlier capability lists or adding routine follow-up questions, and
 do not claim reminder or messaging tools that are not connected.
 When asked to introduce itself, the Agent identifies itself as **Foundry Voice
 Agent**, not ChatGPT, without repeating that identity in ordinary replies.
-The saved setup uses managed **gpt-realtime-2.1**, Whisper input transcription,
+The saved setup uses managed **gpt-realtime-2.1**, **mai-transcribe-2** input transcription,
 and the selected Azure Speech HD output voice. Azure semantic turn detection
 keeps the headset noise-reduction processing on the service-owned audio path;
 GPT Realtime's upstream-owned `server_vad` rejects that denoiser.
@@ -128,7 +128,7 @@ The **Version** line shows the saved Agent's current version. End the call, choo
 `gpt-realtime-2.1`, `azure-realtime`, or `gpt-5.4`, then select **Save new version**.
 This publishes and enables a new version without deleting previous versions.
 Instructions, tools, metadata, and other configuration are preserved except for
-model-dependent transcription, turn-detection, and output-voice compatibility
+explicit transcription selections, turn-detection, and output-voice compatibility
 changes. A stale version, active call, or publication failure is reported rather
 than silently overwriting the saved Agent. These guards coordinate only this
 single backend replica, not independent Foundry editors.
@@ -138,6 +138,29 @@ continue to report the saved configuration until publication succeeds.
 `azure-realtime` uses native voice `ava` by default. Switching from native output
 to a GPT model selects `en-US-Tyler:DragonHDLatestNeural`. Other supported HD
 settings are preserved. Model and voice availability depend on the project.
+
+Use **Transcription model** to select input speech recognition independently of
+the Agent model, then select **Save new version**. **Transcription** shows the
+actual saved model and updates only after a successful save. A transcription-only
+change preserves the existing prompt, AI greeting, tools, output voice, language,
+and turn detection. Switching the Agent model also retains the saved
+transcription choice. Controls are disabled during calls and publication.
+
+New Agents default to **`mai-transcribe-2`**. Existing Agents retain their saved
+choice until explicitly changed. The selector offers these exact IDs:
+`azure-speech`, `azure-speech-streaming`, `azure-llm-speech`, `mai-transcribe`,
+`mai-transcribe-2`, `mai-transcribe-2-streaming`, `gpt-live-transcribe`,
+`gpt-realtime-whisper`, `gpt-transcribe`, `gpt-4o-transcribe`,
+`gpt-4o-mini-transcribe`, `gpt-4o-transcribe-diarize`, and `whisper-1`.
+Availability and compatibility depend on the project and Agent model; listing
+an ID does not guarantee that every combination is supported. Unsupported
+settings fail visibly without substituting another transcription model.
+Publication alone does not prove runtime availability: session startup may still
+reject a configuration. In the test project, `mai-transcribe-2` transcribed real
+input audio with all three Agent models, while `azure-llm-speech` was rejected
+at startup with `invalid_value` for `session.audio.input.transcription.model`.
+The other listed IDs have allowlist/versioning coverage, not exhaustive live
+compatibility verification.
 
 **Show Agent settings** opens read-only YAML for the saved name, version, and
 definition. Known credential fields are redacted. It is not a YAML editor, and

@@ -95,7 +95,7 @@ class PersonalizationTests(unittest.TestCase):
                          {"type": "azure_deep_noise_suppression_headset"})
         self.assertEqual(definition["model_type"], "managed")
         self.assertEqual(definition["model"], "gpt-realtime-2.1")
-        self.assertEqual(definition["audio"]["input"]["transcription"]["model"], "whisper-1")
+        self.assertEqual(definition["audio"]["input"]["transcription"]["model"], "mai-transcribe-2")
         self.assertEqual(definition["audio"]["input"]["turn_detection"]["type"], "azure_semantic_vad")
         self.assertIn("Answer only the caller's latest request", definition["instructions"])
         self.assertIn("Do not offer to set reminders", definition["instructions"])
