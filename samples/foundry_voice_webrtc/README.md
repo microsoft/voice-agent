@@ -30,23 +30,6 @@ notes, personalization, and advanced reset controls. The audio-processing notes
 distinguish requested browser processing from the saved Agent's Azure denoising;
 use **Show Agent settings** to inspect the actual saved definition.
 
-Translucent panels sit over an animated Seattle landscape with Mount Rainier,
-the Space Needle, wind-swept trees, water, and decorative wildlife. Seattle
-weather from Open-Meteo updates every 15 minutes; approximate solar positioning
-uses Seattle's coordinates and the device clock for gradual dawn, sunset, and
-night lighting. This is a stylized scene, not a live camera or wildlife feed.
-
-Use **Scenery only** to hide the panels, **Show panels** or Escape to restore
-them, and **Pause scenery** to stop movement. Hiding panels does not end or mute
-an active call. Reduced-motion preferences pause animation automatically, and
-hidden tabs stop rendering.
-
-Weather requests go directly to `api.open-meteo.com` with Seattle's fixed
-coordinates only, not Agent or conversation data; no location permission or API
-key is needed. Weather timestamps use Seattle local time. Failed refreshes are
-reported and retain the last scenery; a neutral background appears until the
-first successful update.
-
 | Transport | Audio path | Requirements |
 | --- | --- | --- |
 | WebSocket (default) | Browser → local backend → Azure; mono PCM16 at 24 kHz | Outbound secure WebSocket/HTTPS; no ICE |
