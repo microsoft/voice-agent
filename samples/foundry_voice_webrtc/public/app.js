@@ -3,6 +3,187 @@ import { PcmAudio, validateAudioSession } from './pcm-audio.mjs';
 const $ = (id) => document.getElementById(id);
 let config, call = null;
 const messages = new Map();
+let preparingAgent = false;
+let agentAvailability = 'unknown';
+let savedModel = null, savedVersion = null, latestDownload = null, downloading = false;
+
+function updateAgentControls() {
+  const busy = Boolean(call) || preparingAgent;
+  $('start').disabled = busy || !config?.configured || agentAvailability === 'unknown';
+  $('start').textContent = agentAvailability === 'missing' ? 'Create Agent & start' :
+    agentAvailability === 'error' ? 'Retry setup & start' : 'Start conversation';
+  $('recreate-agent').disabled = busy || !config?.configured || !config?.agentRecreateAllowed || agentAvailability !== 'ready';
+  $('agent-model-choice').disabled = busy || agentAvailability !== 'ready';
+  $('save-model').disabled = busy || agentAvailability !== 'ready' || !savedVersion ||
+    !['gpt-realtime-2.1', 'azure-realtime', 'gpt-4.1'].includes($('agent-model-choice').value) ||
+    $('agent-model-choice').value === savedModel;
+  $('show-settings').disabled = preparingAgent || agentAvailability !== 'ready';
+  $('download-conversation').disabled = Boolean(call) || downloading || !latestDownload;
+}
+
+function updateVoiceChoices(model) {
+  const native = model === 'azure-realtime';
+  $('voice').hidden = native;
+  $('native-voice').hidden = !native;
+  $('native-voice').disabled = Boolean(call) || !native;
+  $('voice-label').htmlFor = native ? 'native-voice' : 'voice';
+}
+
+function applyAgentDetails(result) {
+  savedModel = typeof result.model === 'string' ? result.model : null;
+  savedVersion = typeof result.version === 'string' ? result.version : null;
+  $('agent-version').textContent = savedVersion || (result.exists === false ? 'Not created' : 'Unavailable');
+  $('agent-model-choice').value = ['gpt-realtime-2.1', 'azure-realtime', 'gpt-4.1'].includes(savedModel) ?
+    savedModel : 'gpt-realtime-2.1';
+  updateVoiceChoices(savedModel);
+  $('agent-model').textContent = typeof result.model === 'string' && result.model.trim() ?
+    result.model + (result.exists === false ? ' (after setup)' : '') : 'Unavailable';
+  $('weather-tool-hint').hidden = !(result.weatherEnabled || result.exists === false);
+  if (result.personalizationRequired) {
+    config.personalizationRequired = true;
+    $('personalize').checked = true;
+    $('personalize').disabled = true;
+  }
+}
+
+async function saveAgentModel() {
+  if (call || preparingAgent || agentAvailability !== 'ready' || !savedVersion) return;
+  preparingAgent = true;
+  updateAgentControls();
+  $('error').hidden = true;
+  try {
+    const response = await fetch('/api/agent/model', {method:'POST', signal:AbortSignal.timeout(95000),
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:$('agent-model-choice').value, version:savedVersion})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not save the model version.');
+    applyAgentDetails(result);
+    $('agent-preparation').textContent = `Version ${savedVersion} is saved and ready.`;
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    preparingAgent = false;
+    updateAgentControls();
+  }
+}
+
+async function showAgentSettings() {
+  $('show-settings').disabled = true;
+  try {
+    const response = await fetch('/api/agent/settings', {signal:AbortSignal.timeout(40000)});
+    const result = await response.json();
+    if (!response.ok || typeof result.yaml !== 'string') throw new Error(result.error || 'Could not read Agent settings.');
+    $('settings-yaml').textContent = result.yaml;
+    $('settings-version').textContent = `Model: ${result.model || 'Unavailable'} · Version: ${result.version || 'Unavailable'}`;
+    $('settings-dialog').showModal();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    updateAgentControls();
+  }
+}
+
+async function downloadConversation() {
+  if (call || downloading || !latestDownload) return;
+  downloading = true;
+  updateAgentControls();
+  $('download-status').textContent = 'Preparing your log and audio. Azure may need a minute to finalize the recording...';
+  try {
+    const response = await fetch('/api/conversation/download', {method:'POST',
+      headers:{'Content-Type':'application/json'}, signal:AbortSignal.timeout(95000),
+      body:JSON.stringify({downloadToken:latestDownload.downloadToken})});
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || 'Could not download the recording.');
+    }
+    if (!response.headers.get('Content-Type')?.startsWith('application/zip')) throw new Error('The server did not return a conversation archive.');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `conversation-${latestDownload.conversationId}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    $('download-status').textContent = 'Download ready: conversation.json and audio.wav. Keep this recording private.';
+  } catch (error) {
+    $('download-status').textContent = 'Download failed. The recording was not removed from Azure.';
+    showError(error.message);
+  } finally {
+    downloading = false;
+    updateAgentControls();
+  }
+}
+
+async function inspectAgent() {
+  preparingAgent = true;
+  updateAgentControls();
+  $('agent-preparation').textContent = 'Checking for your saved Agent...';
+  $('agent-model').textContent = 'Checking...';
+  try {
+    const response = await fetch('/api/agent', {signal:AbortSignal.timeout(95000)});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not check the saved Agent.');
+    if (typeof result.exists !== 'boolean') throw new Error('The server returned an invalid Agent status.');
+    agentAvailability = result.exists ? 'ready' : 'missing';
+    applyAgentDetails(result);
+    $('agent-preparation').textContent = result.exists ?
+      'Your Agent is saved and ready.' :
+      'No Agent yet. Starting a conversation will create and save one for next time.';
+    state(result.exists ? 'Ready when you are' : 'Create your first Agent',
+      result.exists ? 'Start a conversation with your saved Agent.' : 'Your Agent will be created and saved before the microphone starts.',
+      result.exists ? 'Saved Agent' : 'No Agent yet');
+  } catch (error) {
+    agentAvailability = 'error';
+    $('agent-model').textContent = 'Unavailable';
+    $('agent-preparation').textContent = 'Could not check the Agent. No Agent was created.';
+    state('Agent setup needs attention', 'Review the error, then retry setup.', 'Setup error');
+    showError(error.message);
+  } finally {
+    preparingAgent = false;
+    updateAgentControls();
+  }
+}
+
+async function prepareAgent(recreate = false) {
+  if (call) throw new Error('End the conversation before changing the Agent.');
+  if (preparingAgent) throw new Error('Agent preparation is already running.');
+  if (recreate) {
+    if (!config.agentRecreateAllowed) throw new Error('Agent recreation is disabled by the server.');
+    if (agentAvailability !== 'ready') throw new Error('Start a conversation to set up the Agent before resetting it.');
+    const confirmation = window.prompt(
+      `Permanently remove "${config.agent}" and its saved versions, then create a fresh demo Agent under the same name? Other clients using it may be affected. Type the exact Agent name to confirm.`
+    );
+    if (confirmation === null) return;
+    if (confirmation !== config.agent) throw new Error('Agent name did not match. Nothing was removed.');
+  }
+  preparingAgent = true;
+  updateAgentControls();
+  $('error').hidden = true;
+  $('agent-preparation').textContent = recreate ? 'Resetting your Agent and preparing weather tools...' :
+    agentAvailability === 'missing' ? 'Preparing weather tools, then creating and saving your Agent...' : 'Getting your Agent ready...';
+  try {
+    const response = await fetch(recreate ? '/api/agent/recreate' : '/api/agent/prepare', {
+      method:'POST', signal:AbortSignal.timeout(95000),
+      ...(recreate ? {headers:{'Content-Type':'application/json'}, body:JSON.stringify({confirm_agent:config.agent})} : {}),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not prepare the Agent. Check server configuration and permissions.');
+    agentAvailability = 'ready';
+    applyAgentDetails(result);
+    $('agent-preparation').textContent = result.recreated ? 'Your Agent has been reset and saved.' : 'Your Agent is saved and ready.';
+    state('Ready when you are', 'Start a conversation with your saved Agent.', 'Saved Agent');
+  } catch (error) {
+    agentAvailability = 'error';
+    $('agent-model').textContent = 'Unavailable';
+    $('agent-preparation').textContent = 'Agent preparation failed.';
+    throw error;
+  } finally {
+    preparingAgent = false;
+    updateAgentControls();
+  }
+}
 
 function updateTextInput() {
   const enabled = call?.ready && call.ws?.readyState === WebSocket.OPEN && !call.responding && !call.userSpeaking;
@@ -59,8 +240,11 @@ function stop(title = 'Conversation ended', hint = 'Start again whenever you’r
   }
   $('remote-audio').pause(); $('remote-audio').srcObject = null;
   $('orb').className = 'orb'; $('play').hidden = true;
-  $('start').disabled = !config?.configured; $('stop').disabled = true; $('mute').disabled = true;
+  updateAgentControls(); $('stop').disabled = true; $('mute').disabled = true;
   $('transport').disabled = false;
+  $('personalization').disabled = false;
+  $('voice').disabled = false;
+  $('native-voice').disabled = $('native-voice').hidden;
   $('mute').textContent = 'Mute mic'; $('mute').setAttribute('aria-pressed', 'false');
   updateTextInput();
   state(title, hint, 'Offline');
@@ -94,8 +278,12 @@ function markReady(session) {
   }
 }
 function openSocket(session, onOpen) {
-  const ws = session.ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/voice?transport=${session.transport}`);
-  ws.onopen = () => { if (call === session) onOpen?.(ws); };
+  const ws = session.ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/voice?transport=${session.transport}${session.personalization ? '&personalize=true' : ''}${session.voice ? `&voice=${encodeURIComponent(session.voice)}` : ''}`);
+  ws.onopen = () => {
+    if (call !== session) return;
+    if (session.personalization) ws.send(JSON.stringify(session.personalization));
+    onOpen?.(ws);
+  };
   let queue = Promise.resolve();
   ws.onmessage = e => { queue = queue.then(() => handleEvent(session, JSON.parse(e.data))).catch(error => fail(session,error)); };
   ws.onerror = () => fail(session,new Error('Local WebSocket connection failed. Check that the sample server is running.'));
@@ -135,7 +323,14 @@ async function connectWebRtc(session) {
 async function handleEvent(session, event) {
   if (call !== session) return;
   const type = event.type || '';
-  if (type === 'session.updated' && session.transport === 'websocket') {
+  if (type === 'bridge.conversation') {
+    if (typeof event.downloadToken !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(event.conversationId)) {
+      throw new Error('Invalid conversation download reference.');
+    }
+    latestDownload = {downloadToken:event.downloadToken, conversationId:event.conversationId};
+    $('download-status').textContent = 'Audio is being saved in Azure. End the conversation to download.';
+    updateAgentControls();
+  } else if (type === 'session.updated' && session.transport === 'websocket') {
     validateAudioSession(event.session);
     markReady(session);
   } else if (type === 'response.created') {
@@ -181,8 +376,24 @@ async function handleEvent(session, event) {
   }
 }
 async function start() {
-  if (call || !config?.configured) return;
-  const session = {abort:new AbortController(), muted:false, transport:$('transport').value, ready:false}; call = session;
+  if (call || preparingAgent || !config?.configured) return;
+  try {
+    await prepareAgent();
+  } catch (error) {
+    showError(error.message);
+    return;
+  }
+  const personalization = $('personalize').checked ? {
+    type:'bridge.personalize', display_name:$('display-name').value,
+    user_context:$('user-context').value, client_language:$('client-language').value,
+    english_only:$('english-only').checked,
+  } : null;
+  const session = {abort:new AbortController(), muted:false, transport:$('transport').value, ready:false, personalization,
+    voice:$('native-voice').hidden ? $('voice').value : $('native-voice').value}; call = session;
+  $('personalization').disabled = true;
+  $('voice').disabled = true;
+  $('native-voice').disabled = true;
+  updateAgentControls();
   $('error').hidden = true; $('start').disabled = true; $('stop').disabled = false;
   $('transport').disabled = true; $('elapsed').textContent = '00:00';
   state('Let’s connect', 'Allow microphone access when your browser asks.', 'Connecting');
@@ -243,6 +454,18 @@ async function start() {
   }
 }
 $('start').onclick = start;
+$('agent-model-choice').onchange = () => {
+  updateVoiceChoices($('agent-model-choice').value);
+  updateAgentControls();
+};
+$('save-model').onclick = saveAgentModel;
+$('show-settings').onclick = showAgentSettings;
+$('close-settings').onclick = () => $('settings-dialog').close();
+$('download-conversation').onclick = downloadConversation;
+$('recreate-agent').onclick = async () => {
+  try { await prepareAgent(true); } catch (error) { showError(error.message); }
+};
+if (typeof navigator !== 'undefined') $('client-language').value = navigator.language?.toLowerCase().startsWith('es') ? 'es-ES' : 'en-US';
 $('text-form').onsubmit = sendText;
 $('text-input').oninput = updateTextInput;
 $('stop').onclick = () => stop();
@@ -263,14 +486,21 @@ $('transport').onchange = () => {
 try {
   const response = await fetch('/api/config'); if (!response.ok) throw new Error('Could not load server configuration.');
   config = await response.json(); $('agent').textContent = config.agent || 'Not configured';
+  $('advanced-agent').hidden = !config.agentRecreateAllowed;
+  if (config.personalizationRequired) {
+    $('personalize').checked = true;
+    $('personalize').disabled = true;
+  }
   $('transport').value = config.defaultTransport || 'websocket'; $('transport').onchange();
-  $('start').disabled = !config.configured;
+  updateAgentControls();
   if (!config.configured) {
     $('setup').open = true;
-    state('One small setup first', 'Set your project and agent in .env, then sign in with az login.', 'Setup needed');
+    state('One small setup first', 'Set your project endpoint in .env, then sign in with az login. No Agent is needed yet.', 'Setup needed');
     showError((config.setupIssues || ['Complete the server .env settings.']).join(' '));
   } else if (config.authentication === 'azure_cli' && !config.azureCliInstalled) {
     $('setup').open = true;
     showError('Install Azure CLI, then run az login in a normal PowerShell window. No API key or client secret is needed.');
+  } else {
+    await inspectAgent();
   }
 } catch (error) { showError(error.message); }
