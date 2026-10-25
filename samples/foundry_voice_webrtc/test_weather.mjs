@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion, solarPosition, solarLighting, gullPose } from './public/weather.mjs';
+import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion, solarPosition, solarLighting, gullPose, shorelineY } from './public/weather.mjs';
 
 const current = {
   temperature_2m: 12, is_day: 1, precipitation: 0,
@@ -66,6 +66,21 @@ test('trees stay still in calm weather and flex more in stronger wind', () => {
   const weather = { wind: 18, direction: 270 };
   assert.notEqual(treeSway(weather, 1), treeSway(weather, 2));
   assert.notEqual(treeSway(weather, 1, 0), treeSway(weather, 1, 2));
+});
+
+test('tree roots and wildlife stay on the shared shoreline across viewport sizes', () => {
+  for (const [width, height] of [[320, 480], [390, 844], [1280, 800], [1920, 1080]]) {
+    for (let i = 0; i < 70; i++) {
+      const x = i * width / 69;
+      const depth = 0.35 + (0.35 + ((i * 127) % 100) / 100) * 0.4;
+      const root = shorelineY(height, x, depth);
+      const ground = shorelineY(height, x);
+      assert.ok(root > ground + height * 0.02);
+      assert.ok(root < height);
+      const feet = shorelineY(height, x, 0.9);
+      assert.ok(feet > ground && feet < height);
+    }
+  }
 });
 
 test('wildlife walks, stops to graze, and resumes without teleporting', () => {

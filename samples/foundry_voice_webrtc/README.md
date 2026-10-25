@@ -41,6 +41,8 @@ retain stronger contrast over the scenery.
 Foreground branches bend from fixed roots with fluttering attached leaves;
 loose leaves tumble across the scene in breezes. Tree movement increases with
 wind strength and stops in calm conditions.
+Tree roots and walking wildlife share the foreground bank's terrain profile,
+keeping them on land rather than in the water.
 A small flock crosses the daytime sky with alternating wingbeats and gliding;
 birds are hidden at night and during fog, snow, or heavier precipitation.
 Three closer seagulls with pale bodies and dark wingtips circle above the water,

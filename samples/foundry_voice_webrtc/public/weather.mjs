@@ -123,6 +123,10 @@ export function gullPose(time, bird = 0) {
   };
 }
 
+export function shorelineY(height, x, depth = 0) {
+  return height * (0.94 + depth * 0.045) + Math.sin(x * 0.008) * Math.min(3, height * 0.003);
+}
+
 function startWeather() {
   const canvas = document.getElementById('weather-scene');
   const ctx = canvas.getContext('2d');
@@ -349,16 +353,28 @@ function startWeather() {
         ctx.beginPath(); ctx.ellipse(x - 7, y + 2, 12, 2.4, 0, 0.3, Math.PI - 0.3); ctx.stroke();
       }
     }
-    ctx.fillStyle = blendColor('172c29', '405442', brightness);
+    const bank = ctx.createLinearGradient(0, height * 0.94, 0, height);
+    bank.addColorStop(0, blendColor('35453d', '7a8061', brightness));
+    bank.addColorStop(0.2, blendColor('22362d', '536446', brightness));
+    bank.addColorStop(1, blendColor('172c29', '405442', brightness));
+    ctx.fillStyle = bank;
     ctx.beginPath(); ctx.moveTo(0, height);
     for (let x = 0; x <= width + 8; x += 8) {
-      ctx.lineTo(x, height * 0.955 + Math.sin(x * 0.008) * 3);
+      ctx.lineTo(x, shorelineY(height, x));
     }
     ctx.lineTo(width, height); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = blendColor('334a49', '9ca68a', brightness, 0.6);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, shorelineY(height, 0));
+    for (let x = 8; x <= width + 8; x += 8) ctx.lineTo(x, shorelineY(height, x));
+    ctx.stroke();
     for (let i = 0; i < 70; i++) {
-      const x = i * width / 69, y = height * 0.96 + Math.sin(i * 1.7) * 14;
+      const x = i * width / 69;
+      const y = shorelineY(height, x, 0.35 + particles[i].depth * 0.4);
       const size = 18 + particles[i].depth * 38;
       const sway = treeSway(w, time, i * 0.2) * size * 0.14;
+      ctx.fillStyle = blendColor('142923', '2c3e2d', brightness, 0.35);
+      ctx.beginPath(); ctx.ellipse(x, y, size * 0.12, 1.5, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = blendColor('162e29', '294c3d', brightness, 0.65);
       ctx.strokeStyle = blendColor('1c332d', '345044', brightness, 0.65); ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sway, y - size); ctx.stroke();
@@ -418,7 +434,7 @@ function startWeather() {
         const pose = wildlifeMotion(time, deer ? 0 : 2);
         const scale = deer ? 0.62 : 0.95;
         const x = wrap(width * 0.12 + pose.distance - deer * 50, width + 160) - 80;
-        ctx.save(); ctx.translate(x, height * 0.987); ctx.scale(scale, scale);
+        ctx.save(); ctx.translate(x, shorelineY(height, x, 0.9)); ctx.scale(scale, scale);
         ctx.fillStyle = blendColor('203530', '4b4b36', brightness, 0.9);
         ctx.strokeStyle = ctx.fillStyle; ctx.lineCap = 'round';
         for (let leg = 0; leg < 4; leg++) {
