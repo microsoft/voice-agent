@@ -38,14 +38,44 @@ export function treeSway(w, time, phase = 0) {
     Math.sin(time * 0.9 + phase) * 0.35 + Math.sin(time * 1.7 + phase * 0.7) * 0.15);
 }
 
+export function wildlifeMotion(time, phase = 0) {
+  const elapsed = time + phase;
+  const cycle = elapsed % 32;
+  const walking = Math.floor(elapsed / 32) * 22 + Math.min(cycle, 22);
+  const ease = value => {
+    const t = Math.max(0, Math.min(1, value));
+    return t * t * (3 - 2 * t);
+  };
+  return {
+    distance: walking * 9,
+    stride: cycle < 22 ? Math.sin(cycle * Math.PI * 2) : 0,
+    grazing: ease((cycle - 22) / 2) * ease((32 - cycle) / 2),
+  };
+}
+
 function startWeather() {
   const canvas = document.getElementById('weather-scene');
   const ctx = canvas.getContext('2d');
   const status = document.getElementById('weather-status');
   const button = document.getElementById('weather-motion');
+  const viewButton = document.getElementById('scenery-toggle');
+  let panelScroll = 0;
+  function sceneryView(showScenery) {
+    if (showScenery) panelScroll = window.scrollY;
+    document.body.classList.toggle('scenery-only', showScenery);
+    viewButton.textContent = showScenery ? 'Show panels' : 'Scenery only';
+    viewButton.setAttribute('aria-pressed', String(showScenery));
+    window.scrollTo({ top: showScenery ? 0 : panelScroll, behavior: 'instant' });
+    viewButton.focus({ preventScroll: true });
+  }
+  viewButton.addEventListener('click', () => sceneryView(!document.body.classList.contains('scenery-only')));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.body.classList.contains('scenery-only')) sceneryView(false);
+  });
   if (!ctx) {
     status.textContent = 'Seattle scenery unavailable: canvas is not supported.';
     button.disabled = true;
+    viewButton.disabled = true;
     return;
   }
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -100,6 +130,24 @@ function startWeather() {
         ctx.restore();
       }
     }
+    if (w.day && !w.fog && !w.snow && w.wet < 1) {
+      const flockX = wrap(time * 28 + drift * 0.08, width + 420) - 210;
+      ctx.strokeStyle = '#304b58a6';
+      ctx.lineCap = 'round';
+      for (let bird = 0; bird < 5; bird++) {
+        const x = flockX - bird * 30;
+        const y = height * 0.27 + Math.abs(bird - 2) * 12 + Math.sin(time * 0.6 + bird) * 3;
+        const span = 4 + particles[bird].depth * 2;
+        const gliding = (time + bird * 0.3) % 8 > 3;
+        const wing = gliding ? -span * 0.25 : Math.sin(time * 6 + bird * 0.8) * span * 0.8;
+        ctx.lineWidth = 0.9 + particles[bird].depth * 0.3;
+        ctx.beginPath(); ctx.moveTo(x - span, y + wing);
+        ctx.quadraticCurveTo(x - span * 0.4, y - span * 0.3, x, y);
+        ctx.quadraticCurveTo(x + span * 0.4, y - span * 0.3, x + span, y + wing);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+    }
     // Hazy mountain ridges and a darker evergreen shoreline give the scene depth.
     for (let layer = 0; layer < 3; layer++) {
       ctx.fillStyle = ['#78949650', '#62877c60', '#345c4b65'][layer];
@@ -127,6 +175,25 @@ function startWeather() {
       ctx.beginPath(); ctx.moveTo(x, y);
       ctx.lineTo(x + 6 + depth * 32, y); ctx.stroke();
     }
+    if (!w.fog && w.wet < 2 && !w.snow) {
+      for (let duck = 0; duck < 3; duck++) {
+        const x = wrap(width * 0.28 + time * 5 - duck * 21, width + 80) - 40;
+        const y = height * 0.905 + duck * 3 + Math.sin(time * 1.2 + duck) * 0.8;
+        ctx.fillStyle = w.day ? '#344b49b3' : '#1c333cbb';
+        ctx.beginPath(); ctx.ellipse(x, y, 6, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + 4, y - 3.5, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x + 5, y - 4);
+        ctx.lineTo(x + 9, y - 3); ctx.lineTo(x + 5, y - 2); ctx.fill();
+        ctx.strokeStyle = '#cfddd64a'; ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.ellipse(x - 7, y + 2, 12, 2.4, 0, 0.3, Math.PI - 0.3); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = w.day ? '#405442' : '#203a32';
+    ctx.beginPath(); ctx.moveTo(0, height);
+    for (let x = 0; x <= width + 8; x += 8) {
+      ctx.lineTo(x, height * 0.955 + Math.sin(x * 0.008) * 3);
+    }
+    ctx.lineTo(width, height); ctx.closePath(); ctx.fill();
     for (let i = 0; i < 70; i++) {
       const x = i * width / 69, y = height * 0.96 + Math.sin(i * 1.7) * 14;
       const size = 18 + particles[i].depth * 38;
@@ -181,6 +248,34 @@ function startWeather() {
           ctx.beginPath(); ctx.ellipse(0, 0, 7 + seed.depth * 4, 3 + seed.depth * 2, 0, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
+      }
+    }
+    if (!w.fog && w.wet < 2 && !w.snow) {
+      for (let deer = 0; deer < 2; deer++) {
+        const pose = wildlifeMotion(time, deer ? 0 : 2);
+        const scale = deer ? 0.62 : 0.95;
+        const x = wrap(width * 0.12 + pose.distance - deer * 50, width + 160) - 80;
+        ctx.save(); ctx.translate(x, height * 0.987); ctx.scale(scale, scale);
+        ctx.fillStyle = w.day ? '#4b4b36e0' : '#203530e6';
+        ctx.strokeStyle = ctx.fillStyle; ctx.lineCap = 'round';
+        for (let leg = 0; leg < 4; leg++) {
+          const hip = leg < 2 ? -10 : 10;
+          const swing = pose.stride * (leg % 2 ? -1 : 1) * 5;
+          ctx.lineWidth = leg % 2 ? 1.7 : 2.2;
+          ctx.beginPath(); ctx.moveTo(hip, -20);
+          ctx.lineTo(hip + swing * 0.4, -10); ctx.lineTo(hip + swing, -1); ctx.stroke();
+        }
+        ctx.beginPath(); ctx.ellipse(0, -23, 15, 7, -0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(10, -25);
+        ctx.quadraticCurveTo(15, -30 + pose.grazing * 18, 18, -39 + pose.grazing * 29); ctx.stroke();
+        const headY = -40 + pose.grazing * 29;
+        ctx.beginPath(); ctx.ellipse(21, headY, 6, 3, pose.grazing * 0.7, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(18, headY - 5, 1.8, 5, -0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(22, headY - 5, 1.5, 4, 0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(-13, -25); ctx.lineTo(-18, -28); ctx.stroke();
+        ctx.restore();
       }
     }
     if (w.fog) {

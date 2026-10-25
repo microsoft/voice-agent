@@ -41,6 +41,16 @@ retain stronger contrast over the scenery.
 Foreground branches bend from fixed roots with fluttering attached leaves;
 loose leaves tumble across the scene in breezes. Tree movement increases with
 wind strength and stops in calm conditions.
+A small flock crosses the daytime sky with alternating wingbeats and gliding;
+birds are hidden at night and during fog, snow, or heavier precipitation.
+A deer and fawn stroll along the foreground, occasionally pausing to graze,
+while a small group of ducks drifts across the water with subtle wakes. These
+decorative animals are hidden in fog, snow, and heavier precipitation; they are
+not live wildlife observations. All movement shares the scenery pause control.
+Choose **Scenery only** to hide the interface and enjoy the landscape; the
+floating **Show panels** and **Pause scenery** buttons remain accessible.
+**Show panels** or Escape restores the interface and previous scroll position.
+Hiding panels does not end or mute an active voice session.
 The weather request goes directly from the browser to `api.open-meteo.com`
 (Seattle's fixed coordinates only; no agent or conversation data).
 The timestamp is Seattle local time. Failed updates are shown explicitly;

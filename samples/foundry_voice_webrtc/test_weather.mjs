@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWeather, weatherLabel, weatherMotion, treeSway } from './public/weather.mjs';
+import { parseWeather, weatherLabel, weatherMotion, treeSway, wildlifeMotion } from './public/weather.mjs';
 
 const current = {
   temperature_2m: 12, is_day: 1, precipitation: 0,
@@ -66,4 +66,20 @@ test('trees stay still in calm weather and flex more in stronger wind', () => {
   const weather = { wind: 18, direction: 270 };
   assert.notEqual(treeSway(weather, 1), treeSway(weather, 2));
   assert.notEqual(treeSway(weather, 1, 0), treeSway(weather, 1, 2));
+});
+
+test('wildlife walks, stops to graze, and resumes without teleporting', () => {
+  assert.ok(wildlifeMotion(10).distance > wildlifeMotion(9).distance);
+  assert.equal(wildlifeMotion(25).distance, wildlifeMotion(24).distance);
+  assert.equal(wildlifeMotion(25).stride, 0);
+  assert.equal(wildlifeMotion(25).grazing, 1);
+  assert.equal(wildlifeMotion(10).grazing, 0);
+  for (const boundary of [22, 32, 54, 64]) {
+    const before = wildlifeMotion(boundary - 0.001);
+    const after = wildlifeMotion(boundary + 0.001);
+    assert.ok(after.distance >= before.distance);
+    assert.ok(after.distance - before.distance < 0.02);
+    assert.ok(Math.abs(after.grazing - before.grazing) < 0.01);
+  }
+  assert.notEqual(wildlifeMotion(10).distance, wildlifeMotion(10, 2).distance);
 });
