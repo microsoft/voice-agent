@@ -22,6 +22,22 @@ export function weatherLabel(w) {
   return `Seattle: ${condition}, ${Math.round(w.temperature)} C, wind ${Math.round(w.wind)} km/h · ${w.time.slice(11)} Seattle time`;
 }
 
+export function weatherMotion(w, time) {
+  const gust = 1 + 0.18 * Math.sin(time * 0.43) + 0.08 * Math.sin(time * 1.17);
+  const horizontal = -Math.sin(w.direction * Math.PI / 180) * Math.min(w.wind * 3, 120);
+  // Integrate the gust so motion stays continuous instead of jumping as wind changes.
+  const elapsed = time + 0.18 * (1 - Math.cos(time * 0.43)) / 0.43 +
+    0.08 * (1 - Math.cos(time * 1.17)) / 1.17;
+  return { horizontal, gust, drift: horizontal * elapsed };
+}
+
+export function treeSway(w, time, phase = 0) {
+  const strength = Math.sqrt(Math.min(w.wind / 35, 1));
+  const { horizontal, gust } = weatherMotion(w, time);
+  return strength * gust * (horizontal / 120 * 0.5 +
+    Math.sin(time * 0.9 + phase) * 0.35 + Math.sin(time * 1.7 + phase * 0.7) * 0.15);
+}
+
 function startWeather() {
   const canvas = document.getElementById('weather-scene');
   const ctx = canvas.getContext('2d');
@@ -63,16 +79,26 @@ function startWeather() {
       ctx.fillStyle = w.day ? '#fff5d5' : '#e0e6e1';
       ctx.beginPath(); ctx.arc(sunX, sunY, w.day ? 27 : 16, 0, Math.PI * 2); ctx.fill();
     }
-    const horizontal = Math.sin(w.direction * Math.PI / 180) * -Math.min(w.wind * 3, 120);
-    const drift = time * (12 + w.wind * 1.2) * (horizontal < 0 ? -1 : 1);
-    for (let i = 0; i < 9; i++) {
-      const x = wrap(i * width / 4 + drift * (i % 2 ? 0.6 : 1), width + 600) - 300;
-      const y = height * (0.03 + (i % 4) * 0.095);
-      ctx.save(); ctx.translate(x, y); ctx.scale(2.9, 0.65);
-      const cloud = ctx.createRadialGradient(0, 0, 0, 0, 0, 130);
-      cloud.addColorStop(0, `rgba(236,242,240,${0.25 + w.cloud * 0.55})`);
-      cloud.addColorStop(1, 'rgba(236,242,240,0)');
-      ctx.fillStyle = cloud; ctx.fillRect(-130, -130, 260, 260); ctx.restore();
+    const { horizontal, drift } = weatherMotion(w, time);
+    for (let layer = 0; layer < 3; layer++) {
+      const depth = 0.35 + layer * 0.3;
+      for (let i = 0; i < 5; i++) {
+        const seed = particles[layer * 5 + i];
+        const x = wrap(seed.x * (width + 700) + drift * depth * 0.22, width + 700) - 350;
+        const y = height * (0.06 + seed.y * 0.32);
+        ctx.save(); ctx.translate(x, y); ctx.scale(1.6 + depth, 0.35 + depth * 0.25);
+        for (let puff = 0; puff < 5; puff++) {
+          const px = (puff - 2) * 48, py = Math.sin(puff * 2.3 + i) * 22;
+          const radius = 65 + particles[i + puff].depth * 30;
+          const cloud = ctx.createRadialGradient(px, py - 12, 0, px, py, radius);
+          const alpha = w.cloud * (0.12 + depth * 0.12);
+          cloud.addColorStop(0, `rgba(${w.day ? '248,248,239' : '133,151,168'},${alpha})`);
+          cloud.addColorStop(0.55, `rgba(${w.day ? '183,198,201' : '75,94,116'},${alpha * 0.7})`);
+          cloud.addColorStop(1, 'rgba(150,170,181,0)');
+          ctx.fillStyle = cloud; ctx.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+        }
+        ctx.restore();
+      }
     }
     // Hazy mountain ridges and a darker evergreen shoreline give the scene depth.
     for (let layer = 0; layer < 3; layer++) {
@@ -86,10 +112,25 @@ function startWeather() {
       }
       ctx.lineTo(width, height); ctx.closePath(); ctx.fill();
     }
+    const waterline = height * 0.86;
+    const water = ctx.createLinearGradient(0, waterline, 0, height);
+    water.addColorStop(0, w.day ? '#9bb5b5' : '#354e63');
+    water.addColorStop(1, w.day ? '#526f73' : '#1c3445');
+    ctx.fillStyle = water; ctx.fillRect(0, waterline, width, height - waterline);
+    for (let i = 0; i < 65; i++) {
+      const p = particles[i], depth = (i + 1) / 65;
+      const x = p.x * width + Math.sin(time * (0.4 + depth) + i) * (1 + w.wind * 0.08);
+      const y = waterline + depth * (height - waterline);
+      const reflection = Math.max(0, 1 - Math.abs(x - sunX) / (width * 0.3));
+      ctx.strokeStyle = `rgba(224,235,226,${(0.04 + reflection * 0.16) * (1 - w.cloud * 0.6)})`;
+      ctx.lineWidth = 0.5 + depth;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      ctx.lineTo(x + 6 + depth * 32, y); ctx.stroke();
+    }
     for (let i = 0; i < 70; i++) {
       const x = i * width / 69, y = height * 0.96 + Math.sin(i * 1.7) * 14;
       const size = 18 + particles[i].depth * 38;
-      const sway = Math.sin(time * 0.7 + i) * Math.min(w.wind / 12, 3);
+      const sway = treeSway(w, time, i * 0.2) * size * 0.14;
       ctx.fillStyle = '#294c3d70'; ctx.strokeStyle = '#34504465'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sway, y - size); ctx.stroke();
       for (let branch = 1; branch <= 9; branch++) {
@@ -104,6 +145,44 @@ function startWeather() {
         ctx.closePath(); ctx.fill();
       }
     }
+    // Foreground branches flex from fixed roots; leaf flutter is faster than trunk sway.
+    for (let tree = 0; tree < 2; tree++) {
+      const side = tree ? -1 : 1;
+      const root = tree ? width + 12 : -12;
+      const size = Math.min(height * 0.38, 320);
+      const bend = treeSway(w, time, tree * 1.6) * size * 0.16;
+      const tipX = root + side * size * 0.2 + bend;
+      const tipY = height - size;
+      ctx.strokeStyle = w.day ? '#394b3cce' : '#1b302dd9';
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(root, height);
+      ctx.bezierCurveTo(root, height - size * 0.45, tipX - bend * 0.4, tipY + size * 0.25, tipX, tipY);
+      ctx.stroke();
+      for (let branch = 0; branch < 7; branch++) {
+        const level = (branch + 2) / 10;
+        const baseX = root + (tipX - root) * level * level;
+        const baseY = height - size * level;
+        const reach = size * (0.2 + particles[branch + tree * 7].x * 0.25);
+        const endX = baseX + side * reach + bend * level * 0.4;
+        const endY = baseY - size * 0.13;
+        ctx.lineWidth = 1.2 + (1 - level) * 2;
+        ctx.beginPath(); ctx.moveTo(baseX, baseY);
+        ctx.quadraticCurveTo(baseX + side * reach * 0.5, baseY, endX, endY); ctx.stroke();
+        for (let leaf = 0; leaf < 6; leaf++) {
+          const t = (leaf + 1) / 6;
+          const seed = particles[tree * 42 + branch * 6 + leaf];
+          const flutter = Math.sin(time * 3.2 + seed.x * 20) * Math.min(w.wind / 12, 1);
+          const x = baseX + (endX - baseX) * t;
+          const y = baseY + (endY - baseY) * t * t + (leaf % 2 ? -7 : 7);
+          ctx.save(); ctx.translate(x, y);
+          ctx.rotate(side * -0.5 + flutter * 0.55);
+          ctx.scale(1, 0.65 + flutter * 0.25);
+          ctx.fillStyle = (w.day ? ['#697448d9', '#9b8048cf', '#62774cda'] : ['#344c3ed9', '#53523ad9', '#2a493ed9'])[leaf % 3];
+          ctx.beginPath(); ctx.ellipse(0, 0, 7 + seed.depth * 4, 3 + seed.depth * 2, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
     if (w.fog) {
       const fog = ctx.createLinearGradient(0, height * 0.4, 0, height);
       fog.addColorStop(0, '#e4e9e600'); fog.addColorStop(1, '#e4e9e6ca');
@@ -113,27 +192,29 @@ function startWeather() {
       const count = w.snow ? 65 : Math.min(160, 45 + w.wet * 22);
       for (let i = 0; i < count; i++) {
         const p = particles[i], speed = (w.snow ? 22 : 410) * p.depth;
-        const x = wrap(p.x * width + time * horizontal * p.depth, width + 40) - 20;
+        const flutter = w.snow ? Math.sin(time * 0.8 + i) * 14 * p.depth : 0;
+        const x = wrap(p.x * width + drift * p.depth + flutter, width + 40) - 20;
         const y = wrap(p.y * height + time * speed, height + 40) - 20;
         ctx.strokeStyle = `rgba(224,239,245,${0.22 + p.depth * 0.2})`;
         ctx.lineWidth = p.depth;
         ctx.beginPath();
         if (w.snow) {
-          ctx.fillStyle = '#f5fafbd0'; ctx.arc(x, y, p.depth * 2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(245,250,251,${0.4 + p.depth * 0.3})`;
+          ctx.arc(x, y, p.depth * 2, 0, Math.PI * 2); ctx.fill();
         } else {
           ctx.moveTo(x, y); ctx.lineTo(x + horizontal * 0.035, y + 16 * p.depth); ctx.stroke();
         }
       }
     }
-    if (w.wind >= 5 && !w.snow) {
-      for (let i = 0; i < Math.min(22, 4 + Math.floor(w.wind / 2)); i++) {
+    if (w.wind >= 3 && Math.abs(horizontal) > 1 && !w.snow) {
+      for (let i = 0; i < Math.min(18, 3 + Math.floor(w.wind / 3)); i++) {
         const p = particles[i], direction = horizontal < 0 ? -1 : 1;
-        const x = wrap(p.x * width + time * direction * (35 + w.wind * 4) * p.depth, width + 80) - 40;
+        const x = wrap(p.x * width + drift * 1.5 * p.depth, width + 80) - 40;
         const y = wrap(p.y * height + time * 20 + Math.sin(time * 1.4 + i) * 25, height + 80) - 40;
-        ctx.save(); ctx.translate(x, y); ctx.rotate(time * 2 + i);
-        ctx.scale(1, 0.35 + Math.abs(Math.sin(time + i)) * 0.65);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(time * direction * 1.4 + i + Math.sin(time + i) * 0.4);
+        ctx.scale(1, 0.2 + Math.abs(Math.sin(time * 2.1 + i)) * 0.8);
         ctx.fillStyle = ['#997344aa', '#b18a45aa', '#6b784eaa'][i % 3];
-        ctx.beginPath(); ctx.ellipse(0, 0, 7 * p.depth, 3 * p.depth, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, 0, 4 + 7 * p.depth, 2 + 3 * p.depth, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#514a36aa'; ctx.lineWidth = 0.6;
         ctx.beginPath(); ctx.moveTo(-6 * p.depth, 0); ctx.lineTo(9 * p.depth, 0); ctx.stroke(); ctx.restore();
       }

@@ -34,6 +34,13 @@ The browser also displays an animated Seattle landscape using Open-Meteo current
 weather, refreshed every 15 minutes. Cloud cover, day/night, precipitation, and
 wind drive the sky, rain/snow, and drifting leaves; no location permission or
 API key is required. This is a stylized landscape, not a live camera feed.
+Translucent panels reveal layered clouds, hazy ridges, and rippling water.
+Clouds and precipitation follow wind direction with smooth gusts; snow flutters,
+nearby trees sway, and water highlights move subtly. Text and recording notices
+retain stronger contrast over the scenery.
+Foreground branches bend from fixed roots with fluttering attached leaves;
+loose leaves tumble across the scene in breezes. Tree movement increases with
+wind strength and stops in calm conditions.
 The weather request goes directly from the browser to `api.open-meteo.com`
 (Seattle's fixed coordinates only; no agent or conversation data).
 The timestamp is Seattle local time. Failed updates are shown explicitly;

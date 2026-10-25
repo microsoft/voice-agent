@@ -62,3 +62,12 @@ header .tag{display:none}
   .transcript-panel{min-height:420px}
   .text-composer,.transcript-panel .panel-top{padding:16px}
 }
+.call-panel,.transcript-panel{background:rgba(250,253,247,.46);border-color:rgba(255,255,255,.6);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.call-panel{background:linear-gradient(150deg,rgba(236,244,222,.48),rgba(253,254,250,.38))}
+.intro::before{background:rgba(247,248,244,.45)}
+header,footer,#setup{background:rgba(247,248,244,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.message{background:rgba(242,245,237,.76)}
+.message.user{background:rgba(250,250,247,.8)}
+.call-panel p,.intro>p,.history-help,.text-composer p{color:#405448}
+.recording-notice{background:rgba(238,241,223,.85)}
+.eyebrow,#empty h3,#empty p,.text-button,.transport-control label,.transcript-footer{color:#2c4436}
