@@ -15,9 +15,8 @@ bundled preview wheel `dist/azure_ai_projects-2.10.0-py3-none-any.whl`, built fr
 SDK's GPT Live WebSocket branch; see [`dist/README.md`](../../dist/README.md) for its
 source and checksum.
 
-The SDK returns generated models for known Live events and plain dicts for events it
-does not model yet, such as Foundry's `session.managed_delegation.*` diagnostics.
-Both are mappings, so the samples dispatch on `event.get("type")`.
+The SDK returns generated models for known Live events and plain dicts for any event
+it does not model yet. Both are mappings, so the samples dispatch on `event.get("type")`.
 
 ## Files
 
@@ -143,14 +142,19 @@ existing agents untouched:
    forwards accepted guidance; the client only streams audio and displays events.
 
 Ask: **"Please correct my English: I goed to school yesterday. Explain why."**
-Managed start/progress/completion/failure events appear in the Delegation pane.
-The service also emits `session.delegation.created` with
+The service emits `session.delegation.created` with
 `delegation.target="foundry_managed_agent"` as an ownership notification, not a
 request for the client to execute the prompt agent. Native `client` or `responses`
 targets are rejected in managed mode; no fallback executor is started.
-The `[thinking]` section is factual background, not private reasoning. Accepted
-backend guidance is kept separate from the transcript of what GPT Live says.
-Failures stay visible without a client-side retry or fallback executor.
+The prompt agent's Responses stream then arrives as `response.event` with that
+delegation ID, and the Delegation pane shows its status and raw tagged-text output.
+Foundry validates that output and appends accepted sections to GPT Live itself;
+each `session.commentary.appended` or `session.thinking.appended` acknowledgment
+marks the delegation as forwarded. These acknowledgments carry no text or
+delegation ID, so the sample attributes them to the latest delegation.
+The `[thinking]` section is factual background, not private reasoning. Backend
+guidance is kept separate from the transcript of what GPT Live says. Backend
+failures stay visible without a client-side retry or fallback executor.
 
 Add `--create-only` to create and keep both agents without opening the microphone.
 Otherwise, press **Ctrl+C** to finish. Both agents are kept by default; add

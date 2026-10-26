@@ -279,17 +279,16 @@ class ToolHandlerTests(unittest.IsolatedAsyncioTestCase):
             await self.completed(response_id)
         self.assertEqual(self.sent, [])
 
-    async def test_finished_delegations_discard_pending_and_stale_events(self):
-        for index, phase in enumerate(("completed", "failed")):
-            delegation_id = f"delegation-{phase}"
-            await self.created(f"response-{index}", delegation_id)
-            await self.done(function_call(f"call-{index}"), delegation_id)
-            await self.observe(envelope(f"session.managed_delegation.{phase}", delegation_id=delegation_id))
-            await self.created(f"response-{index}", delegation_id)
-            await self.done(function_call(f"call-{index}"), delegation_id)
-            await self.completed(f"response-{index}", delegation_id)
+    async def test_session_events_do_not_submit_pending_calls(self):
+        await self.done()
+        await self.observe(envelope(
+            "session.delegation.created",
+            delegation={"id": "delegation-1", "type": "delegation", "target": "foundry_managed_agent"},
+        ))
+        await self.observe(envelope("session.commentary.appended", client_event_id="evt_managed_1"))
         self.assertEqual(self.sent, [])
-        self.assertFalse(self.handler.pending)
+        await self.completed()
+        self.assertEqual([kind for kind, _ in self.sent], ["item", "resume"])
 
     async def test_delegations_do_not_share_pending_calls(self):
         await self.done()
@@ -536,16 +535,26 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     "target": "foundry_managed_agent",
                 },
             ),
-            envelope(
-                "session.managed_delegation.completed",
-                delegation_id="delegation-original",
-                spoken_text='Say "I went to school yesterday."',
-                background_context="The past tense of go is went.",
+            # The managed flow as the service sends it: the prompt agent's Responses
+            # stream, then Foundry's acknowledgment that it forwarded the guidance.
+            backend("response.created", "delegation-original", response={"id": "response-1"}),
+            backend(
+                "response.output_text.delta", "delegation-original",
+                delta='[commentary] Say "I went to school yesterday."',
             ),
+            envelope("session.commentary.appended", client_event_id="evt_managed_1"),
+            backend("response.completed", "delegation-original", response={"id": "response-1"}),
             envelope("session.output_transcript.delta", delta="I went to school yesterday."),
         ))
-        self.assertIn("Prompt agent delegation requested", str(self.transcript.mock_calls))
-        self.assertIn("[commentary]", str(self.transcript.mock_calls))
+        activity = str(self.transcript.mock_calls)
+        self.assertIn("Prompt agent delegation requested", activity)
+        self.assertIn("[commentary] Say", activity)
+        self.assertIn("Accepted commentary forwarded to GPT Live", activity)
+        # The acknowledgment arrived before response.completed, so the final status keeps it.
+        self.assertEqual(
+            self.transcript.update_agent_activity.call_args.kwargs["status"],
+            "Backend response completed; accepted guidance forwarded to GPT Live",
+        )
         self.transcript.append_agent.assert_called_once_with("I went to school yesterday.")
         self.assertFalse({"response.create", "response.item.create", "session.commentary.append"}
                          & set(self.sent_commands()))
@@ -556,6 +565,20 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assert_live_handshake(voice["name"], "3")
         self.assertEqual(self.project.deleted, [voice["name"], prompt["name"]])
         self.assertIn("Conversation id: conversation-original", self.output)
+
+    async def test_managed_backend_failure_stays_visible_without_ending_the_session(self):
+        await self.run_managed(managed.main, session_events=live_session(
+            "conversation-failed",
+            envelope(
+                "session.delegation.created",
+                delegation={"id": "delegation-failed", "type": "delegation", "target": "foundry_managed_agent"},
+            ),
+            backend("response.failed", "delegation-failed", response={"id": "response-1"}),
+            envelope("session.output_transcript.delta", delta="Let's try that again."),
+        ))
+        self.assertIn("Backend response failed", str(self.transcript.mock_calls))
+        self.transcript.append_agent.assert_called_once_with("Let's try that again.")
+        self.assertIn("Conversation id: conversation-failed", self.output)
 
     async def test_responses_sample_creates_live_agent_and_deletes_it(self):
         await self.run_main(
@@ -688,11 +711,12 @@ class SDKLoopbackTests(unittest.IsolatedAsyncioTestCase):
             output = commands[0]["item"]
             self.assertEqual(output["call_id"], "call-1")
             self.assertIn("utc_datetime", json.loads(output["output"]))
-            await send_backend("response.output_item.done", item={
-                "type": "message", "content": [{"type": "output_text", "text": "UNVALIDATED_BACKEND_TEXT"}],
-            })
-            await send("session.managed_delegation.completed",
-                       delegation_id="delegation-1", spoken_text="The clock was checked.", background_context="")
+            # The resumed prompt agent answers; Foundry forwards the accepted section.
+            await send_backend("response.created", response={"id": "response-2", "status": "in_progress"})
+            await send_backend("response.output_text.delta", delta="[commentary] The clock was checked.")
+            await send("session.commentary.appended", event_id="event-ack", client_event_id="evt_managed_1",
+                       start_ms=2000, end_ms=2200)
+            await send_backend("response.completed", response={"id": "response-2", "status": "completed", "output": []})
             await send("session.output_transcript.delta", delta="The clock was checked.")
             await send("session.output_audio.delta", delta=base64.b64encode(bytes(48)).decode("ascii"))
             await send("session.closed", reason="close_requested", usage={"seconds": 1})
@@ -711,9 +735,10 @@ class SDKLoopbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(audio.stopped)
         self.assertEqual(audio.played, [bytes(48)])
         transcript.append_agent.assert_called_once_with("The clock was checked.")
-        self.assertNotIn("UNVALIDATED_BACKEND_TEXT", str(transcript.mock_calls))
-        self.assertIn("[commentary] The clock was checked.", str(transcript.mock_calls))
-        self.assertIn("Prompt agent delegation requested", str(transcript.mock_calls))
+        activity = str(transcript.mock_calls)
+        self.assertIn("[commentary] The clock was checked.", activity)
+        self.assertIn("Prompt agent delegation requested", activity)
+        self.assertIn("Accepted commentary forwarded to GPT Live", activity)
 
     async def check_delegation_notice(self, target):
         """Exercise the notice with the real SDK and no local tool handler."""

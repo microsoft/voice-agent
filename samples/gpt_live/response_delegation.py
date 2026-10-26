@@ -102,10 +102,13 @@ async def converse(
     closed = close_sent = False
     audio_started = False
     replied = set()
+    latest_delegation = None
+    forwarded = set()
     tasks = []
+    delegation_title = "Managed delegation" if managed_delegation else "Delegation"
 
     async def observe(event):
-        nonlocal closed
+        nonlocal closed, latest_delegation
         # The SDK returns generated models for known Live events and plain dicts for
         # events it does not model yet. Both are mappings, so dispatch on the wire type.
         event_type = event.get("type", "")
@@ -119,46 +122,9 @@ async def converse(
             transcript.append_user(event.delta)
         elif event_type == "session.output_transcript.delta":
             transcript.append_agent(event.delta)
-        elif event_type.startswith("session.managed_delegation."):
-            # Foundry-specific events that the SDK does not model; they arrive as dicts.
-            # These are diagnostics only: Foundry already forwards accepted guidance.
-            phase = event_type.rsplit(".", 1)[-1]
-            statuses = {
-                "started": "Prompt agent started",
-                "request": "Prompt agent request sent",
-                "progress": "Receiving accepted prompt-agent guidance",
-                "completed": "Prompt agent completed",
-                "failed": "Prompt agent failed",
-            }
-            if phase not in statuses:
-                return
-            status = statuses[phase]
-            text = None
-            if phase in {"progress", "completed"}:
-                # These fields are cumulative, not token deltas or spoken captions.
-                text = (
-                    "\n".join(
-                        f"[{tag}] {value}"
-                        for field, tag in (
-                            ("spoken_text", "commentary"),
-                            ("background_context", "thinking"),
-                        )
-                        if isinstance(value := event.get(field), str) and value
-                    )
-                    or None
-                )
-            elif phase == "failed":
-                status += f": {event.get('error_code', 'unknown_error')}"
-                # Preserve previously accepted text on partial failure. Do not show
-                # rejected output, retry the backend, or interrupt its spoken fallback.
-            transcript.update_agent_activity(
-                event["delegation_id"],
-                title=f"Managed delegation → {backend_model}",
-                status=status,
-                text=text,
-            )
         elif event_type == "session.delegation.created":
             delegation = event.delegation
+            latest_delegation = delegation.id
             # The wire string; the typed attribute is an enum whose str() adds its class name.
             target = delegation["target"]
             if managed_delegation:
@@ -173,13 +139,13 @@ async def converse(
                     )
                 transcript.update_agent_activity(
                     delegation.id,
-                    title=f"Managed delegation → {backend_model}",
+                    title=f"{delegation_title} → {backend_model}",
                     status="Prompt agent delegation requested",
                 )
                 return
             transcript.update_agent_activity(
                 delegation.id,
-                title=f"Delegation → {backend_model if target == 'responses' else target}",
+                title=f"{delegation_title} → {backend_model if target == 'responses' else target}",
                 status="Delegation requested",
             )
             if target == "client" and delegation.id not in replied:
@@ -190,10 +156,9 @@ async def converse(
                     content=content,
                 )
         elif event_type == "response.event":
-            if managed_delegation:
-                # Only managed lifecycle events report validated prompt-agent output.
-                return
-            # Backend guidance is not the spoken teacher transcript.
+            # Backend guidance is not the spoken teacher transcript. In managed mode this
+            # is the prompt agent's raw tagged-text output; Foundry validates it and
+            # forwards only accepted sections to GPT Live.
             backend = event.event
             kind = backend.get("type")
             activity_id = event.delegation_id or "uncorrelated-backend"
@@ -207,10 +172,13 @@ async def converse(
                 "error": "Backend error",
             }
             if kind in statuses:
+                status = statuses[kind]
+                if kind == "response.completed" and activity_id in forwarded:
+                    status += "; accepted guidance forwarded to GPT Live"
                 transcript.update_agent_activity(
                     activity_id,
-                    title=f"{'Delegation' if event.delegation_id else 'Uncorrelated backend'} → {backend_model}",
-                    status=statuses[kind],
+                    title=f"{delegation_title if event.delegation_id else 'Uncorrelated backend'} → {backend_model}",
+                    status=status,
                     delta=backend.get("delta", "")
                     if kind == "response.output_text.delta"
                     else "",
@@ -220,8 +188,25 @@ async def converse(
                 "response.failed",
                 "response.incomplete",
             }:
+                if managed_delegation:
+                    # Foundry owns the managed fallback; keep the failure visible
+                    # without retrying the backend or interrupting GPT Live.
+                    return
                 raise DemoError(
                     f"Teaching backend reported {backend['type']}; check its deployment and configuration."
+                )
+        elif managed_delegation and event_type in {
+            "session.commentary.appended",
+            "session.thinking.appended",
+        }:
+            # Foundry appends each accepted guidance section to GPT Live itself. The
+            # acknowledgment carries no text or delegation ID, so mark the latest one.
+            if latest_delegation is not None:
+                forwarded.add(latest_delegation)
+                section = event_type.split(".")[1]
+                transcript.update_agent_activity(
+                    latest_delegation,
+                    status=f"Accepted {section} forwarded to GPT Live",
                 )
         elif event_type == "session.closed":
             closed = True
