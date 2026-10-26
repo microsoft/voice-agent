@@ -15,6 +15,7 @@ from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 
 import demo_server
+from voice_policy import VoicePolicy
 import template_portal
 from template_portal import (
     McpProbeError,
@@ -195,7 +196,7 @@ class TemplateCatalogTests(unittest.TestCase):
         self.assertNotIn("mock_tool_call_zendesk_add_comment", allowed)
 
     def test_mock_tool_examples_use_persona_voices(self) -> None:
-        male_personas = {"Marco", "Finn", "Kai", "Max"}
+        male_personas = {"Theo", "Owen", "Hugo", "Luca", "Milo", "Arjun", "Noah"}
         for template_id, folder, *_ in MOCK_TOOL_TEMPLATES:
             with self.subTest(template_id=template_id):
                 definition = json.loads(
@@ -646,6 +647,13 @@ class TemplateCatalogTests(unittest.TestCase):
 
 class TemplateRouteTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        self.voice_policy_patch = patch.object(
+            VoicePolicy, "resolve", side_effect=lambda cfg, body: {
+                "definition": body["definition"], "region": "westus2", "resolutions": [],
+            },
+        )
+        self.voice_policy_patch.start()
+        self.addCleanup(self.voice_policy_patch.stop)
         args = demo_server.parse_args([
             "--project-endpoint",
             ENDPOINT,
