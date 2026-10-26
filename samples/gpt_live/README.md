@@ -1,10 +1,18 @@
-# Foundry GPT Live with the OpenAI Python SDK
+# Foundry GPT Live with the Projects and OpenAI Python SDKs
 
 English-teacher voice samples that create or reuse agents in an existing Foundry
-project, stream microphone audio through the OpenAI Live SDK, and display
-user/agent transcripts. Choose direct Responses delegation or a versioned managed
-prompt agent. The Agent area has separate **GPT Live** and **Delegation**
-panes; delegation IDs, status, and guidance appear in the Delegation pane.
+project with the Azure AI Projects SDK, stream microphone audio through the OpenAI
+Live SDK, and display user/agent transcripts. Choose direct Responses delegation or
+a versioned managed prompt agent. The Agent area has separate **GPT Live** and
+**Delegation** panes; delegation IDs, status, and guidance appear in the Delegation pane.
+
+Agents are defined with the SDK's typed `VoiceAgentLiveDefinition` and
+`PromptAgentDefinition` models and created, read back, and deleted through
+`AIProjectClient.agents`. These GPT Live models are not in a PyPI release yet, so
+`requirements.txt` installs the bundled preview wheel
+`dist/azure_ai_projects-2.10.0-py3-none-any.whl`; see [`dist/README.md`](../../dist/README.md)
+for its source and checksum. That build has no Live WebSocket client, so audio still
+uses the OpenAI Live SDK.
 
 ## Files
 
@@ -16,7 +24,7 @@ panes; delegation IDs, status, and guidance appear in the Delegation pane.
 | `audio_common.py` | Captures microphone audio and plays the agent's response. |
 | `transcript_common.py` | Independently scrollable GPT Live, Delegation, and User terminal panes. |
 | `../download_conversation_artifacts.py` | Existing separate downloader for conversation JSON, per-item audio, and merged audio. |
-| `requirements.txt` | Required Python packages and versions. |
+| `requirements.txt` | Required Python packages and versions, including the bundled preview Projects SDK wheel. |
 | `.env.example` | Configuration template. |
 | `.env` | Your local project, agent, deployment, and subscription settings; git-ignored. |
 | `.gitignore` | Excludes credentials, the virtual environment, and recordings. |
@@ -36,9 +44,14 @@ if (-not (Test-Path -LiteralPath .venv\Scripts\python.exe)) { python -m venv .ve
 if (-not (Test-Path -LiteralPath samples\gpt_live\.env)) { Copy-Item samples\gpt_live\.env.example samples\gpt_live\.env }
 ```
 
+Run the install from the repository root: pip resolves the wheel path in
+`requirements.txt` from the current directory. It replaces any PyPI
+`azure-ai-projects` in the shared `.venv` with the preview 2.10.0 build, which
+still satisfies the other samples' `azure-ai-projects>=2.7.0` requirement.
+
 In `samples/gpt_live/.env`, set `FOUNDRY_PROJECT_ENDPOINT`. Authentication uses
 your `az login` account through `AzureCliCredential`, with automatically refreshed
-Entra tokens for REST and the Live WebSocket handshake. No API keys or manually
+Entra tokens for the Projects SDK and the Live WebSocket handshake. No API keys or manually
 copied tokens are needed. If you have multiple signed-in subscriptions, set
 `AZURE_SUBSCRIPTION_ID` to select the right account without changing the CLI default.
 
@@ -185,7 +198,8 @@ the basic `response_delegation.py` client does not execute their local function.
 No additional packages or `.env` settings are needed.
 
 Run the offline payload, function-continuation, cleanup, and SDK loopback tests
-(no Azure resources or audio devices):
+(no Azure resources or audio devices). Agent lifecycle tests drive the real
+Projects SDK client against an in-memory transport:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s samples/gpt_live -p "test_*.py" -v

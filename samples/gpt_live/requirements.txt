@@ -1,6 +1,8 @@
+# Preview Projects SDK with the GPT Live agent models (see dist/README.md).
+# pip resolves this path from the current directory: install from the repository root.
+./dist/azure_ai_projects-2.10.0-py3-none-any.whl
 openai[realtime]==3.19.2
 azure-identity==1.25.3
-httpx==0.28.1
 websockets==15.0.1
 python-dotenv==1.2.3
 sounddevice==0.5.6

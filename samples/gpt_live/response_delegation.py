@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create or reuse a Foundry GPT Live agent, then stream audio with the OpenAI SDK."""
+"""Create or reuse a Foundry GPT Live agent with the Projects SDK, then stream audio with the OpenAI SDK."""
 
 import argparse
 import asyncio
@@ -12,8 +12,20 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import uuid4
 
-import httpx
-from azure.core.exceptions import ClientAuthenticationError
+from azure.ai.projects.aio import AIProjectClient
+from azure.ai.projects.models import (
+    LiveInitialSessionAudioOutputParam,
+    LiveInitialSessionAudioParam,
+    LiveResponsesDelegationParam,
+    LiveResponsesDelegationSettingsInputParam,
+    LiveSessionAudioFormatPCMParam,
+    VoiceAgentLiveDefinition,
+)
+from azure.core.exceptions import (
+    ClientAuthenticationError,
+    HttpResponseError,
+    ResourceNotFoundError,
+)
 from azure.identity.aio import AzureCliCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -44,45 +56,35 @@ class DemoError(Exception):
     pass
 
 
-class EntraAuth(httpx.Auth):
-    """Share automatically refreshed Azure CLI tokens between REST and the SDK."""
-
-    def __init__(self, credential):
-        self.token_provider = get_bearer_token_provider(credential, TOKEN_SCOPE)
-
-    async def async_auth_flow(self, request):
-        request.headers["Authorization"] = f"Bearer {await self.token_provider()}"
-        yield request
+def live_audio():
+    """PCM16 at RATE in both directions, spoken with the marin voice."""
+    return LiveInitialSessionAudioParam(
+        format=LiveSessionAudioFormatPCMParam(rate=RATE),
+        output=LiveInitialSessionAudioOutputParam(voice="marin"),
+    )
 
 
 # Agent configuration is intentionally fully visible here, separate from the SDK conversation.
-def agent_payload(name):
+# VoiceAgentLiveDefinition sets kind=voice, sub_protocol=live, and model_type=self_deployed.
+def agent_definition():
     backend = required("RESPONSE_DELEGATION_DEPLOYMENT")
     instructions = ENGLISH_TEACHER_INSTRUCTIONS + (
         " Handle greetings and casual conversation yourself. For grammar corrections, "
         "grammar explanations, or lesson planning, always delegate to the Responses "
         "English-teacher backend first, then explain its guidance aloud."
     )
-    return {
-        "name": name,
-        "definition": {
-            "kind": "voice",
-            "sub_protocol": "live",
-            "model_type": "self_deployed",
-            "model": required("GPT_LIVE_DEPLOYMENT"),
-            "instructions": instructions,
-            "audio": {
-                "format": {"type": "audio/pcm", "rate": RATE},
-                "output": {"voice": "marin"},
-            },
-            "delegation": {
-                "type": "responses",
-                "responses": {"model": backend, "instructions": BACKEND_INSTRUCTIONS},
-            },
-            # Persist in Foundry for the shared conversation downloader.
-            "store": True,
-        },
-    }
+    return VoiceAgentLiveDefinition(
+        model=required("GPT_LIVE_DEPLOYMENT"),
+        instructions=instructions,
+        audio=live_audio(),
+        delegation=LiveResponsesDelegationParam(
+            responses=LiveResponsesDelegationSettingsInputParam(
+                model=backend, instructions=BACKEND_INSTRUCTIONS
+            )
+        ),
+        # Persist in Foundry for the shared conversation downloader.
+        store=True,
+    )
 
 
 async def converse(
@@ -318,27 +320,24 @@ async def converse(
         signal.signal(signal.SIGINT, old_sigint)
 
 
-async def check_deployments(http, base, payload):
+async def check_deployments(project, definition):
     """Check the configured model deployments with read-only requests."""
-    definition = payload["definition"]
     deployments = {
-        "GPT_LIVE_DEPLOYMENT": definition["model"],
+        "GPT_LIVE_DEPLOYMENT": definition.model,
     }
-    delegation = definition.get("delegation") or {}
+    # Created definitions hold typed delegation models, while service readback returns
+    # a plain dict. Both are mappings, so key access works for either.
+    delegation = definition.delegation or {}
     if delegation.get("type") == "responses":
         deployments["RESPONSE_DELEGATION_DEPLOYMENT"] = delegation["responses"]["model"]
     for setting, name in deployments.items():
-        response = await http.get(
-            f"{base}/deployments/{quote(name, safe='')}",
-            params={"api-version": API_VERSION},
-        )
-        if response.status_code == 404:
-            raise DemoError(
-                f"Deployment '{name}' was not found in this project. "
-                f"Check the existing agent's deployment, or {setting} for a new agent."
-            )
-        check_response(response, f"Check deployment '{name}'")
-        if response.json().get("name") != name:
+        with service_errors(
+            f"Check deployment '{name}'",
+            not_found=f"Deployment '{name}' was not found in this project. "
+            f"Check the existing agent's deployment, or {setting} for a new agent.",
+        ):
+            deployment = await project.deployments.get(name)
+        if deployment.name != name:
             raise DemoError(f"Deployment readback did not match {setting}='{name}'.")
         print(f"Deployment verified: {setting}={name}", flush=True)
 
@@ -347,57 +346,50 @@ async def main(*, auto_delete: bool = False):
     base = project_endpoint()
     existing_agent = os.getenv("AGENT_NAME", "").strip()
     name = existing_agent or f"english-teacher-{uuid4().hex[:12]}"
-    payload = None if existing_agent else agent_payload(name)
+    definition = None if existing_agent else agent_definition()
     agent_url = f"{base}/agents/{quote(name, safe='')}"
     created = False
     credential = project_credential()
-    auth = EntraAuth(credential)
+    # One credential refreshes Entra tokens for the Projects SDK and the Live handshake.
+    token_provider = get_bearer_token_provider(credential, TOKEN_SCOPE)
     async with (
         credential,
-        httpx.AsyncClient(
-            auth=auth,
-            headers={"Foundry-Features": PREVIEW},
-            timeout=30,
-            follow_redirects=False,
-        ) as http,
+        # allow_preview sends the VoiceAgents=V1Preview feature header for voice agents.
+        AIProjectClient(endpoint=base, credential=credential, allow_preview=True) as project,
     ):
-        if payload is not None:
-            await check_deployments(http, base, payload)
+        if definition is not None:
+            await check_deployments(project, definition)
         try:
             with Audio() as audio:
                 if not existing_agent:
-                    response = await http.post(
-                        f"{base}/agents",
-                        params={"api-version": API_VERSION},
-                        json=payload,
-                    )
-                    check_response(response, "Create agent")
+                    with service_errors("Create agent"):
+                        version = (
+                            await project.agents.create_version(name, definition=definition)
+                        ).version
                     created = True
-                    version = response.json()["versions"]["latest"]["version"]
                     print(
                         f"Created English teacher agent: {name}, version {version}",
                         flush=True,
                     )
-                response = await http.get(
-                    agent_url, params={"api-version": API_VERSION}
-                )
-                if existing_agent and response.status_code == 404:
-                    raise DemoError(
-                        f"Agent '{name}' was not found in this project. Check AGENT_NAME."
-                    )
-                check_response(response, "Read agent")
-                latest = response.json()["versions"]["latest"]
-                definition = latest["definition"]
-                if definition.get("sub_protocol") != "live":
+                with service_errors(
+                    "Read agent",
+                    not_found=f"Agent '{name}' was not found in this project. Check AGENT_NAME."
+                    if existing_agent
+                    else None,
+                ):
+                    latest = (await project.agents.get(name)).versions.latest
+                definition = latest.definition
+                # Readback returns VoiceAgentLiveDefinition only for sub_protocol=live.
+                if not isinstance(definition, VoiceAgentLiveDefinition):
                     raise DemoError(
                         "The agent must use sub_protocol=live. "
                         "Check AGENT_NAME or the created agent definition."
                     )
                 if existing_agent:
-                    version = latest["version"]
+                    version = latest.version
                     print(f"Using existing agent: {name}, version {version}", flush=True)
-                    await check_deployments(http, base, {"definition": definition})
-                delegation = definition.get("delegation") or {}
+                    await check_deployments(project, definition)
+                delegation = definition.delegation or {}
                 managed_delegation = delegation.get("type") in {
                     "foundry_managed_agent",
                     "managed_prompt_agent",
@@ -413,7 +405,7 @@ async def main(*, auto_delete: bool = False):
                 # not the model's /openai/v1 endpoint or a complete sessions URL.
                 # api_key accepts an async Entra token provider, not a stored key.
                 async with AsyncOpenAI(
-                    api_key=auth.token_provider,
+                    api_key=token_provider,
                     base_url=f"{agent_url}/endpoint/protocols/voice",
                     max_retries=0,
                 ) as client:
@@ -466,11 +458,8 @@ async def main(*, auto_delete: bool = False):
         finally:
             if created and auto_delete:
                 try:
-                    response = await http.delete(
-                        agent_url, params={"api-version": API_VERSION}
-                    )
-                    if response.status_code != 404:
-                        check_response(response, "Delete demo agent")
+                    with contextlib.suppress(ResourceNotFoundError):
+                        await project.agents.delete(name)
                     print(f"Deleted temporary demo agent: {name}", flush=True)
                 except Exception as exc:
                     print(
@@ -484,7 +473,7 @@ async def main(*, auto_delete: bool = False):
                 )
 
 
-# HTTP authentication, URL construction, and error handling stay in this sample.
+# Settings, URL construction, and error handling stay in this sample.
 def required(name):
     value = os.getenv(name, "").strip()
     if not value:
@@ -525,17 +514,25 @@ def project_credential():
     return AzureCliCredential(subscription=subscription)
 
 
-def check_response(response, action):
-    if response.is_success:
-        return
-    hint = {
-        401: "Run az login again and check AZURE_SUBSCRIPTION_ID.",
-        403: "Check the signed-in identity's project permissions and preview access.",
-        404: "Check the project endpoint and whether this service has the Live implementation.",
-        409: "The generated agent name already exists; run the demo again.",
-        429: "Deployment quota is exhausted; retry later.",
-    }.get(response.status_code, "Check the request and service configuration.")
-    raise DemoError(f"{action}: HTTP {response.status_code}. {hint}")
+@contextlib.contextmanager
+def service_errors(action, *, not_found=None):
+    """Turn Projects SDK HTTP errors into short hints.
+
+    Authentication failures keep their own handler in run_cli.
+    """
+    try:
+        yield
+    except ClientAuthenticationError:
+        raise
+    except HttpResponseError as exc:
+        if exc.status_code == 404 and not_found:
+            raise DemoError(not_found) from None
+        hint = {
+            403: "Check the signed-in identity's project permissions and preview access.",
+            404: "Check the project endpoint and whether this service has the Live implementation.",
+            429: "Deployment quota is exhausted; retry later.",
+        }.get(exc.status_code, "Check the request and service configuration.")
+        raise DemoError(f"{action}: HTTP {exc.status_code}. {hint}") from exc
 
 
 def run_cli():

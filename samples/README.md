@@ -123,8 +123,9 @@ backend and does not require the Projects SDK; follow its README for setup.
 The common Python SDK samples require `azure-ai-projects>=2.7.0` from PyPI.
 
 The GPT Live terminal samples use the shared repository-root `.venv` with additional
-pinned packages and the OpenAI Live SDK. Follow its own README for configuration
-and installation.
+pinned packages, the OpenAI Live SDK, and a bundled preview `azure-ai-projects` 2.10.0
+wheel from `dist/` for the GPT Live agent models. Follow its own README for
+configuration and installation.
 
 ## Common Python sample prerequisites
 

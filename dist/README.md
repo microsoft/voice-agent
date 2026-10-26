@@ -1,9 +1,30 @@
 # SDK packages
 
 Python samples now install `azure-ai-projects>=2.7.0`
-from PyPI, using the `[voice]` extra for SDK voice connections. No Python
-wheels are bundled. Use the requirements files under `samples/` to install
-the public package.
+from PyPI, using the `[voice]` extra for SDK voice connections. Use the
+requirements files under `samples/` to install the public package.
+
+The [GPT Live samples](../samples/gpt_live/README.md) are the exception: they
+install the bundled preview wheel below, which adds the GPT Live agent models
+that are not yet in a PyPI release.
+
+## Bundled Python preview build: azure-ai-projects 2.10.0
+
+`azure_ai_projects-2.10.0-py3-none-any.whl` is the unmodified wheel published by
+the Azure SDK for Python pull-request pipeline. It is a preview build, not a
+release; PyPI's latest release was 2.9.0 when it was added.
+
+- Source: [Azure/azure-sdk-for-python#49629](https://github.com/Azure/azure-sdk-for-python/pull/49629),
+  "[azure-ai-projects] Emit GPT Live APIs from TypeSpec" (draft, targeting `feature/azure-ai-projects/vnext`)
+- PR head commit: [`ede03b49d28fdb682cd199946d83825c55e4f956`](https://github.com/Azure/azure-sdk-for-python/commit/ede03b49d28fdb682cd199946d83825c55e4f956)
+- Build: [azure-sdk/public build 6995855](https://dev.azure.com/azure-sdk/public/_build/results?buildId=6995855&view=artifacts&pathAsName=false&type=publishedArtifacts)
+  (`python - pullrequest`, 20261023.42), artifact `packages_linux`
+- Adds: `VoiceAgentLiveDefinition`, Live delegation and event models, and
+  `beta.voice_agents.live_conversations`. It has no Live WebSocket client; that is
+  planned in the follow-up PR
+  [Azure/azure-sdk-for-python#49631](https://github.com/Azure/azure-sdk-for-python/pull/49631), so the samples keep the OpenAI Live SDK for audio.
+- SHA-256: `0204c8ab4959496973aa64398829c5346f36d9bc93a1f07ceb58c07d5f6f8e6f`
+- License: MIT
 
 The .NET sample installs the published
 [`Azure.AI.Projects`](https://www.nuget.org/packages/Azure.AI.Projects/3.0.0-beta.3)

@@ -8,18 +8,25 @@ import json
 import os
 import unittest
 from datetime import datetime, timezone
+from http import HTTPStatus
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlsplit
 
-import httpx
-from azure.ai.projects.models import PromptAgentDefinition
+from azure.ai.projects.aio import AIProjectClient
+from azure.ai.projects.models import PromptAgentDefinition, VoiceAgentLiveDefinition
 from azure.core.credentials import AccessToken
+from azure.core.pipeline.transport import AsyncHttpResponse, AsyncHttpTransport
+from azure.core.utils import case_insensitive_dict
 from openai import AsyncOpenAI
 from websockets.asyncio.server import serve
 
 import prompt_agent_delegation as managed
 import prompt_agent_delegation_tools as sample
+import response_delegation as direct
 from response_delegation import DemoError, converse
+
+PROJECT_ENDPOINT = "https://sample.services.ai.azure.com/api/projects/test"
 
 
 def function_call(call_id="call-1", **overrides):
@@ -44,35 +51,64 @@ def backend(kind, delegation_id="delegation-1", **fields):
     )
 
 
+def live_session(conversation_id, *events):
+    """Parsed Live events from session.started to session.closed."""
+    return [
+        envelope(
+            "session.started",
+            conversation_id=conversation_id,
+            session=SimpleNamespace(
+                id=f"session-{conversation_id}",
+                audio=SimpleNamespace(format=SimpleNamespace(type="audio/pcm", rate=24000)),
+            ),
+        ),
+        *events,
+        envelope("session.closed", reason="close_requested", usage=SimpleNamespace(seconds=1)),
+    ]
+
+
 class PayloadTests(unittest.TestCase):
-    def test_prompt_tools_match_released_projects_sdk(self):
-        payload = sample.prompt_agent_payload("tools-prompt", "text-model")
-        definition = payload["definition"]
-        self.assertEqual(PromptAgentDefinition(definition).as_dict(), definition)
-        mcp, clock = definition["tools"]
+    def test_prompt_tools_use_projects_sdk_models(self):
+        definition = sample.prompt_agent_definition("text-model")
+        self.assertIsInstance(definition, PromptAgentDefinition)
+        wire = definition.as_dict()
+        self.assertEqual(PromptAgentDefinition(wire).as_dict(), wire)
+        mcp, clock = wire["tools"]
+        self.assertEqual(mcp["type"], "mcp")
         self.assertEqual(mcp["server_url"], sample.MCP_SERVER_URL)
         self.assertEqual(mcp["allowed_tools"], ["add"])
         self.assertEqual(mcp["require_approval"], "never")
         self.assertNotIn("headers", mcp)
         self.assertNotIn("authorization", mcp)
+        self.assertEqual(clock["type"], "function")
         self.assertEqual(clock["name"], sample.DATETIME_TOOL_NAME)
         self.assertTrue(clock["strict"])
         self.assertEqual(
             clock["parameters"],
             {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
         )
-        self.assertEqual(definition["text"], {"format": {"type": "text"}})
-        self.assertIn("[commentary]", definition["instructions"])
+        self.assertEqual(wire["text"], {"format": {"type": "text"}})
+        self.assertIn("[commentary]", wire["instructions"])
 
     def test_voice_retains_pinned_managed_reference(self):
-        definition = sample.voice_agent_payload("voice", "live", "prompt", "7")["definition"]
+        definition = sample.voice_agent_definition("live", "prompt", "7")
+        self.assertIsInstance(definition, VoiceAgentLiveDefinition)
+        wire = definition.as_dict()
         self.assertEqual(
-            definition["delegation"],
+            (wire["kind"], wire["sub_protocol"], wire["model_type"], wire["model"]),
+            ("voice", "live", "self_deployed", "live"),
+        )
+        self.assertEqual(
+            wire["delegation"],
             {"type": "foundry_managed_agent", "agent_name": "prompt", "agent_version": "7"},
         )
-        self.assertTrue(definition["store"])
-        self.assertIn("current-date/time", definition["instructions"])
-        self.assertNotIn("tools", managed.prompt_agent_payload("plain", "text")["definition"])
+        self.assertEqual(
+            wire["audio"],
+            {"format": {"type": "audio/pcm", "rate": 24000}, "output": {"voice": "marin"}},
+        )
+        self.assertTrue(wire["store"])
+        self.assertIn("current-date/time", wire["instructions"])
+        self.assertNotIn("tools", managed.prompt_agent_definition("text").as_dict())
 
     def test_datetime_is_one_instant_with_explicit_offsets(self):
         before = datetime.now(timezone.utc).replace(microsecond=0)
@@ -265,41 +301,99 @@ class OfflineCredential:
         pass
 
 
-class LifecycleTests(unittest.IsolatedAsyncioTestCase):
-    async def run_lifecycle(
-        self, *, fail_voice=False, auto_delete=True,
-        main_function=sample.main, session_events=None,
-    ):
+class OfflineResponse(AsyncHttpResponse):
+    def __init__(self, request, status_code, payload):
+        super().__init__(request, None)
+        self.status_code = status_code
+        self.reason = HTTPStatus(status_code).phrase
+        self.content_type = "application/json"
+        self.headers = case_insensitive_dict({"Content-Type": self.content_type})
+        self._body = json.dumps(payload).encode()
+
+    def body(self):
+        return self._body
+
+    def json(self):
+        return json.loads(self._body)
+
+    async def read(self):
+        return self._body
+
+
+class OfflineProject(AsyncHttpTransport):
+    """An in-memory Foundry project behind the real Projects SDK client."""
+
+    def __init__(self, agents=None, *, fail_voice=False):
+        self.agents = dict(agents or {})  # name -> (version, definition wire dict)
+        self.fail_voice = fail_voice
         self.requests = []
-        self.created_payloads = []
+        self.created = []
         self.deleted = []
 
-        def handle(request):
-            self.requests.append((request.method, request.url.path))
-            path = request.url.path
-            if request.method == "GET" and "/deployments/" in path:
-                return httpx.Response(200, json={"name": path.rsplit("/", 1)[-1]})
-            if request.method == "POST":
-                payload = json.loads(request.content)
-                if payload["definition"]["kind"] == "voice" and fail_voice:
-                    return httpx.Response(400, json={"error": {"code": "test_failure"}})
-                self.created_payloads.append(payload)
-                version = "7" if payload["definition"]["kind"] == "prompt" else "3"
-                return httpx.Response(200, json={"versions": {"latest": {"version": version}}})
-            if request.method == "GET" and "/versions/" in path:
-                return httpx.Response(200, json={"definition": self.created_payloads[-1]["definition"]})
-            if request.method == "DELETE":
-                self.deleted.append(path.rsplit("/", 1)[-1])
-                return httpx.Response(204)
-            raise AssertionError(f"Unexpected request: {request.method} {path}")
+    async def open(self):
+        pass
 
-        client_class = httpx.AsyncClient
+    async def close(self):
+        pass
 
-        def make_client(**kwargs):
-            return client_class(**kwargs, transport=httpx.MockTransport(handle))
+    async def __aexit__(self, *args):
+        pass
 
+    async def send(self, request, **kwargs):
+        self.requests.append(request)
+        return OfflineResponse(request, *self.handle(request))
+
+    def version(self, name):
+        version, definition = self.agents[name]
+        return {
+            "object": "agent.version", "id": f"{name}:{version}", "name": name,
+            "version": version, "created_at": 1, "definition": definition,
+        }
+
+    def handle(self, request):
+        path = urlsplit(request.url).path.removeprefix(urlsplit(PROJECT_ENDPOINT).path)
+        collection, name, *rest = path.strip("/").split("/")
+        if request.method == "GET" and collection == "deployments":
+            return 200, {"name": name, "type": "ModelDeployment"}
+        if collection != "agents":
+            raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+        if request.method == "POST":  # agents/{name}/versions
+            definition = json.loads(request.content)["definition"]
+            if definition["kind"] == "voice" and self.fail_voice:
+                return 400, {"error": {"code": "test_failure", "message": "Test failure."}}
+            self.created.append({"name": name, "definition": definition})
+            self.agents[name] = ("7" if definition["kind"] == "prompt" else "3", definition)
+            return 200, self.version(name)
+        if request.method == "DELETE":
+            self.deleted.append(name)
+            return 200, {"object": "agent.deleted", "name": name, "deleted": True}
+        if name not in self.agents:
+            return 404, {"error": {"code": "not_found", "message": "Agent not found."}}
+        if rest:  # agents/{name}/versions/{version}
+            return 200, self.version(name)
+        return 200, {
+            "object": "agent", "id": name, "name": name,
+            "versions": {"latest": self.version(name)},
+        }
+
+    def deployment_checks(self):
+        return [
+            urlsplit(request.url).path.rsplit("/", 1)[-1]
+            for request in self.requests
+            if "/deployments/" in request.url
+        ]
+
+
+class LifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def run_main(
+        self, module, main_function, *, project=None, session_events=None,
+        environment=None, **kwargs,
+    ):
+        """Run a sample's main through the real Projects SDK against an offline project."""
+        self.project = project or OfflineProject()
         audio_factory = MagicMock(side_effect=AssertionError("Opened physical audio"))
-        sdk_factory = MagicMock(side_effect=AssertionError("Opened a real Live session"))
+        self.sdk_factory = MagicMock(side_effect=AssertionError("Opened a real Live session"))
+        self.sdk = None
         self.transcript = MagicMock()
         self.transcript.stop_requested = asyncio.Event()
         self.transcript.__aenter__.return_value = self.transcript
@@ -315,67 +409,82 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.connection.__aiter__.side_effect = stream
             self.connection.session.input_audio.append = AsyncMock()
             self.connection.session.close = AsyncMock()
-            sdk = MagicMock()
-            sdk.__aenter__.return_value = sdk
-            sdk.live.connect.return_value.__aenter__.return_value = self.connection
-            sdk_factory = MagicMock(return_value=sdk)
+            self.sdk = MagicMock()
+            self.sdk.__aenter__.return_value = self.sdk
+            self.sdk.live.connect.return_value.__aenter__.return_value = self.connection
+            self.sdk_factory = MagicMock(return_value=self.sdk)
 
+        def project_client(**client_kwargs):
+            return AIProjectClient(**client_kwargs, transport=self.project)
+
+        output = io.StringIO()
         with (
             patch.dict(os.environ, {
-                "FOUNDRY_PROJECT_ENDPOINT": "https://sample.services.ai.azure.com/api/projects/test",
+                "FOUNDRY_PROJECT_ENDPOINT": PROJECT_ENDPOINT,
                 "GPT_LIVE_DEPLOYMENT": "live-model",
                 "RESPONSE_DELEGATION_DEPLOYMENT": "text-model",
+                "AGENT_NAME": "",
+                **(environment or {}),
             }),
-            patch.object(managed, "project_credential", return_value=OfflineCredential()),
-            patch.object(managed.httpx, "AsyncClient", side_effect=make_client),
-            patch.object(managed, "Audio", audio_factory),
-            patch.object(managed, "AsyncOpenAI", sdk_factory),
-            patch.object(managed, "TranscriptDisplay", return_value=self.transcript),
-            contextlib.redirect_stdout(io.StringIO()),
+            patch.object(module, "project_credential", return_value=OfflineCredential()),
+            patch.object(module, "AIProjectClient", side_effect=project_client),
+            patch.object(module, "Audio", audio_factory),
+            patch.object(module, "AsyncOpenAI", self.sdk_factory),
+            patch.object(module, "TranscriptDisplay", return_value=self.transcript),
+            contextlib.redirect_stdout(output),
         ):
-            await main_function(
-                create_only=session_events is None, auto_delete=auto_delete
-            )
+            try:
+                await main_function(**kwargs)
+            finally:
+                self.output = output.getvalue()
+
+    async def run_managed(
+        self, main_function=sample.main, *, project=None, session_events=None,
+        auto_delete=True,
+    ):
+        await self.run_main(
+            managed, main_function, project=project, session_events=session_events,
+            create_only=session_events is None, auto_delete=auto_delete,
+        )
 
     async def test_create_only_keeps_tool_agents_and_pins_returned_version(self):
-        await self.run_lifecycle(auto_delete=False)
-        self.assertEqual(self.deleted, [])
-        prompt, voice = self.created_payloads
+        await self.run_managed(auto_delete=False)
+        self.assertEqual(self.project.deleted, [])
+        prompt, voice = self.project.created
         self.assertEqual(len(prompt["definition"]["tools"]), 2)
         self.assertEqual(
             voice["definition"]["delegation"],
             {"type": "foundry_managed_agent", "agent_name": prompt["name"], "agent_version": "7"},
         )
-        self.assertTrue(all(method == "GET" for method, _ in self.requests[:2]))
+        self.assertEqual([request.method for request in self.project.requests[:2]], ["GET", "GET"])
+        self.assertEqual(self.project.deployment_checks(), ["live-model", "text-model"])
+        create = next(request for request in self.project.requests if request.method == "POST")
+        self.assertIn("VoiceAgents=V1Preview", create.headers["Foundry-Features"])
 
     async def test_cleanup_deletes_voice_before_prompt(self):
-        await self.run_lifecycle()
-        self.assertEqual(self.deleted, [payload["name"] for payload in reversed(self.created_payloads)])
+        await self.run_managed()
+        self.assertEqual(
+            self.project.deleted,
+            [payload["name"] for payload in reversed(self.project.created)],
+        )
 
     async def test_failed_voice_creation_cleans_only_created_prompt(self):
         with self.assertRaisesRegex(DemoError, "HTTP 400"):
-            await self.run_lifecycle(fail_voice=True)
-        self.assertEqual(len(self.created_payloads), 1)
-        self.assertEqual(self.deleted, [self.created_payloads[0]["name"]])
+            await self.run_managed(project=OfflineProject(fail_voice=True))
+        self.assertEqual(len(self.project.created), 1)
+        self.assertEqual(self.project.deleted, [self.project.created[0]["name"]])
 
     async def test_original_managed_sample_retains_plain_prompt_and_cleanup(self):
-        await self.run_lifecycle(main_function=managed.main)
-        prompt, voice = self.created_payloads
+        await self.run_managed(managed.main)
+        prompt, voice = self.project.created
         self.assertNotIn("tools", prompt["definition"])
         self.assertEqual(prompt["definition"]["instructions"], managed.PROMPT_INSTRUCTIONS)
         self.assertEqual(voice["definition"]["delegation"]["agent_version"], "7")
-        self.assertEqual(self.deleted, [voice["name"], prompt["name"]])
+        self.assertEqual(self.project.deleted, [voice["name"], prompt["name"]])
 
     async def test_original_main_handles_managed_notice_and_finishes_normal_session(self):
-        await self.run_lifecycle(main_function=managed.main, session_events=[
-            envelope(
-                "session.started",
-                conversation_id="conversation-original",
-                session=SimpleNamespace(
-                    id="session-original",
-                    audio=SimpleNamespace(format=SimpleNamespace(type="audio/pcm", rate=24000)),
-                ),
-            ),
+        await self.run_managed(managed.main, session_events=live_session(
+            "conversation-original",
             envelope(
                 "session.delegation.created",
                 delegation=SimpleNamespace(
@@ -389,12 +498,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                 background_context="The past tense of go is went.",
             ),
             envelope("session.output_transcript.delta", delta="I went to school yesterday."),
-            envelope(
-                "session.closed",
-                reason="client_request",
-                usage=SimpleNamespace(seconds=1),
-            ),
-        ])
+        ))
         self.assertIn("Prompt agent delegation requested", str(self.transcript.mock_calls))
         self.assertIn("[commentary]", str(self.transcript.mock_calls))
         self.transcript.append_agent.assert_called_once_with("I went to school yesterday.")
@@ -403,9 +507,69 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.connection.session.commentary.append.assert_not_called()
         self.assertTrue(self.audio.started)
         self.assertTrue(self.audio.stopped)
-        prompt, voice = self.created_payloads
+        prompt, voice = self.project.created
         self.assertNotIn("tools", prompt["definition"])
-        self.assertEqual(self.deleted, [voice["name"], prompt["name"]])
+        self.assertEqual(self.project.deleted, [voice["name"], prompt["name"]])
+        self.assertIn("Conversation id: conversation-original", self.output)
+
+    async def test_responses_sample_creates_live_agent_and_deletes_it(self):
+        await self.run_main(
+            direct, direct.main, session_events=live_session("conversation-direct"),
+            auto_delete=True,
+        )
+        (agent,) = self.project.created
+        definition = agent["definition"]
+        self.assertEqual(
+            (definition["kind"], definition["sub_protocol"], definition["model_type"], definition["model"]),
+            ("voice", "live", "self_deployed", "live-model"),
+        )
+        self.assertEqual(
+            definition["delegation"],
+            {
+                "type": "responses",
+                "responses": {"model": "text-model", "instructions": direct.BACKEND_INSTRUCTIONS},
+            },
+        )
+        self.assertTrue(definition["store"])
+        self.assertEqual(self.project.deployment_checks(), ["live-model", "text-model"])
+        self.assertTrue(self.sdk_factory.call_args.kwargs["base_url"].endswith(
+            f"/agents/{agent['name']}/endpoint/protocols/voice"
+        ))
+        self.assertEqual(
+            self.sdk.live.connect.call_args.kwargs["extra_query"]["x-agent-version-override"], "3"
+        )
+        self.assertIn("Conversation id: conversation-direct", self.output)
+        self.assertEqual(self.project.deleted, [agent["name"]])
+
+    async def test_responses_sample_reuses_existing_agent_without_changes(self):
+        saved = {
+            "kind": "voice", "sub_protocol": "live", "model_type": "self_deployed",
+            "model": "saved-live",
+            "delegation": {"type": "responses", "responses": {"model": "saved-text"}},
+        }
+        await self.run_main(
+            direct, direct.main, project=OfflineProject({"teacher": ("5", saved)}),
+            session_events=live_session("conversation-existing"),
+            environment={"AGENT_NAME": "teacher"}, auto_delete=True,
+        )
+        self.assertEqual(self.project.created, [])
+        self.assertEqual(self.project.deleted, [])
+        self.assertEqual(self.project.deployment_checks(), ["saved-live", "saved-text"])
+        self.assertEqual(
+            self.sdk.live.connect.call_args.kwargs["extra_query"]["x-agent-version-override"], "5"
+        )
+
+    async def test_responses_sample_rejects_missing_or_realtime_agents(self):
+        realtime = {"kind": "voice", "model": "realtime-model"}
+        for agents, message in (({}, "was not found"), ({"teacher": ("1", realtime)}, "sub_protocol=live")):
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(DemoError, message):
+                    await self.run_main(
+                        direct, direct.main, project=OfflineProject(agents),
+                        session_events=[], environment={"AGENT_NAME": "teacher"},
+                    )
+                self.sdk_factory.assert_not_called()
+                self.assertEqual(self.project.deleted, [])
 
 
 class OfflineAudio:
