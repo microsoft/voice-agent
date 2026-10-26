@@ -36,6 +36,7 @@ independent shared MCP reference implementation, start with the
 | [Foundry GPT Live with Responses delegation](gpt_live/README.md) | Create an English-teacher agent or reuse `AGENT_NAME`, stream microphone audio with Responses delegation, and print the conversation ID and download command after close. |
 | [Foundry GPT Live with managed prompt-agent delegation](gpt_live/README.md#managed-prompt-agent-delegation) | Create a prompt agent first, pin its version to a new GPT Live voice agent, then stream microphone audio with Foundry-managed delegation. |
 | [Foundry GPT Live with prompt-agent tools](gpt_live/README.md#managed-prompt-agent-with-mcp-and-local-function-tools) | Give the managed prompt agent an MCP addition calculator and a local current date/time function. |
+| [Foundry GPT Live in JavaScript](gpt_live_js/README.md) | JavaScript versions of the Responses and managed prompt-agent delegation samples using the preview `@azure/ai-projects` package: stream a recorded question through the SDK's Live client and save the spoken reply. |
 | [`voice_agent_with_mcp.py`](voice_agent_with_mcp.py) | Create an MCP Agent, converse through the microphone, and display tool arguments and output. |
 | [`voice_agent_with_foundry_iq.py`](voice_agent_with_foundry_iq.py) | Create a Foundry IQ Agent, converse through the microphone, and display tool activity. |
 | [`voice_agent_with_local_function.py`](voice_agent_with_local_function.py) | Execute `add_numbers` in the client, return its output, and hear the response. |
@@ -125,7 +126,8 @@ The common Python SDK samples require `azure-ai-projects>=2.7.0` from PyPI.
 The GPT Live terminal samples use the shared repository-root `.venv` with additional
 pinned packages and a bundled preview `azure-ai-projects` 2.10.0 wheel from `dist/`
 for the GPT Live agent models and Live WebSocket client. Follow its own README for
-configuration and installation.
+configuration and installation. The JavaScript GPT Live samples in `gpt_live_js/` use
+Node.js 22+ and the bundled preview `@azure/ai-projects` package from `dist/` instead.
 
 ## Common Python sample prerequisites
 

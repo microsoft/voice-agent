@@ -1,0 +1,19 @@
+{
+  "name": "gpt-live-js-samples",
+  "private": true,
+  "description": "Foundry GPT Live English-teacher samples using the Azure AI Projects SDK for JavaScript.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "response": "node response_delegation.mjs",
+    "managed": "node prompt_agent_delegation.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@azure/ai-projects": "file:../../dist/azure-ai-projects-2.10.0.tgz",
+    "@azure/identity": "4.14.0",
+    "dotenv": "18.0.8"
+  }
+}

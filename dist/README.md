@@ -6,7 +6,9 @@ requirements files under `samples/` to install the public package.
 
 The [GPT Live samples](../samples/gpt_live/README.md) are the exception: they
 install the bundled preview wheel below, which adds the GPT Live agent models
-and Live WebSocket client that are not yet in a PyPI release.
+and Live WebSocket client that are not yet in a PyPI release. The
+[JavaScript GPT Live samples](../samples/gpt_live_js/README.md) likewise install the
+bundled preview `@azure/ai-projects` package described below.
 
 ## Bundled Python preview build: azure-ai-projects 2.10.0
 
@@ -30,6 +32,32 @@ release was 2.9.0 when it was added.
   `python -m build --wheel --no-isolation`
 - Build tools: `build==1.6.0`, `setuptools==84.0.0`, `wheel==0.48.0`
 - SHA-256: `2a82d6be93c3b81da7fba573693199a4b833c5caaaa86eb9d23ccce2e10cf426`
+- License: MIT
+
+## Bundled JavaScript preview build: @azure/ai-projects 2.10.0
+
+The [JavaScript GPT Live samples](../samples/gpt_live_js/README.md) install
+`azure-ai-projects-2.10.0.tgz`, a local build of the `sdk/ai/ai-projects` package from
+the Azure SDK for JavaScript pull request that adds the native GPT Live client. The
+pull request's CI build was not available, so this is a source build, not a pipeline
+artifact or a release; npm's latest release was 2.9.0 when it was added.
+
+- Source: [Azure/azure-sdk-for-js#40419](https://github.com/Azure/azure-sdk-for-js/pull/40419)
+  "[ai-projects] Add native GPT Live client, samples, and tests" (draft, branch
+  `xitzhang/gpt-live-handwritten`, stacked on
+  [Azure/azure-sdk-for-js#40418](https://github.com/Azure/azure-sdk-for-js/pull/40418), which
+  generates the GPT Live models)
+- Commit: [`4201af1ae96f119d9b3e2ceceee4d55b0cfc6166`](https://github.com/Azure/azure-sdk-for-js/tree/4201af1ae96f119d9b3e2ceceee4d55b0cfc6166/sdk/ai/ai-projects)
+- Adds: GPT Live agent definitions, `beta.voiceAgents.live` (the Live WebSocket client), and
+  `beta.voiceAgents.liveConversations`.
+- Built: October 26, 2026, with Node.js 22.23.4, npm 10.9.9, and TypeScript 6.0.3 (the
+  repository's catalog version), using the repository's `tsconfig.src.esm.json` with the
+  package's published runtime dependencies. No source file was changed.
+- Packaging: Node.js ES modules only (`dist/esm`). As the SDK's own build tool does, the
+  package-internal `#platform/*` imports were rewritten to relative paths in the compiled
+  output, and the package manifest's `exports` keep only the `import` target. CommonJS,
+  browser, and React Native builds are not included.
+- SHA-256: `9844502a93aa0ea7bf5f5cb8d33997afcb176b98b0d062b6c35c437c82997db0`
 - License: MIT
 
 The .NET sample installs the published
