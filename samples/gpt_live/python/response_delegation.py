@@ -406,7 +406,7 @@ async def main(*, auto_delete: bool = False):
                     )
                 else:
                     downloader = (
-                        Path(__file__).resolve().parent.parent
+                        Path(__file__).resolve().parents[2]
                         / "download_conversation_artifacts.py"
                     )
                     command_prefix = "& " if os.name == "nt" else ""
@@ -510,7 +510,8 @@ def run_cli():
     )
     args = parser.parse_args()
     try:
-        load_dotenv(Path(__file__).resolve().with_name(".env"), override=False)
+        # samples/gpt_live/.env is shared by the Python and JavaScript samples.
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
         asyncio.run(main(auto_delete=args.auto_delete))
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)

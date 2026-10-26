@@ -4,10 +4,10 @@ Python samples now install `azure-ai-projects>=2.7.0`
 from PyPI, using the `[voice]` extra for SDK voice connections. Use the
 requirements files under `samples/` to install the public package.
 
-The [GPT Live samples](../samples/gpt_live/README.md) are the exception: they
-install the bundled preview wheel below, which adds the GPT Live agent models
+The [Python GPT Live samples](../samples/gpt_live/python/README.md) are the exception:
+they install the bundled preview wheel below, which adds the GPT Live agent models
 and Live WebSocket client that are not yet in a PyPI release. The
-[JavaScript GPT Live samples](../samples/gpt_live_js/README.md) likewise install the
+[browser GPT Live sample](../samples/gpt_live/js/README.md) likewise installs the
 bundled preview `@azure/ai-projects` package described below.
 
 ## Bundled Python preview build: azure-ai-projects 2.10.0
@@ -36,8 +36,8 @@ release was 2.9.0 when it was added.
 
 ## Bundled JavaScript preview build: @azure/ai-projects 2.10.0
 
-The [JavaScript GPT Live samples](../samples/gpt_live_js/README.md) install
-`azure-ai-projects-2.10.0.tgz`, a local build of the `sdk/ai/ai-projects` package from
+The [browser GPT Live sample](../samples/gpt_live/js/README.md) installs
+`azure-ai-projects-2.10.0.tgz` in its Node.js server, a local build of the `sdk/ai/ai-projects` package from
 the Azure SDK for JavaScript pull request that adds the native GPT Live client. The
 pull request's CI build was not available, so this is a source build, not a pipeline
 artifact or a release; npm's latest release was 2.9.0 when it was added.

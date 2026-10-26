@@ -196,7 +196,7 @@ async def main(
                     print(f"Conversation id: {conversation_id}", flush=True)
                     if not auto_delete:
                         downloader = (
-                            Path(__file__).resolve().parent.parent
+                            Path(__file__).resolve().parents[2]
                             / "download_conversation_artifacts.py"
                         )
                         command_prefix = "& " if os.name == "nt" else ""
@@ -242,7 +242,8 @@ def run_cli(main_function=None, *, description=__doc__):
     )
     args = parser.parse_args()
     try:
-        load_dotenv(Path(__file__).resolve().with_name(".env"), override=False)
+        # samples/gpt_live/.env is shared by the Python and JavaScript samples.
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
         asyncio.run(
             (main_function or main)(
                 create_only=args.create_only, auto_delete=args.auto_delete
