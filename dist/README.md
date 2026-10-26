@@ -6,24 +6,30 @@ requirements files under `samples/` to install the public package.
 
 The [GPT Live samples](../samples/gpt_live/README.md) are the exception: they
 install the bundled preview wheel below, which adds the GPT Live agent models
-that are not yet in a PyPI release.
+and Live WebSocket client that are not yet in a PyPI release.
 
 ## Bundled Python preview build: azure-ai-projects 2.10.0
 
-`azure_ai_projects-2.10.0-py3-none-any.whl` is the unmodified wheel published by
-the Azure SDK for Python pull-request pipeline. It is a preview build, not a
-release; PyPI's latest release was 2.9.0 when it was added.
+`azure_ai_projects-2.10.0-py3-none-any.whl` was built from the unmodified
+`sdk/ai/azure-ai-projects` package on the GPT Live WebSocket branch of the Azure
+SDK for Python repository. It is a preview build, not a release; PyPI's latest
+release was 2.9.0 when it was added.
 
-- Source: [Azure/azure-sdk-for-python#49629](https://github.com/Azure/azure-sdk-for-python/pull/49629),
-  "[azure-ai-projects] Emit GPT Live APIs from TypeSpec" (draft, targeting `feature/azure-ai-projects/vnext`)
-- PR head commit: [`ede03b49d28fdb682cd199946d83825c55e4f956`](https://github.com/Azure/azure-sdk-for-python/commit/ede03b49d28fdb682cd199946d83825c55e4f956)
-- Build: [azure-sdk/public build 6995855](https://dev.azure.com/azure-sdk/public/_build/results?buildId=6995855&view=artifacts&pathAsName=false&type=publishedArtifacts)
-  (`python - pullrequest`, 20261023.42), artifact `packages_linux`
-- Adds: `VoiceAgentLiveDefinition`, Live delegation and event models, and
-  `beta.voice_agents.live_conversations`. It has no Live WebSocket client; that is
-  planned in the follow-up PR
-  [Azure/azure-sdk-for-python#49631](https://github.com/Azure/azure-sdk-for-python/pull/49631), so the samples keep the OpenAI Live SDK for audio.
-- SHA-256: `0204c8ab4959496973aa64398829c5346f36d9bc93a1f07ceb58c07d5f6f8e6f`
+- Branch: [`xitzhang/gpt-live-websocket`](https://github.com/Azure/azure-sdk-for-python/tree/xitzhang/gpt-live-websocket/sdk/ai/azure-ai-projects),
+  [Azure/azure-sdk-for-python#49631](https://github.com/Azure/azure-sdk-for-python/pull/49631)
+  "[azure-ai-projects] Add GPT Live WebSocket clients and samples". It is stacked on
+  [Azure/azure-sdk-for-python#49629](https://github.com/Azure/azure-sdk-for-python/pull/49629),
+  which emits the GPT Live models.
+- Commit: [`c69c028870ca5ad18cec77373dbba30e2a4be82d`](https://github.com/Azure/azure-sdk-for-python/tree/c69c028870ca5ad18cec77373dbba30e2a4be82d/sdk/ai/azure-ai-projects)
+  (October 23, 2026)
+- Adds: `VoiceAgentLiveDefinition`, Live delegation and event models,
+  `beta.voice_agents.live_conversations`, and the `beta.voice_agents.live` WebSocket
+  client used for the samples' audio sessions (requires the `[voice]` extra).
+- Package version: `2.10.0`
+- Built: October 26, 2026, using Python 3.12.10 on Windows (`core.autocrlf=false`, LF checkout),
+  `python -m build --wheel --no-isolation`
+- Build tools: `build==1.6.0`, `setuptools==84.0.0`, `wheel==0.48.0`
+- SHA-256: `2a82d6be93c3b81da7fba573693199a4b833c5caaaa86eb9d23ccce2e10cf426`
 - License: MIT
 
 The .NET sample installs the published

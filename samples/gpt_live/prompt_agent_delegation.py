@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a prompt agent, pin it to a GPT Live voice agent, and talk using the OpenAI SDK."""
+"""Create a prompt agent, pin it to a GPT Live voice agent, and talk using the Azure AI Projects SDK."""
 
 import argparse
 import asyncio
@@ -7,7 +7,6 @@ import contextlib
 import os
 import sys
 from pathlib import Path
-from urllib.parse import quote
 from uuid import uuid4
 
 from azure.ai.projects.aio import AIProjectClient
@@ -19,15 +18,10 @@ from azure.ai.projects.models import (
     VoiceAgentLiveManagedAgentDelegation,
 )
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
-from azure.identity.aio import get_bearer_token_provider
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 
 from audio_common import Audio, AudioError
 from response_delegation import (
-    API_VERSION,
-    PREVIEW,
-    TOKEN_SCOPE,
     DemoError,
     ENGLISH_TEACHER_INSTRUCTIONS,
     converse,
@@ -110,10 +104,8 @@ async def main(
     suffix = uuid4().hex[:12]
     prompt_name = f"english-teacher-prompt-{suffix}"
     voice_name = f"english-teacher-live-{suffix}"
-    agent_url = f"{base}/agents/{quote(voice_name, safe='')}"
     created = []
     credential = project_credential()
-    token_provider = get_bearer_token_provider(credential, TOKEN_SCOPE)
 
     async with (
         credential,
@@ -183,38 +175,23 @@ async def main(
                     )
                     return
 
-                # 3. The same OpenAI Live SDK transport as the original sample.
+                # 3. The same SDK Live connection as the original sample.
                 # Foundry owns prompt execution, backend conversations, and forwarding
                 # accepted commentary/thinking. The tools example additionally handles
                 # explicit backend function calls through event_handler.
-                async with AsyncOpenAI(
-                    api_key=token_provider,
-                    base_url=f"{agent_url}/endpoint/protocols/voice",
-                    max_retries=0,
-                ) as client:
-                    async with client.live.connect(
-                        extra_headers={"Foundry-Features": PREVIEW},
-                        extra_query={
-                            "api-version": API_VERSION,
-                            "x-agent-version-override": voice_version,
-                        },
-                        max_retries=0,
-                        websocket_connection_options={
-                            "open_timeout": 20,
-                            "close_timeout": 5,
-                            "max_size": 1024 * 1024,
-                        },
-                    ) as connection:
-                        # Foundry sends session.start; converse waits for session.started.
-                        async with TranscriptDisplay() as transcript:
-                            conversation_id = await converse(
-                                connection,
-                                audio,
-                                transcript,
-                                f"{prompt_name}:{prompt_version}",
-                                managed_delegation=True,
-                                event_handler=event_handler,
-                            )
+                async with project.beta.voice_agents.live.connect(
+                    agent_name=voice_name, agent_version=voice_version
+                ) as connection:
+                    # Foundry sends session.start; converse waits for session.started.
+                    async with TranscriptDisplay() as transcript:
+                        conversation_id = await converse(
+                            connection,
+                            audio,
+                            transcript,
+                            f"{prompt_name}:{prompt_version}",
+                            managed_delegation=True,
+                            event_handler=event_handler,
+                        )
                 if conversation_id:
                     print(f"Conversation id: {conversation_id}", flush=True)
                     if not auto_delete:

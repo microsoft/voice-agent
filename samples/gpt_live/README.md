@@ -1,18 +1,23 @@
-# Foundry GPT Live with the Projects and OpenAI Python SDKs
+# Foundry GPT Live with the Azure AI Projects Python SDK
 
 English-teacher voice samples that create or reuse agents in an existing Foundry
-project with the Azure AI Projects SDK, stream microphone audio through the OpenAI
-Live SDK, and display user/agent transcripts. Choose direct Responses delegation or
+project, stream microphone audio through a GPT Live session, and display user/agent
+transcripts, all with the Azure AI Projects SDK. Choose direct Responses delegation or
 a versioned managed prompt agent. The Agent area has separate **GPT Live** and
 **Delegation** panes; delegation IDs, status, and guidance appear in the Delegation pane.
 
 Agents are defined with the SDK's typed `VoiceAgentLiveDefinition` and
 `PromptAgentDefinition` models and created, read back, and deleted through
-`AIProjectClient.agents`. These GPT Live models are not in a PyPI release yet, so
-`requirements.txt` installs the bundled preview wheel
-`dist/azure_ai_projects-2.10.0-py3-none-any.whl`; see [`dist/README.md`](../../dist/README.md)
-for its source and checksum. That build has no Live WebSocket client, so audio still
-uses the OpenAI Live SDK.
+`AIProjectClient.agents`. Audio sessions use the SDK's Live WebSocket client,
+`AIProjectClient.beta.voice_agents.live.connect(...)`, with the same credential.
+These GPT Live APIs are not in a PyPI release yet, so `requirements.txt` installs the
+bundled preview wheel `dist/azure_ai_projects-2.10.0-py3-none-any.whl`, built from the
+SDK's GPT Live WebSocket branch; see [`dist/README.md`](../../dist/README.md) for its
+source and checksum.
+
+The SDK returns generated models for known Live events and plain dicts for events it
+does not model yet, such as Foundry's `session.managed_delegation.*` diagnostics.
+Both are mappings, so the samples dispatch on `event.get("type")`.
 
 ## Files
 
@@ -51,7 +56,7 @@ still satisfies the other samples' `azure-ai-projects>=2.7.0` requirement.
 
 In `samples/gpt_live/.env`, set `FOUNDRY_PROJECT_ENDPOINT`. Authentication uses
 your `az login` account through `AzureCliCredential`, with automatically refreshed
-Entra tokens for the Projects SDK and the Live WebSocket handshake. No API keys or manually
+Entra tokens for agent management and the Live WebSocket handshake. No API keys or manually
 copied tokens are needed. If you have multiple signed-in subscriptions, set
 `AZURE_SUBSCRIPTION_ID` to select the right account without changing the CLI default.
 
@@ -134,7 +139,7 @@ existing agents untouched:
    }
    ```
    The result format defaults to `tagged_text`, matching the demo portal.
-3. Connect through the OpenAI Live SDK. Foundry executes the prompt agent and
+3. Connect through the SDK's Live client. Foundry executes the prompt agent and
    forwards accepted guidance; the client only streams audio and displays events.
 
 Ask: **"Please correct my English: I goed to school yesterday. Explain why."**
@@ -198,8 +203,9 @@ the basic `response_delegation.py` client does not execute their local function.
 No additional packages or `.env` settings are needed.
 
 Run the offline payload, function-continuation, cleanup, and SDK loopback tests
-(no Azure resources or audio devices). Agent lifecycle tests drive the real
-Projects SDK client against an in-memory transport:
+(no Azure resources or audio devices). They drive the real Projects SDK client:
+agent calls go to an in-memory transport, and the Live client's `wss://` handshake
+is routed to a local WebSocket server:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s samples/gpt_live -p "test_*.py" -v

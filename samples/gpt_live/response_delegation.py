@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create or reuse a Foundry GPT Live agent with the Projects SDK, then stream audio with the OpenAI SDK."""
+"""Create or reuse a Foundry GPT Live agent and stream audio with the Azure AI Projects SDK."""
 
 import argparse
 import asyncio
@@ -9,10 +9,11 @@ import os
 import signal
 import sys
 from pathlib import Path
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from azure.ai.projects.aio import AIProjectClient
+from azure.ai.projects.aio.operations import AsyncBetaLiveConnection
 from azure.ai.projects.models import (
     LiveInitialSessionAudioOutputParam,
     LiveInitialSessionAudioParam,
@@ -26,18 +27,12 @@ from azure.core.exceptions import (
     HttpResponseError,
     ResourceNotFoundError,
 )
-from azure.identity.aio import AzureCliCredential, get_bearer_token_provider
+from azure.identity.aio import AzureCliCredential
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
-from openai.resources.live.live import AsyncLiveConnection
-from websockets.exceptions import ConnectionClosed
 
 from audio_common import Audio, AudioError, RATE
 from transcript_common import TranscriptDisplay
 
-PREVIEW = "VoiceAgents=V1Preview"
-API_VERSION = "v1"
-TOKEN_SCOPE = "https://ai.azure.com/.default"
 ENGLISH_TEACHER_INSTRUCTIONS = (
     "You are a patient English teacher helping the learner practice spoken English. "
     "Ask one short question at a time and let the learner answer. Gently correct "
@@ -88,7 +83,7 @@ def agent_definition():
 
 
 async def converse(
-    connection: AsyncLiveConnection,
+    connection: AsyncBetaLiveConnection,
     audio: Audio,
     transcript: TranscriptDisplay,
     backend_model: str,
@@ -111,20 +106,23 @@ async def converse(
 
     async def observe(event):
         nonlocal closed
+        # The SDK returns generated models for known Live events and plain dicts for
+        # events it does not model yet. Both are mappings, so dispatch on the wire type.
+        event_type = event.get("type", "")
         if event_handler is not None:
             await event_handler(connection, event, transcript)
-        if event.type == "error":
+        if event_type == "error":
             raise DemoError(f"Live error: {event.error.message}")
-        if event.type == "session.output_audio.delta":
+        if event_type == "session.output_audio.delta":
             audio.play(base64.b64decode(event.delta, validate=True))
-        elif event.type == "session.input_transcript.delta":
+        elif event_type == "session.input_transcript.delta":
             transcript.append_user(event.delta)
-        elif event.type == "session.output_transcript.delta":
+        elif event_type == "session.output_transcript.delta":
             transcript.append_agent(event.delta)
-        elif event.type.startswith("session.managed_delegation."):
-            # Foundry-specific events survive the OpenAI SDK parser as extra fields.
+        elif event_type.startswith("session.managed_delegation."):
+            # Foundry-specific events that the SDK does not model; they arrive as dicts.
             # These are diagnostics only: Foundry already forwards accepted guidance.
-            phase = event.type.rsplit(".", 1)[-1]
+            phase = event_type.rsplit(".", 1)[-1]
             statuses = {
                 "started": "Prompt agent started",
                 "request": "Prompt agent request sent",
@@ -145,29 +143,31 @@ async def converse(
                             ("spoken_text", "commentary"),
                             ("background_context", "thinking"),
                         )
-                        if isinstance(value := getattr(event, field, None), str) and value
+                        if isinstance(value := event.get(field), str) and value
                     )
                     or None
                 )
             elif phase == "failed":
-                status += f": {getattr(event, 'error_code', 'unknown_error')}"
+                status += f": {event.get('error_code', 'unknown_error')}"
                 # Preserve previously accepted text on partial failure. Do not show
                 # rejected output, retry the backend, or interrupt its spoken fallback.
             transcript.update_agent_activity(
-                event.delegation_id,
+                event["delegation_id"],
                 title=f"Managed delegation → {backend_model}",
                 status=status,
                 text=text,
             )
-        elif event.type == "session.delegation.created":
+        elif event_type == "session.delegation.created":
             delegation = event.delegation
+            # The wire string; the typed attribute is an enum whose str() adds its class name.
+            target = delegation["target"]
             if managed_delegation:
                 # Managed sessions retain the native event name, but Foundry
                 # projects its target to indicate that the service owns execution.
-                if delegation.target != "foundry_managed_agent":
+                if target != "foundry_managed_agent":
                     raise DemoError(
                         "Expected Foundry-managed delegation, but received "
-                        f"delegation target '{delegation.target}'. Check that the "
+                        f"delegation target '{target}'. Check that the "
                         "service supports foundry_managed_agent with tagged_text; "
                         "no client fallback was run."
                     )
@@ -179,17 +179,17 @@ async def converse(
                 return
             transcript.update_agent_activity(
                 delegation.id,
-                title=f"Delegation → {backend_model if delegation.target == 'responses' else delegation.target}",
+                title=f"Delegation → {backend_model if target == 'responses' else target}",
                 status="Delegation requested",
             )
-            if delegation.target == "client" and delegation.id not in replied:
+            if target == "client" and delegation.id not in replied:
                 replied.add(delegation.id)
                 content = "This demo uses a Responses backend, not a client executor. Please continue the English lesson."
                 await connection.session.commentary.append(
                     delegation_id=delegation.id,
                     content=content,
                 )
-        elif event.type == "response.event":
+        elif event_type == "response.event":
             if managed_delegation:
                 # Only managed lifecycle events report validated prompt-agent output.
                 return
@@ -223,7 +223,7 @@ async def converse(
                 raise DemoError(
                     f"Teaching backend reported {backend['type']}; check its deployment and configuration."
                 )
-        elif event.type == "session.closed":
+        elif event_type == "session.closed":
             closed = True
             transcript.set_status(
                 f"Session closed: {event.reason}; cumulative Live usage: {event.usage.seconds} seconds"
@@ -243,24 +243,22 @@ async def converse(
         )
 
     async def send_microphone():
-        # audio.frames() yields PCM only; encoding and SDK calls belong to this sample.
+        # audio.frames() yields raw PCM; the SDK base64-encodes bytes before sending.
         async for pcm in audio.frames(stop):
-            encoded = base64.b64encode(pcm).decode("ascii")
-            await connection.session.input_audio.append(audio=encoded)
+            await connection.session.input_audio.append(audio=pcm)
 
     try:
         # Foundry owns session.start. Wait for service-owned readiness; do not start again.
         async with asyncio.timeout(30):
             async for event in events:
                 await observe(event)
-                if event.type == "session.started":
+                if event.get("type") == "session.started":
                     session_id = event.session.id
                     # Foundry adds this top-level field; it is not session.id.
-                    # The OpenAI SDK preserves service-specific fields as extras.
-                    value = getattr(event, "conversation_id", None)
+                    value = event.conversation_id
                     if isinstance(value, str) and value.strip():
                         conversation_id = value
-                    actual_format = event.session.audio.format
+                    actual_format = event.session.audio and event.session.audio.format
                     if actual_format and (actual_format.type, actual_format.rate) != (
                         "audio/pcm",
                         RATE,
@@ -304,7 +302,8 @@ async def converse(
         if audio_started:
             await audio.drain()
         return conversation_id
-    except ConnectionClosed as exc:
+    except ConnectionResetError as exc:
+        # The SDK ends iteration on a graceful close and raises this for an abnormal one.
         raise DemoError(
             "WebSocket ended without session.closed; finalization is unconfirmed."
         ) from exc
@@ -347,11 +346,8 @@ async def main(*, auto_delete: bool = False):
     existing_agent = os.getenv("AGENT_NAME", "").strip()
     name = existing_agent or f"english-teacher-{uuid4().hex[:12]}"
     definition = None if existing_agent else agent_definition()
-    agent_url = f"{base}/agents/{quote(name, safe='')}"
     created = False
     credential = project_credential()
-    # One credential refreshes Entra tokens for the Projects SDK and the Live handshake.
-    token_provider = get_bearer_token_provider(credential, TOKEN_SCOPE)
     async with (
         credential,
         # allow_preview sends the VoiceAgents=V1Preview feature header for voice agents.
@@ -401,36 +397,20 @@ async def main(*, auto_delete: bool = False):
                     or delegation.get("type", "client")
                 )
 
-                # The SDK appends /live/sessions. Point it at the agent protocol,
-                # not the model's /openai/v1 endpoint or a complete sessions URL.
-                # api_key accepts an async Entra token provider, not a stored key.
-                async with AsyncOpenAI(
-                    api_key=token_provider,
-                    base_url=f"{agent_url}/endpoint/protocols/voice",
-                    max_retries=0,
-                ) as client:
-                    async with client.live.connect(
-                        extra_headers={"Foundry-Features": PREVIEW},
-                        extra_query={
-                            "api-version": API_VERSION,
-                            "x-agent-version-override": str(version),
-                        },
-                        max_retries=0,
-                        websocket_connection_options={
-                            "open_timeout": 20,
-                            "close_timeout": 5,
-                            "max_size": 1024 * 1024,
-                        },
-                    ) as connection:
-                        # Do NOT call connection.session.start(): Foundry does it.
-                        async with TranscriptDisplay() as transcript:
-                            conversation_id = await converse(
-                                connection,
-                                audio,
-                                transcript,
-                                backend_model,
-                                managed_delegation=managed_delegation,
-                            )
+                # The SDK opens the agent's .../endpoint/protocols/voice/live/sessions
+                # WebSocket with the project credential and the preview header.
+                # Foundry sends session.start; the client only waits for session.started.
+                async with project.beta.voice_agents.live.connect(
+                    agent_name=name, agent_version=str(version)
+                ) as connection:
+                    async with TranscriptDisplay() as transcript:
+                        conversation_id = await converse(
+                            connection,
+                            audio,
+                            transcript,
+                            backend_model,
+                            managed_delegation=managed_delegation,
+                        )
             if conversation_id:
                 print(f"Conversation id: {conversation_id}", flush=True)
                 if created and auto_delete:

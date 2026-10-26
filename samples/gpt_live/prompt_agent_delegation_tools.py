@@ -108,8 +108,11 @@ class ManagedToolHandler:
         self.answered = set()
 
     async def __call__(self, connection, envelope, transcript):
-        delegation_id = getattr(envelope, "delegation_id", None)
-        if envelope.type in {
+        # Envelopes are SDK models, or dicts for the unmodeled managed_delegation
+        # events; both are mappings.
+        envelope_type = envelope.get("type")
+        delegation_id = envelope.get("delegation_id")
+        if envelope_type in {
             "session.managed_delegation.completed",
             "session.managed_delegation.failed",
         }:
@@ -120,14 +123,14 @@ class ManagedToolHandler:
                     del self.pending[key]
             return
         if (
-            envelope.type != "response.event"
+            envelope_type != "response.event"
             or not isinstance(delegation_id, str)
             or not delegation_id
             or delegation_id in self.retired_delegations
         ):
             return
 
-        event = envelope.event
+        event = envelope["event"]
         kind = event.get("type")
         response = event.get("response") or {}
         response_id = (

@@ -13,12 +13,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urlsplit
 
+import aiohttp
 from azure.ai.projects.aio import AIProjectClient
 from azure.ai.projects.models import PromptAgentDefinition, VoiceAgentLiveDefinition
 from azure.core.credentials import AccessToken
 from azure.core.pipeline.transport import AsyncHttpResponse, AsyncHttpTransport
 from azure.core.utils import case_insensitive_dict
-from openai import AsyncOpenAI
 from websockets.asyncio.server import serve
 
 import prompt_agent_delegation as managed
@@ -40,7 +40,8 @@ def function_call(call_id="call-1", **overrides):
 
 
 def envelope(kind, **fields):
-    return SimpleNamespace(type=kind, **fields)
+    """A Live server event as JSON; the SDK yields models or dicts, both mappings."""
+    return {"type": kind, **fields}
 
 
 def backend(kind, delegation_id="delegation-1", **fields):
@@ -52,19 +53,50 @@ def backend(kind, delegation_id="delegation-1", **fields):
 
 
 def live_session(conversation_id, *events):
-    """Parsed Live events from session.started to session.closed."""
+    """Live server events from session.started to session.closed."""
     return [
         envelope(
             "session.started",
             conversation_id=conversation_id,
-            session=SimpleNamespace(
-                id=f"session-{conversation_id}",
-                audio=SimpleNamespace(format=SimpleNamespace(type="audio/pcm", rate=24000)),
-            ),
+            session={
+                "id": f"session-{conversation_id}",
+                "audio": {"format": {"type": "audio/pcm", "rate": 24000}},
+            },
         ),
         *events,
-        envelope("session.closed", reason="close_requested", usage=SimpleNamespace(seconds=1)),
+        envelope("session.closed", reason="close_requested", usage={"seconds": 1}),
     ]
+
+
+@contextlib.asynccontextmanager
+async def live_server(exchange):
+    """Serve exchange on a local ws:// port and route the SDK's wss:// Live handshake to it.
+
+    Yields the recorded handshakes as (url, ws_connect keyword arguments).
+    """
+    handshakes = []
+    connect = aiohttp.ClientSession.ws_connect
+
+    def loopback(session, url, **kwargs):
+        handshakes.append((url, kwargs))
+        return connect(session, f"ws://127.0.0.1:{port}", **kwargs)
+
+    async with serve(exchange, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        with patch.object(aiohttp.ClientSession, "ws_connect", loopback):
+            yield handshakes
+
+
+def play(events, received):
+    """A Live server that sends events, then records client commands until closed."""
+
+    async def exchange(socket):
+        for event in events:
+            await socket.send(json.dumps(event))
+        async for raw in socket:
+            received.append(json.loads(raw))
+
+    return exchange
 
 
 class PayloadTests(unittest.TestCase):
@@ -389,54 +421,64 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self, module, main_function, *, project=None, session_events=None,
         environment=None, **kwargs,
     ):
-        """Run a sample's main through the real Projects SDK against an offline project."""
+        """Run a sample's main through the real Projects SDK against an offline project.
+
+        With session_events, the SDK's Live client talks to a local WebSocket server
+        that plays them; otherwise any Live handshake fails the test.
+        """
         self.project = project or OfflineProject()
+        self.received = []
+        self.handshakes = []
         audio_factory = MagicMock(side_effect=AssertionError("Opened physical audio"))
-        self.sdk_factory = MagicMock(side_effect=AssertionError("Opened a real Live session"))
-        self.sdk = None
         self.transcript = MagicMock()
         self.transcript.stop_requested = asyncio.Event()
         self.transcript.__aenter__.return_value = self.transcript
-        if session_events is not None:
-            self.audio = OfflineAudio()
-            audio_factory = MagicMock(return_value=contextlib.nullcontext(self.audio))
-            self.connection = MagicMock()
-
-            async def stream():
-                for event in session_events:
-                    yield event
-
-            self.connection.__aiter__.side_effect = stream
-            self.connection.session.input_audio.append = AsyncMock()
-            self.connection.session.close = AsyncMock()
-            self.sdk = MagicMock()
-            self.sdk.__aenter__.return_value = self.sdk
-            self.sdk.live.connect.return_value.__aenter__.return_value = self.connection
-            self.sdk_factory = MagicMock(return_value=self.sdk)
 
         def project_client(**client_kwargs):
             return AIProjectClient(**client_kwargs, transport=self.project)
 
         output = io.StringIO()
-        with (
-            patch.dict(os.environ, {
+        async with contextlib.AsyncExitStack() as stack:
+            if session_events is None:
+                stack.enter_context(patch.object(
+                    aiohttp.ClientSession, "ws_connect",
+                    side_effect=AssertionError("Opened a real Live session"),
+                ))
+            else:
+                self.audio = OfflineAudio()
+                audio_factory = MagicMock(return_value=contextlib.nullcontext(self.audio))
+                self.handshakes = await stack.enter_async_context(
+                    live_server(play(session_events, self.received))
+                )
+            stack.enter_context(patch.dict(os.environ, {
                 "FOUNDRY_PROJECT_ENDPOINT": PROJECT_ENDPOINT,
                 "GPT_LIVE_DEPLOYMENT": "live-model",
                 "RESPONSE_DELEGATION_DEPLOYMENT": "text-model",
                 "AGENT_NAME": "",
                 **(environment or {}),
-            }),
-            patch.object(module, "project_credential", return_value=OfflineCredential()),
-            patch.object(module, "AIProjectClient", side_effect=project_client),
-            patch.object(module, "Audio", audio_factory),
-            patch.object(module, "AsyncOpenAI", self.sdk_factory),
-            patch.object(module, "TranscriptDisplay", return_value=self.transcript),
-            contextlib.redirect_stdout(output),
-        ):
+            }))
+            stack.enter_context(patch.object(module, "project_credential", return_value=OfflineCredential()))
+            stack.enter_context(patch.object(module, "AIProjectClient", side_effect=project_client))
+            stack.enter_context(patch.object(module, "Audio", audio_factory))
+            stack.enter_context(patch.object(module, "TranscriptDisplay", return_value=self.transcript))
+            stack.enter_context(contextlib.redirect_stdout(output))
             try:
                 await main_function(**kwargs)
             finally:
                 self.output = output.getvalue()
+
+    def assert_live_handshake(self, agent_name, version):
+        (url, kwargs), = self.handshakes
+        self.assertEqual(
+            url, f"wss://sample.services.ai.azure.com/api/projects/test/agents/{agent_name}"
+            "/endpoint/protocols/voice/live/sessions",
+        )
+        self.assertEqual(kwargs["params"]["x-agent-version-override"], version)
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer offline-test-token")
+        self.assertEqual(kwargs["headers"]["Foundry-Features"], "VoiceAgents=V1Preview")
+
+    def sent_commands(self):
+        return [command["type"] for command in self.received]
 
     async def run_managed(
         self, main_function=sample.main, *, project=None, session_events=None,
@@ -487,9 +529,12 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             "conversation-original",
             envelope(
                 "session.delegation.created",
-                delegation=SimpleNamespace(
-                    id="delegation-original", target="foundry_managed_agent"
-                ),
+                offset_ms=1000,
+                delegation={
+                    "id": "delegation-original",
+                    "type": "delegation",
+                    "target": "foundry_managed_agent",
+                },
             ),
             envelope(
                 "session.managed_delegation.completed",
@@ -502,13 +547,13 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Prompt agent delegation requested", str(self.transcript.mock_calls))
         self.assertIn("[commentary]", str(self.transcript.mock_calls))
         self.transcript.append_agent.assert_called_once_with("I went to school yesterday.")
-        self.connection.response.create.assert_not_called()
-        self.connection.response.item.create.assert_not_called()
-        self.connection.session.commentary.append.assert_not_called()
+        self.assertFalse({"response.create", "response.item.create", "session.commentary.append"}
+                         & set(self.sent_commands()))
         self.assertTrue(self.audio.started)
         self.assertTrue(self.audio.stopped)
         prompt, voice = self.project.created
         self.assertNotIn("tools", prompt["definition"])
+        self.assert_live_handshake(voice["name"], "3")
         self.assertEqual(self.project.deleted, [voice["name"], prompt["name"]])
         self.assertIn("Conversation id: conversation-original", self.output)
 
@@ -532,11 +577,11 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(definition["store"])
         self.assertEqual(self.project.deployment_checks(), ["live-model", "text-model"])
-        self.assertTrue(self.sdk_factory.call_args.kwargs["base_url"].endswith(
-            f"/agents/{agent['name']}/endpoint/protocols/voice"
-        ))
-        self.assertEqual(
-            self.sdk.live.connect.call_args.kwargs["extra_query"]["x-agent-version-override"], "3"
+        self.assert_live_handshake(agent["name"], "3")
+        # The sample passes raw PCM; the SDK sends it base64-encoded.
+        self.assertIn(
+            {"type": "session.input_audio.append", "audio": base64.b64encode(bytes(48)).decode()},
+            self.received,
         )
         self.assertIn("Conversation id: conversation-direct", self.output)
         self.assertEqual(self.project.deleted, [agent["name"]])
@@ -555,9 +600,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.project.created, [])
         self.assertEqual(self.project.deleted, [])
         self.assertEqual(self.project.deployment_checks(), ["saved-live", "saved-text"])
-        self.assertEqual(
-            self.sdk.live.connect.call_args.kwargs["extra_query"]["x-agent-version-override"], "5"
-        )
+        self.assert_live_handshake("teacher", "5")
 
     async def test_responses_sample_rejects_missing_or_realtime_agents(self):
         realtime = {"kind": "voice", "model": "realtime-model"}
@@ -568,7 +611,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                         direct, direct.main, project=OfflineProject(agents),
                         session_events=[], environment={"AGENT_NAME": "teacher"},
                     )
-                self.sdk_factory.assert_not_called()
+                self.assertEqual(self.handshakes, [])
                 self.assertEqual(self.project.deleted, [])
 
 
@@ -593,6 +636,19 @@ class OfflineAudio:
 
     async def drain(self):
         pass
+
+
+@contextlib.asynccontextmanager
+async def sdk_live_connection(exchange):
+    """A real Projects SDK Live connection whose WebSocket peer is exchange."""
+    async with (
+        live_server(exchange),
+        AIProjectClient(
+            endpoint=PROJECT_ENDPOINT, credential=OfflineCredential(), transport=OfflineProject()
+        ) as project,
+        project.beta.voice_agents.live.connect(agent_name="loopback-voice") as connection,
+    ):
+        yield connection
 
 
 class SDKLoopbackTests(unittest.IsolatedAsyncioTestCase):
@@ -639,22 +695,17 @@ class SDKLoopbackTests(unittest.IsolatedAsyncioTestCase):
                        delegation_id="delegation-1", spoken_text="The clock was checked.", background_context="")
             await send("session.output_transcript.delta", delta="The clock was checked.")
             await send("session.output_audio.delta", delta=base64.b64encode(bytes(48)).decode("ascii"))
-            await send("session.closed", reason="client_request", usage={"seconds": 1})
+            await send("session.closed", reason="close_requested", usage={"seconds": 1})
 
-        async with serve(exchange, "127.0.0.1", 0) as server:
-            port = server.sockets[0].getsockname()[1]
-            audio = OfflineAudio()
-            transcript = MagicMock()
-            transcript.stop_requested = asyncio.Event()
-            async with AsyncOpenAI(
-                api_key="offline-test-token", base_url=f"http://127.0.0.1:{port}/v1", max_retries=0
-            ) as client:
-                async with client.live.connect() as connection:
-                    async with asyncio.timeout(10):
-                        conversation_id = await converse(
-                            connection, audio, transcript, "tools-prompt:7",
-                            managed_delegation=True, event_handler=sample.ManagedToolHandler(),
-                        )
+        audio = OfflineAudio()
+        transcript = MagicMock()
+        transcript.stop_requested = asyncio.Event()
+        async with sdk_live_connection(exchange) as connection:
+            async with asyncio.timeout(10):
+                conversation_id = await converse(
+                    connection, audio, transcript, "tools-prompt:7",
+                    managed_delegation=True, event_handler=sample.ManagedToolHandler(),
+                )
         self.assertEqual(conversation_id, "conversation-offline")
         self.assertTrue(audio.started)
         self.assertTrue(audio.stopped)
@@ -683,28 +734,21 @@ class SDKLoopbackTests(unittest.IsolatedAsyncioTestCase):
             }))
             await socket.send(json.dumps({
                 "type": "session.closed",
-                "reason": "client_request",
+                "reason": "close_requested",
                 "usage": {"seconds": 1},
             }))
             async for raw in socket:
                 received.append(json.loads(raw))
 
+        transcript = MagicMock()
+        transcript.stop_requested = asyncio.Event()
         try:
-            async with serve(exchange, "127.0.0.1", 0) as server:
-                port = server.sockets[0].getsockname()[1]
-                transcript = MagicMock()
-                transcript.stop_requested = asyncio.Event()
-                async with AsyncOpenAI(
-                    api_key="offline-test-token",
-                    base_url=f"http://127.0.0.1:{port}/v1",
-                    max_retries=0,
-                ) as client:
-                    async with client.live.connect() as connection:
-                        async with asyncio.timeout(10):
-                            await converse(
-                                connection, OfflineAudio(), transcript,
-                                "plain-prompt:7", managed_delegation=True,
-                            )
+            async with sdk_live_connection(exchange) as connection:
+                async with asyncio.timeout(10):
+                    await converse(
+                        connection, OfflineAudio(), transcript,
+                        "plain-prompt:7", managed_delegation=True,
+                    )
         finally:
             # A notification must never cause client commentary or prompt execution.
             self.assertFalse(any(
