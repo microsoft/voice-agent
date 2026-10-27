@@ -2,6 +2,7 @@
 // The browser sends raw PCM16 microphone chunks and {"type":"stop"}; the server sends
 // JSON messages: status, ready, audio, transcript, delegation, error, and closed.
 import { DemoError, RATE } from "./agents.mjs";
+import { ManagedToolHandler } from "./tools.mjs";
 
 const BACKEND_STATUSES = {
   "response.created": "Backend response started",
@@ -21,11 +22,13 @@ const CLIENT_DELEGATION_REPLY =
  * their terminal panes. Throws DemoError for failures that should end the session.
  */
 export class LiveEventTranslator {
-  constructor({ managedDelegation, backendModel, send, appendCommentary }) {
+  constructor({ managedDelegation, backendModel, send, appendCommentary, toolHandler }) {
     this.managedDelegation = managedDelegation;
     this.backendModel = backendModel;
     this.send = send;
     this.appendCommentary = appendCommentary;
+    // Managed sessions run the prompt agent's local function calls; see tools.mjs.
+    this.toolHandler = toolHandler;
     this.title = managedDelegation ? "Managed delegation" : "Delegation";
     this.replied = new Set();
     this.forwarded = new Set();
@@ -37,6 +40,7 @@ export class LiveEventTranslator {
   }
 
   async handle(event) {
+    await this.toolHandler?.handle(event);
     switch (event.type) {
       case "session.started": {
         // Foundry adds conversation_id at the top level; it is not session.id.
@@ -152,20 +156,28 @@ export class LiveEventTranslator {
 }
 
 /**
- * Opens a Live session for `agent`, relays it to the browser socket until either side stops,
- * and resolves with the session's conversation ID and close reason.
+ * Opens a Live session for `agent` with openLive(agent) (see live_transport.mjs), relays it to
+ * the browser socket until either side stops, and resolves with the session's conversation ID
+ * and close reason.
  */
-export async function relaySession(socket, { project, agent, log = () => {} }) {
+export async function relaySession(socket, { openLive, agent, log = () => {} }) {
   const send = (message) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
   };
   let connection;
+  let sendRaw;
   let stopping = false;
   let sending = Promise.resolve();
   const translator = new LiveEventTranslator({
     ...agent,
     send,
     appendCommentary: (content, delegationId) => connection.appendCommentary(content, { delegationId }),
+    toolHandler: agent.managedDelegation
+      ? new ManagedToolHandler({
+          sendRaw: (event) => sendRaw(event),
+          report: (id, status) => send({ type: "delegation", id, title: "Managed prompt-agent tools", status }),
+        })
+      : undefined,
   });
   const stop = () => {
     if (stopping) return;
@@ -198,7 +210,7 @@ export async function relaySession(socket, { project, agent, log = () => {} }) {
     send({ type: "status", text: `Connecting to ${agent.name} version ${agent.version}...` });
     // The SDK opens the agent's .../endpoint/protocols/voice/live/sessions WebSocket with the
     // project credential and preview header, and resolves once Foundry sends session.started.
-    connection = await project.beta.voiceAgents.live.connect(agent.name, { agentVersionOverride: agent.version });
+    ({ connection, sendRaw } = await openLive(agent));
     if (stopping) {
       stopping = false;
       stop();

@@ -20,13 +20,16 @@ import {
   projectEndpoint,
 } from "./agents.mjs";
 import { relaySession } from "./live_relay.mjs";
+import { openLiveSession } from "./live_transport.mjs";
+import { toolsPromptAgentDefinition, toolsVoiceAgentDefinition } from "./tools.mjs";
 
 const USAGE = `Usage: node server.mjs [--managed] [--auto-delete] [--port 8080]
 
   (default)      Create an English-teacher GPT Live agent with Responses delegation,
                  or reuse AGENT_NAME from samples/gpt_live/.env.
-  --managed      Create a prompt agent and a GPT Live agent pinned to it (Foundry-managed
-                 delegation). Ignores AGENT_NAME.
+  --managed      Create a prompt agent with an MCP calculator and a local date/time function,
+                 and a GPT Live agent pinned to it (Foundry-managed delegation).
+                 Ignores AGENT_NAME.
   --auto-delete  Delete only the agents created by this run when the server stops.
   --port         Local port (default 8080). The server listens on 127.0.0.1 only.`;
 
@@ -49,8 +52,11 @@ export function downloadCommand(endpoint, agentName, conversationId) {
   );
 }
 
-/** Serves the page and relays /live WebSocket sessions to `agent`. Call listen(port) to start. */
-export function createServer({ project, agent, endpoint, keepAgent = true, log = () => {} }) {
+/**
+ * Serves the page and relays /live WebSocket sessions to `agent`, opened with openLive(agent).
+ * Call listen(port) to start.
+ */
+export function createServer({ openLive, agent, endpoint, keepAgent = true, log = () => {} }) {
   const sessions = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
   const server = http.createServer(async (request, response) => {
@@ -61,7 +67,11 @@ export function createServer({ project, agent, endpoint, keepAgent = true, log =
         JSON.stringify({
           agent: agent.name,
           version: agent.version,
-          delegation: agent.managedDelegation ? "Foundry-managed prompt agent" : "Responses",
+          delegation: agent.tools
+            ? "Foundry-managed prompt agent (MCP calculator, local date/time function)"
+            : agent.managedDelegation
+              ? "Foundry-managed prompt agent"
+              : "Responses",
           backend: agent.backendModel,
         }),
       );
@@ -90,7 +100,7 @@ export function createServer({ project, agent, endpoint, keepAgent = true, log =
     }
     wss.handleUpgrade(request, socket, head, (browser) => {
       log("Browser connected; starting a GPT Live session.");
-      const session = relaySession(browser, { project, agent, log }).then((result) => {
+      const session = relaySession(browser, { openLive, agent, log }).then((result) => {
         if (result.conversationId) {
           log(`Conversation id: ${result.conversationId}`);
           if (keepAgent) log(downloadCommand(endpoint, agent.name, result.conversationId));
@@ -122,7 +132,8 @@ export function createServer({ project, agent, endpoint, keepAgent = true, log =
 
 /**
  * Prepares the agents and starts the server. Tests pass credential and clientOptions (an
- * offline HTTP client and Live WebSocket factory); the command line uses az login.
+ * offline HTTP client, and liveOptions.webSocketFactory for Live sessions); the command line
+ * uses az login and the sample's Node.js WebSocket transport.
  * Resolves with { port, agent, stop }, where stop() closes sessions and cleans up agents.
  */
 export async function main({ argv = [], env = process.env, credential, clientOptions, log = console.log } = {}) {
@@ -144,7 +155,10 @@ export async function main({ argv = [], env = process.env, credential, clientOpt
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new DemoError("--port must be 0-65535.");
   const autoDelete = values["auto-delete"];
   const endpoint = projectEndpoint(env);
-  const project = createProject(endpoint, credential ?? projectCredential(env), clientOptions);
+  credential ??= projectCredential(env);
+  const project = createProject(endpoint, credential, clientOptions);
+  const webSocketFactory = clientOptions?.liveOptions?.webSocketFactory;
+  const openLive = (agent) => openLiveSession({ endpoint, credential, webSocketFactory }, agent);
   const created = [];
   const cleanup = async () => {
     if (autoDelete) await deleteAgents(project, created, log);
@@ -154,13 +168,19 @@ export async function main({ argv = [], env = process.env, credential, clientOpt
   let agent;
   try {
     agent = values.managed
-      ? await prepareManagedAgents(project, env, log, created)
+      ? {
+          ...(await prepareManagedAgents(project, env, log, created, {
+            promptDefinition: toolsPromptAgentDefinition,
+            voiceDefinition: toolsVoiceAgentDefinition,
+          })),
+          tools: true,
+        }
       : await prepareResponsesAgent(project, env, log, created);
   } catch (error) {
     await cleanup();
     throw error;
   }
-  const app = createServer({ project, agent, endpoint, keepAgent: !autoDelete || !created.includes(agent.name), log });
+  const app = createServer({ openLive, agent, endpoint, keepAgent: !autoDelete || !created.includes(agent.name), log });
   let listening;
   try {
     listening = await app.listen(port);

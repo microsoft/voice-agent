@@ -88,10 +88,16 @@ export class OfflineProject {
 let eventCount = 0;
 const event = (type, fields) => ({ type, event_id: `event-${++eventCount}`, ...fields });
 const SESSION = { id: "live_offline", audio: { format: { type: "audio/pcm", rate: 24000 } } };
+/** A managed session's delegation snapshot; the SDK refuses Responses commands for it. */
+export const MANAGED = { type: "foundry_managed_agent", agent_name: "prompt", agent_version: "7" };
 
 /** Live server events with the fields the SDK validates. */
 export const live = {
-  started: (conversationId) => event("session.started", { session: SESSION, conversation_id: conversationId }),
+  started: (conversationId, delegation) =>
+    event("session.started", {
+      session: delegation ? { ...SESSION, delegation } : SESSION,
+      conversation_id: conversationId,
+    }),
   user: (delta) => event("session.input_transcript.delta", { delta, start_ms: 0, end_ms: 100 }),
   teacher: (delta) => event("session.output_transcript.delta", { delta, start_ms: 100, end_ms: 200 }),
   audio: (pcm) => ({ type: "session.output_audio.delta", delta: Buffer.from(pcm).toString("base64") }),

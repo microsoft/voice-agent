@@ -6,7 +6,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import WebSocket from "ws";
 
 import { main } from "../server.mjs";
-import { ENV, OfflineProject, ScriptedLive, clientOptions, credential, live } from "./offline.mjs";
+import { DATETIME_TOOL_NAME, MCP_SERVER_URL } from "../tools.mjs";
+import { ENV, MANAGED, OfflineProject, ScriptedLive, clientOptions, credential, live } from "./offline.mjs";
 
 const MICROPHONE = Buffer.from(Array.from({ length: 4800 }, (_, index) => index % 256));
 
@@ -171,6 +172,42 @@ describe("managed prompt-agent server", () => {
     assert.deepEqual([...new Set(liveEndpoint.commands())], ["session.input_audio.append", "session.close"]);
     assert.equal(new URL(liveEndpoint.connects[0].url).searchParams.get("x-agent-version-override"), "3");
     assert.deepEqual(project.deleted, [voice.name, prompt.name]);
+  });
+
+  it("creates the tools prompt agent and returns local function results on the session", async () => {
+    const call = { type: "function_call", call_id: "call-1", name: DATETIME_TOOL_NAME, arguments: "{}" };
+    const { running, project, liveEndpoint } = await start({
+      argv: ["--managed", "--auto-delete"],
+      events: [
+        live.started("conversation-tools", MANAGED),
+        live.delegation("delegation-tools", "foundry_managed_agent"),
+        live.backend("delegation-tools", "response.created", { response: { id: "response-1" } }),
+        live.backend("delegation-tools", "response.output_item.done", { item: call }),
+        live.backend("delegation-tools", "response.completed", { response: { id: "response-1", output: [] } }),
+        live.teacher("It's 1:54 PM."),
+      ],
+    });
+    const config = await (await fetch(`http://127.0.0.1:${running.port}/config`)).json();
+    const messages = await browser(running.port);
+    await running.stop();
+    const [prompt, voice] = project.created;
+    assert.deepEqual(prompt.definition.tools.map((tool) => tool.type), ["mcp", "function"]);
+    assert.equal(prompt.definition.tools[0].server_url, MCP_SERVER_URL);
+    assert.match(voice.definition.instructions, /MCP calculator and a client-computer clock function/);
+    assert.match(config.delegation, /MCP calculator, local date\/time function/);
+    // The function output and one continuation go out on the same Live socket.
+    const commands = liveEndpoint.received.filter((command) => command.type.startsWith("response."));
+    assert.deepEqual(commands.map((command) => command.type), ["response.item.create", "response.create"]);
+    assert.equal(commands[0].item.type, "function_call_output");
+    assert.equal(commands[0].item.call_id, "call-1");
+    assert.ok("utc_datetime" in JSON.parse(commands[0].item.output));
+    assert.ok(
+      ofType(messages, "delegation").some(
+        (message) =>
+          message.title === "Managed prompt-agent tools" &&
+          message.status === "Local function results sent; resuming the prompt agent",
+      ),
+    );
   });
 
   it("rejects native client or responses targets without a fallback", async () => {

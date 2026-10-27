@@ -8,7 +8,7 @@ Delegation view. Choose direct Responses delegation or a versioned managed promp
 | Folder | Sample |
 | --- | --- |
 | [`python/`](python/README.md) | Terminal samples with the Python SDK: Responses delegation, managed prompt-agent delegation, and a managed prompt agent with MCP and local function tools. |
-| [`js/`](js/README.md) | A simple browser sample with the JavaScript SDK: a local Node.js server creates the agents and relays microphone audio from the page to GPT Live. |
+| [`js/`](js/README.md) | A simple browser sample with the JavaScript SDK: a local Node.js server creates the agents and relays microphone audio from the page to GPT Live. Its managed mode includes the MCP calculator and local date/time function. |
 
 The GPT Live APIs are not in a PyPI or npm release yet, so each sample installs a bundled
 preview SDK build from [`dist/`](../../dist/README.md).

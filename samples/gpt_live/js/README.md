@@ -6,9 +6,10 @@ GPT Live, Delegation, and You panes update.
 
 A small Node.js server does the Azure work with the preview `@azure/ai-projects` package. It
 creates or reuses the agents through `AIProjectClient.agents` and opens one GPT Live session
-per page through the SDK's Live client, `project.beta.voiceAgents.live.connect(...)`. The page
-streams microphone audio to the server and plays the audio it relays back. Your `az login`
-credential stays on the server; the browser never receives a token.
+per page with the SDK's Live client (`VoiceAgentLiveClient.connect(...)`, the class behind
+`project.beta.voiceAgents.live`). The page streams microphone audio to the server and plays the
+audio it relays back. Your `az login` credential stays on the server; the browser never
+receives a token.
 
 The GPT Live APIs are not in an npm release yet, so `package.json` installs the bundled
 preview package `dist/azure-ai-projects-2.10.0.tgz`; see
@@ -21,8 +22,10 @@ preview package `dist/azure-ai-projects-2.10.0.tgz`; see
 | `server.mjs` | Prepares the agents, serves the page on `127.0.0.1`, relays `/live` WebSocket sessions, and cleans up on Ctrl+C. |
 | `agents.mjs` | Settings, agent definitions, and the create/reuse/delete lifecycle, mirroring the Python samples. |
 | `live_relay.mjs` | Turns Live events into page messages, as the Python samples do for their panes, and forwards microphone audio. |
+| `tools.mjs` | The managed prompt agent's MCP calculator and local `get_current_datetime` function, and the handler that returns local function results. |
+| `live_transport.mjs` | Opens Live sessions over a small `ws` transport that also lets the sample send local function results (see below). |
 | `public/` | The page: `index.html`, `app.js`, `pcm-audio.js` (Web Audio capture and playback), `pcm-capture.js` (AudioWorklet), and `style.css`. |
-| `test/` | Offline agent, relay, and HTTP tests. |
+| `test/` | Offline agent, relay, tool, transport, and HTTP tests. |
 | `package.json` / `package-lock.json` | Dependencies, including the bundled preview `@azure/ai-projects` package. |
 
 ## How to run
@@ -55,16 +58,28 @@ Delegation pane shows each delegation's status and the Responses backend's guida
 separate from what the teacher says. A client-target delegation receives commentary tied to
 its ID; a backend failure ends the session with an error.
 
-### Managed prompt-agent delegation
+### Managed prompt-agent delegation with MCP and local function tools
 
 ```powershell
 npm run managed
 ```
 
-This creates two fresh agents and ignores `AGENT_NAME`: an English-teacher prompt agent with
-a `[commentary]`/`[thinking]` tagged-text contract, then a GPT Live voice agent pinned to the
-prompt agent's exact returned version with `"type": "foundry_managed_agent"`. Foundry runs the
-prompt agent and forwards accepted guidance; the page only streams audio and shows events:
+This is the browser version of the Python
+[managed prompt agent with MCP and local function tools](../python/README.md#managed-prompt-agent-with-mcp-and-local-function-tools).
+It creates two fresh agents and ignores `AGENT_NAME`: an English-teacher prompt agent with a
+`[commentary]`/`[thinking]` tagged-text contract and two tools, then a GPT Live voice agent
+pinned to the prompt agent's exact returned version with `"type": "foundry_managed_agent"`.
+
+- **MCP calculator:** the public, unauthenticated
+  `https://voice-mcp-auth-tests.graysky-8afcdfd2.eastus2.azurecontainerapps.io/noauth/mcp`
+  server, exposing only `add(a, b)` for integers, with `require_approval: "never"`. Foundry
+  calls it directly. This test endpoint is not a production dependency.
+- **`get_current_datetime`:** a local function that returns the server computer's local time,
+  IANA timezone, and UTC time as ISO 8601 timestamps with offsets. It takes no arguments.
+
+Try **"What is 17 plus 25?"**, **"What is the current date and time?"**, or **"Please correct
+my English: I goed to school yesterday."** Foundry runs the prompt agent and forwards accepted
+guidance; the page streams audio and shows events:
 
 - `session.delegation.created` with `target: "foundry_managed_agent"` reports Foundry's
   ownership. Native `client` or `responses` targets end the session, with no fallback executor.
@@ -73,6 +88,26 @@ prompt agent and forwards accepted guidance; the page only streams audio and sho
 - Each `session.commentary.appended` or `session.thinking.appended` marks the latest
   delegation's accepted guidance as forwarded to GPT Live. Backend failures stay visible
   without ending the session.
+- When the prompt agent calls `get_current_datetime`, the server collects the completed
+  `function_call` items from `response.event`, waits for `response.completed`, sends each
+  `function_call_output` with `response.item.create`, then sends one `response.create` to resume
+  the same managed delegation. The Delegation pane briefly shows **Managed prompt-agent tools:
+  Local function results sent**. MCP calls run on the service and are never executed locally.
+
+The server answers local function calls in every managed session, including an `AGENT_NAME`
+agent with managed delegation; it answers unknown functions with an error result.
+
+#### Why the sample supplies its own WebSocket transport
+
+This preview JS SDK refuses `response.item.create` and `response.create` unless the session
+uses Responses delegation (`Responses commands require a Responses delegation.`), so
+`sendToolOutput` cannot return a function result in a managed session. The service accepts
+these commands in managed mode, and the Python SDK sends them. The SDK also doesn't export its
+own Node.js transport. So `live_transport.mjs` opens each session with `VoiceAgentLiveClient`
+and a small `ws` transport passed through the public `webSocketFactory` option, keeps a handle
+on that transport, and sends the two commands on it directly. Everything else, including the
+handshake, authentication, and event parsing, still goes through the SDK. Unlike the SDK's
+built-in transport, this one doesn't apply `HTTPS_PROXY` settings.
 
 ### Keeping or deleting agents
 
@@ -90,7 +125,8 @@ so other websites cannot use your credential through it.
 
 Run the offline tests (no Azure resources, browser, or audio devices). They drive the real
 Projects SDK client: agent calls go to an in-memory HTTP client, the Live client talks to a
-scripted WebSocket transport, and a `ws` client stands in for the page.
+scripted WebSocket transport, and a `ws` client stands in for the page. The sample's own
+transport is tested against a local `ws` server.
 
 ```powershell
 npm test

@@ -242,9 +242,16 @@ export async function prepareResponsesAgent(project, env, log, created) {
 
 /**
  * Creates a prompt agent, then a GPT Live voice agent pinned to its returned version. Always
- * creates fresh agents and ignores AGENT_NAME. Created agent names go into `created`.
+ * creates fresh agents and ignores AGENT_NAME. Created agent names go into `created`. The
+ * definition builders default to the plain English teacher; server.mjs passes the tools ones.
  */
-export async function prepareManagedAgents(project, env, log, created) {
+export async function prepareManagedAgents(
+  project,
+  env,
+  log,
+  created,
+  { promptDefinition = promptAgentDefinition, voiceDefinition = managedVoiceAgentDefinition } = {},
+) {
   const deployments = {
     GPT_LIVE_DEPLOYMENT: required(env, "GPT_LIVE_DEPLOYMENT"),
     RESPONSE_DELEGATION_DEPLOYMENT: required(env, "RESPONSE_DELEGATION_DEPLOYMENT"),
@@ -257,14 +264,14 @@ export async function prepareManagedAgents(project, env, log, created) {
 
   // 1. Create the same-project prompt agent and use its returned version.
   const prompt = await serviceCall("Create prompt agent", () =>
-    project.agents.create(promptName, promptAgentDefinition(deployments.RESPONSE_DELEGATION_DEPLOYMENT)),
+    project.agents.create(promptName, promptDefinition(deployments.RESPONSE_DELEGATION_DEPLOYMENT)),
   );
   created.push(promptName);
   const promptVersion = String(prompt.versions.latest.version);
   log(`Created prompt agent: ${promptName}:${promptVersion}`);
 
   // 2. Create GPT Live with a pinned managed-agent reference, NOT responses.
-  const definition = managedVoiceAgentDefinition(deployments.GPT_LIVE_DEPLOYMENT, promptName, promptVersion);
+  const definition = voiceDefinition(deployments.GPT_LIVE_DEPLOYMENT, promptName, promptVersion);
   const voice = await serviceCall("Create GPT Live voice agent", () =>
     project.agents.create(voiceName, definition, PREVIEW),
   );
