@@ -1,17 +1,10 @@
-// Offline tests for the managed prompt agent's tools and local function continuation.
+// Offline tests for the managed prompt agent's tools and the page's local function continuation.
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
-import { DemoError, PROMPT_INSTRUCTIONS } from "../agents.mjs";
-import {
-  DATETIME_TOOL_NAME,
-  MCP_SERVER_URL,
-  ManagedToolHandler,
-  executeFunction,
-  getCurrentDatetime,
-  toolsPromptAgentDefinition,
-  toolsVoiceAgentDefinition,
-} from "../tools.mjs";
+import { PROMPT_INSTRUCTIONS } from "../agents.mjs";
+import { DATETIME_TOOL_NAME, ManagedToolHandler, executeFunction, getCurrentDatetime } from "../public/local-tools.js";
+import { MCP_SERVER_URL, toolsPromptAgentDefinition, toolsVoiceAgentDefinition } from "../tools.mjs";
 
 const functionCall = (callId = "call-1", overrides = {}) => ({
   type: "function_call",
@@ -161,7 +154,7 @@ describe("ManagedToolHandler", () => {
   });
 
   it("rejects missing response IDs, changed calls, and reused call IDs", async () => {
-    await assert.rejects(done(functionCall(), "no-response"), (error) => error instanceof DemoError && /correlated response/.test(error.message));
+    await assert.rejects(done(functionCall(), "no-response"), /correlated response/);
     await done();
     await assert.rejects(done(functionCall("call-1", { arguments: '{"unexpected":true}' })), /changed/);
     await completed();

@@ -1,8 +1,8 @@
-// Relays one browser WebSocket to one GPT Live session opened with the Projects SDK.
-// The browser sends raw PCM16 microphone chunks and {"type":"stop"}; the server sends
-// JSON messages: status, ready, audio, transcript, delegation, error, and closed.
-import { DemoError, RATE } from "./agents.mjs";
-import { ManagedToolHandler } from "./tools.mjs";
+// Runs one GPT Live session in the page with the Projects SDK. The page passes raw PCM16
+// microphone chunks to sendAudio() and calls stop(); the session reports UI messages to
+// onMessage: status, ready, audio, transcript, delegation, error, and closed.
+import { ManagedToolHandler } from "./local-tools.js";
+import { RATE } from "./pcm-audio.js";
 
 const BACKEND_STATUSES = {
   "response.created": "Backend response started",
@@ -17,9 +17,15 @@ const BACKEND_FAILURES = new Set(["error", "response.failed", "response.incomple
 const CLIENT_DELEGATION_REPLY =
   "This demo uses a Responses backend, not a client executor. Please continue the English lesson.";
 
+/** A one-line description of an error, including the cause the SDK wraps. */
+export function describeError(error) {
+  const text = !error?.name || error.name === "Error" ? String(error?.message ?? error) : `${error.name}: ${error.message}`;
+  return error?.cause?.message ? `${text} ${error.cause.message}` : text;
+}
+
 /**
- * Turns Live events into browser messages, as the Python samples' converse() loop does for
- * their terminal panes. Throws DemoError for failures that should end the session.
+ * Turns Live events into UI messages, as the Python samples' converse() loop does for
+ * their terminal panes. Throws for failures that should end the session.
  */
 export class LiveEventTranslator {
   constructor({ managedDelegation, backendModel, send, appendCommentary, toolHandler }) {
@@ -27,7 +33,7 @@ export class LiveEventTranslator {
     this.backendModel = backendModel;
     this.send = send;
     this.appendCommentary = appendCommentary;
-    // Managed sessions run the prompt agent's local function calls; see tools.mjs.
+    // Managed sessions run the prompt agent's local function calls; see local-tools.js.
     this.toolHandler = toolHandler;
     this.title = managedDelegation ? "Managed delegation" : "Delegation";
     this.replied = new Set();
@@ -47,7 +53,7 @@ export class LiveEventTranslator {
         this.conversationId = event.conversation_id || undefined;
         const format = event.session?.audio?.format;
         if (format && (format.type !== "audio/pcm" || format.rate !== RATE)) {
-          throw new DemoError("The negotiated format is not the requested PCM16/24 kHz.");
+          throw new Error("The negotiated format is not the requested PCM16/24 kHz.");
         }
         this.ready = true;
         this.send({ type: "ready", sessionId: event.session.id, conversationId: this.conversationId });
@@ -55,9 +61,9 @@ export class LiveEventTranslator {
       }
       case "error":
       case "transport.failed":
-        throw new DemoError(`Live error: ${event.error?.message ?? event.type}`);
+        throw new Error(`Live error: ${event.error?.message ?? event.type}`);
       case "session.output_audio.delta":
-        // Base64 PCM16 at 24 kHz, passed through for the browser to play.
+        // Base64 PCM16 at 24 kHz, passed through for the page to play.
         this.send({ type: "audio", delta: event.delta });
         break;
       case "session.input_transcript.delta":
@@ -90,7 +96,7 @@ export class LiveEventTranslator {
         this.closeReason = event.reason;
         this.usageSeconds = event.usage?.seconds;
         if (event.reason === "connection_lost") {
-          throw new DemoError("Upstream connection was lost; native finalization is not confirmed.");
+          throw new Error("Upstream connection was lost; native finalization is not confirmed.");
         }
         break;
     }
@@ -102,7 +108,7 @@ export class LiveEventTranslator {
       // Managed sessions keep the native event, but Foundry reports itself as the owner:
       // the client must not execute the prompt agent or send commentary.
       if (target !== "foundry_managed_agent") {
-        throw new DemoError(
+        throw new Error(
           `Expected Foundry-managed delegation, but received delegation target '${target}'. ` +
             "Check that the service supports foundry_managed_agent with tagged_text; no client fallback was run.",
         );
@@ -148,7 +154,7 @@ export class LiveEventTranslator {
       });
     }
     if (BACKEND_FAILURES.has(kind) && !this.managedDelegation) {
-      throw new DemoError(`Teaching backend reported ${kind}; check its deployment and configuration.`);
+      throw new Error(`Teaching backend reported ${kind}; check its deployment and configuration.`);
     }
     // Foundry owns the managed fallback; keep the failure visible without retrying the
     // backend or interrupting GPT Live.
@@ -156,80 +162,72 @@ export class LiveEventTranslator {
 }
 
 /**
- * Opens a Live session for `agent` with openLive(agent) (see live_transport.mjs), relays it to
- * the browser socket until either side stops, and resolves with the session's conversation ID
- * and close reason.
+ * One GPT Live session for `agent`, opened with openLive(agent) (see live-transport.js).
+ * run() resolves with the conversation ID and close reason once the session ends.
  */
-export async function relaySession(socket, { openLive, agent, log = () => {} }) {
-  const send = (message) => {
-    if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
-  };
-  let connection;
-  let sendRaw;
-  let stopping = false;
-  let sending = Promise.resolve();
-  const translator = new LiveEventTranslator({
-    ...agent,
-    send,
-    appendCommentary: (content, delegationId) => connection.appendCommentary(content, { delegationId }),
-    toolHandler: agent.managedDelegation
-      ? new ManagedToolHandler({
-          sendRaw: (event) => sendRaw(event),
-          report: (id, status) => send({ type: "delegation", id, title: "Managed prompt-agent tools", status }),
-        })
-      : undefined,
-  });
-  const stop = () => {
-    if (stopping) return;
-    stopping = true;
-    send({ type: "status", text: "Closing; waiting for session.closed..." });
-    // Sends session.close, waits for session.closed, then closes the Live socket.
-    connection?.close().catch((error) => log(`Live close failed: ${error.message}`));
-  };
-
-  socket.on("message", (data, isBinary) => {
-    if (!isBinary) {
-      let message;
-      try {
-        message = JSON.parse(String(data));
-      } catch {
-        message = undefined;
-      }
-      if (message?.type === "stop") stop();
-      return;
-    }
-    if (!connection || stopping || !translator.ready) return;
-    // Raw PCM16 microphone audio; the SDK base64-encodes it for session.input_audio.append.
-    const pcm = data.subarray(0, data.length - (data.length % 2));
-    sending = sending.then(() => connection.sendAudio(pcm)).catch(() => {});
-  });
-  socket.on("close", stop);
-
-  let failure;
-  try {
-    send({ type: "status", text: `Connecting to ${agent.name} version ${agent.version}...` });
-    // The SDK opens the agent's .../endpoint/protocols/voice/live/sessions WebSocket with the
-    // project credential and preview header, and resolves once Foundry sends session.started.
-    ({ connection, sendRaw } = await openLive(agent));
-    if (stopping) {
-      stopping = false;
-      stop();
-    }
-    for await (const event of connection) await translator.handle(event);
-  } catch (error) {
-    failure = error;
-    send({ type: "error", message: error instanceof DemoError ? error.message : `${error.name}: ${error.message}` });
-    log(`Live session failed: ${error.message}`);
-    stopping = true;
-    await connection?.close().catch(() => {});
+export class LiveSession {
+  constructor({ openLive, agent, onMessage, log = () => {} }) {
+    this.openLive = openLive;
+    this.agent = agent;
+    this.onMessage = onMessage;
+    this.log = log;
+    this.stopping = false;
+    this.sending = Promise.resolve();
+    this.translator = new LiveEventTranslator({
+      ...agent,
+      send: onMessage,
+      appendCommentary: (content, delegationId) => this.connection.appendCommentary(content, { delegationId }),
+      toolHandler: agent.managedDelegation
+        ? new ManagedToolHandler({
+            sendRaw: (event) => this.sendRaw(event),
+            report: (id, status) => onMessage({ type: "delegation", id, title: "Managed prompt-agent tools", status }),
+          })
+        : undefined,
+    });
   }
-  const result = {
-    conversationId: translator.conversationId,
-    closeReason: translator.closeReason,
-    usageSeconds: translator.usageSeconds,
-    failure,
-  };
-  send({ type: "closed", ...result, failure: undefined });
-  if (socket.readyState === socket.OPEN) socket.close(1000, "Live session ended.");
-  return result;
+
+  /** Streams one raw PCM16 microphone chunk once the session has started. */
+  sendAudio(chunk) {
+    if (!this.connection || this.stopping || !this.translator.ready) return;
+    const bytes = new Uint8Array(chunk);
+    // The SDK base64-encodes the audio for session.input_audio.append.
+    const pcm = bytes.subarray(0, bytes.length - (bytes.length % 2));
+    this.sending = this.sending.then(() => this.connection.sendAudio(pcm)).catch(() => {});
+  }
+
+  stop() {
+    if (this.stopping) return;
+    this.stopping = true;
+    this.onMessage({ type: "status", text: "Closing; waiting for session.closed..." });
+    // Sends session.close, waits for session.closed, then closes the Live socket.
+    this.connection?.close().catch((error) => this.log(`Live close failed: ${error.message}`));
+  }
+
+  async run() {
+    let failure;
+    try {
+      this.onMessage({ type: "status", text: `Connecting to ${this.agent.name} version ${this.agent.version}...` });
+      // The SDK opens the agent's .../endpoint/protocols/voice/live/sessions WebSocket and
+      // resolves once Foundry sends session.started.
+      ({ connection: this.connection, sendRaw: this.sendRaw } = await this.openLive(this.agent));
+      if (this.stopping) {
+        this.stopping = false;
+        this.stop();
+      }
+      for await (const event of this.connection) await this.translator.handle(event);
+    } catch (error) {
+      failure = error;
+      this.onMessage({ type: "error", message: describeError(error) });
+      this.log(`Live session failed: ${describeError(error)}`);
+      this.stopping = true;
+      await this.connection?.close().catch(() => {});
+    }
+    const result = {
+      conversationId: this.translator.conversationId,
+      closeReason: this.translator.closeReason,
+      usageSeconds: this.translator.usageSeconds,
+    };
+    this.onMessage({ type: "closed", ...result });
+    return { ...result, failure };
+  }
 }

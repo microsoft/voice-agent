@@ -1,25 +1,32 @@
-// Browser side of the GPT Live sample: microphone in, teacher audio out, three text panes.
-// The page only talks to the local server; the server holds the Azure credential.
-import { PcmAudio } from "/pcm-audio.js";
+// Page side of the GPT Live sample: microphone in, teacher audio out, three text panes.
+// The page opens the GPT Live session itself with the Projects SDK. The local server only
+// creates the agents and returns an access token from your az login session.
+import { LiveSession } from "./live-session.js";
+import { openLiveSession } from "./live-transport.js";
+import { PcmAudio } from "./pcm-audio.js";
 
 const $ = (id) => document.getElementById(id);
 const startButton = $("start");
 const stopButton = $("stop");
 const statusLine = $("status");
+const downloadHint = $("download");
 const panes = { teacher: $("teacher"), user: $("user") };
 const delegationPane = $("delegation");
 const delegations = new Map();
-let socket;
+let config;
+let session;
 let audio;
 let microphone;
 let lastRole;
 let failed = false;
 
-fetch("/config")
+const loaded = fetch("/config")
   .then((response) => response.json())
-  .then((config) => {
+  .then((value) => {
+    config = value;
     $("agent").textContent =
-      `Agent ${config.agent}, version ${config.version} · ${config.delegation} delegation → ${config.backend}`;
+      `Agent ${config.agent.name}, version ${config.agent.version} · ` +
+      `${config.delegation} delegation → ${config.agent.backendModel}`;
   })
   .catch(() => {
     $("agent").textContent = "Could not read the agent configuration from the server.";
@@ -69,16 +76,23 @@ function updateDelegation({ id, title, status, delta }) {
   scrollToEnd(delegationPane);
 }
 
+/** The shared Python downloader's command; shown only for agents the server keeps. */
+function showDownloadCommand(conversationId) {
+  if (!config.downloader || !conversationId) return;
+  downloadHint.textContent =
+    `Set AZURE_VOICE_AGENTS_ENDPOINT to ${config.endpoint}, then run from the repository root:\n` +
+    `python "${config.downloader}" "${config.agent.name}" "${conversationId}"`;
+  downloadHint.hidden = false;
+}
+
 async function handle(message) {
   switch (message.type) {
     case "status":
-      setStatus(message.text);
+      if (!failed) setStatus(message.text);
       break;
     case "ready":
       setStatus("Ready. Speak into your microphone; click Stop to end the lesson.");
-      await audio.startCapture(microphone, (chunk) => {
-        if (socket?.readyState === WebSocket.OPEN) socket.send(chunk);
-      });
+      await audio.startCapture(microphone, (chunk) => session?.sendAudio(chunk));
       break;
     case "audio":
       audio.play(message.delta);
@@ -97,11 +111,10 @@ async function handle(message) {
       const summary = [
         message.closeReason ? `Session closed: ${message.closeReason}` : "Session ended",
         message.usageSeconds !== undefined ? `Live usage ${message.usageSeconds} s` : undefined,
-        message.conversationId
-          ? `Conversation id ${message.conversationId} (the server console prints a download command)`
-          : undefined,
+        message.conversationId ? `Conversation id ${message.conversationId}` : undefined,
       ].filter(Boolean);
       setStatus(failed ? `${statusLine.textContent} ${summary.join(". ")}.` : `${summary.join(". ")}.`, failed);
+      showDownloadCommand(message.conversationId);
       break;
     }
   }
@@ -113,50 +126,49 @@ function releaseMicrophone() {
   microphone = undefined;
 }
 
-function finish() {
-  releaseMicrophone();
-  socket = undefined;
-  startButton.disabled = false;
-  stopButton.disabled = true;
-}
-
 startButton.addEventListener("click", async () => {
   startButton.disabled = true;
   failed = false;
   lastRole = undefined;
   delegations.clear();
+  downloadHint.hidden = true;
   for (const pane of [...Object.values(panes), delegationPane]) pane.replaceChildren();
   // Create audio in the click handler so the browser allows playback; replace any
   // previous session's context only now, so its last reply could finish playing.
   audio?.close();
   audio = new PcmAudio();
   try {
+    await loaded;
+    if (!config) throw new Error("The agent configuration is unavailable; check the server console.");
     setStatus("Waiting for microphone permission…");
     microphone = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
-    socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/live`);
-    socket.binaryType = "arraybuffer";
-    socket.addEventListener("message", (event) =>
-      handle(JSON.parse(event.data)).catch((error) => {
-        failed = true;
-        setStatus(error.message, true);
-        stopButton.click();
-      }),
-    );
-    socket.addEventListener("close", finish);
+    session = new LiveSession({
+      openLive: (agent) => openLiveSession({ endpoint: config.endpoint }, agent),
+      agent: config.agent,
+      onMessage: (message) =>
+        handle(message).catch((error) => {
+          failed = true;
+          setStatus(error.message, true);
+          stopButton.click();
+        }),
+      log: (line) => console.warn(line),
+    });
     stopButton.disabled = false;
+    await session.run();
   } catch (error) {
+    failed = true;
     setStatus(error.message, true);
-    finish();
   }
+  releaseMicrophone();
+  session = undefined;
+  startButton.disabled = false;
+  stopButton.disabled = true;
 });
 
 stopButton.addEventListener("click", () => {
   stopButton.disabled = true;
   releaseMicrophone();
-  if (socket?.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "stop" }));
-    if (!failed) setStatus("Closing; waiting for session.closed…");
-  }
+  session?.stop();
 });

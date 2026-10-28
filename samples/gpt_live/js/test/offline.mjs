@@ -1,5 +1,5 @@
 // Offline stand-ins for the tests: an in-memory Foundry project behind the real Projects SDK
-// HTTP pipeline, and a scripted Live WebSocket transport for the SDK's Live client.
+// HTTP pipeline, and a scripted Live WebSocket transport for the page's SDK Live client.
 import assert from "node:assert/strict";
 
 export const ENDPOINT = "https://sample.services.ai.azure.com/api/projects/test";
@@ -163,8 +163,5 @@ export class ScriptedLive {
   }
 }
 
-/** SDK client options that route REST to `project` and Live sessions to `liveEndpoint`. */
-export const clientOptions = (project, liveEndpoint) => ({
-  httpClient: project,
-  liveOptions: { webSocketFactory: liveEndpoint },
-});
+/** SDK client options that route the server's REST calls to `project`. */
+export const clientOptions = (project) => ({ httpClient: project });

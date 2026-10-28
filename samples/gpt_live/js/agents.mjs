@@ -90,7 +90,7 @@ export function projectCredential(env) {
   return new AzureCliCredential({ subscription: env.AZURE_SUBSCRIPTION_ID?.trim() || undefined });
 }
 
-/** One client manages agents over REST and opens Live WebSocket sessions with the same credential. */
+/** Manages agents over REST; the page opens the Live sessions itself (public/live-transport.js). */
 export function createProject(endpoint, credential, clientOptions) {
   return new AIProjectClient(endpoint, credential, clientOptions);
 }

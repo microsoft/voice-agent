@@ -1,5 +1,8 @@
 // Microphone capture and speaker playback of mono PCM16 at 24 kHz with the Web Audio API.
 
+/** PCM16 mono sample rate used in both directions. */
+export const RATE = 24000;
+
 /** Decodes base64 little-endian PCM16 into Web Audio samples. */
 export function decodePcm(base64) {
   const binary = atob(base64);
@@ -15,7 +18,7 @@ export function decodePcm(base64) {
 export class PcmAudio {
   /** Create during a click so the browser allows audio playback. */
   constructor() {
-    this.context = new AudioContext({ sampleRate: 24000 });
+    this.context = new AudioContext({ sampleRate: RATE });
     this.nextTime = 0;
     this.resumed = this.context.resume();
   }
@@ -23,7 +26,7 @@ export class PcmAudio {
   /** Sends each 100 ms microphone chunk (an ArrayBuffer of PCM16) to onChunk. */
   async startCapture(stream, onChunk) {
     await this.resumed;
-    if (this.context.sampleRate !== 24000) {
+    if (this.context.sampleRate !== RATE) {
       throw new Error("This browser cannot run audio at 24 kHz. Use Chrome or Edge.");
     }
     await this.context.audioWorklet.addModule("/pcm-capture.js");
@@ -49,7 +52,7 @@ export class PcmAudio {
   play(base64) {
     const samples = decodePcm(base64);
     if (!samples.length) return;
-    const buffer = this.context.createBuffer(1, samples.length, 24000);
+    const buffer = this.context.createBuffer(1, samples.length, RATE);
     buffer.copyToChannel(samples, 0);
     const node = this.context.createBufferSource();
     node.buffer = buffer;
