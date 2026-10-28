@@ -15,7 +15,7 @@ import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
@@ -52,8 +52,11 @@ def truncation_update(session):
         include = []
     if not isinstance(include, list) or any(not isinstance(value, str) for value in include):
         raise SessionConfigurationError("Azure returned an invalid session include list.")
-    include = list(dict.fromkeys([*include, TRUNCATED_ITEM_INCLUDE]))
-    vad = {**vad, "auto_truncate": True, "interrupt_response": True}
+    auto_truncate = session.get("model") not in {FLASH_MODEL, "azure-realtime-flash-1"}
+    include = list(dict.fromkeys(
+        [*include, TRUNCATED_ITEM_INCLUDE] if auto_truncate else
+        [value for value in include if value != TRUNCATED_ITEM_INCLUDE]))
+    vad = {**vad, "auto_truncate": auto_truncate, "interrupt_response": True}
     settings = {"include": include}
     if stable:
         settings.update({"type": "realtime", "audio": {"input": {"turn_detection": vad}}})
@@ -67,6 +70,7 @@ class SessionConfiguration:
     update: dict | None = None
     session_id: str | None = None
     ready: bool = False
+    closed: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def observe(self, frame, upstream):
         # The first session.updated applies the saved agent, unlike session.created.
@@ -80,15 +84,18 @@ class SessionConfiguration:
             return False
         expected = self.update["session"]
         stable = "audio" in expected
+        expected_vad = expected["audio"]["input"]["turn_detection"] if stable else expected["turn_detection"]
         vad = ((session.get("audio") or {}).get("input") or {}).get("turn_detection") if stable else session.get("turn_detection")
         include = session.get("include", [])
         if (session.get("id") != self.session_id or not isinstance(vad, dict)
-                or vad.get("auto_truncate") is not True or vad.get("interrupt_response") is not True
+                or vad.get("auto_truncate") is not expected_vad["auto_truncate"]
+                or vad.get("interrupt_response") is not True
                 or not isinstance(include, list)
+                or (not expected_vad["auto_truncate"] and TRUNCATED_ITEM_INCLUDE in include)
                 or any(value not in include for value in expected["include"])):
             self.ready = False
             raise SessionConfigurationError(
-                "Azure did not acknowledge auto_truncate, interrupt_response and the retained-item include selector. "
+                "Azure did not acknowledge the requested auto_truncate, interrupt_response and retained-item include settings. "
                 "Input remains disabled; check support for this agent endpoint/API version.")
         first_ack = not self.ready
         self.ready = True
@@ -102,7 +109,8 @@ HD_VOICES = {f"en-US-{name}:DragonHDLatestNeural" for name in ("Tessa", "Tyler",
     "en-IN-Diya:DragonHDLatestNeural", "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-Xiaoke:DragonHDFlashLatestNeural"}
 MAI_FLASH_VOICES = {"en-US-Harper:MAI-Voice-2.1-Flash", "en-GB-Harry:MAI-Voice-2.1-Flash"}
 NATIVE_VOICES = {"ava", "andrew", "emma", "clara", "liam", "natasha", "rayn", "alvaro", "dalia", "jorge"}
-MODELS = {"gpt-realtime-2.1", "azure-realtime", "gpt-5.4"}
+FLASH_MODEL = "azure-realtime-flash-2026-10-14"
+MODELS = {"gpt-realtime-2.1", "gpt-realtime-2.1-mini", "azure-realtime", FLASH_MODEL, "gpt-5.4"}
 LIVE_MODEL = "gpt-live-1"
 TRANSCRIPTION_MODELS = {
     "azure-speech", "azure-speech-streaming", "azure-llm-speech",
@@ -373,7 +381,8 @@ class Settings:
             raise ValueError("Unsupported transport.")
         project = self.project_url().replace("https://", "wss://", 1)
         params = {"api-version": self.api_version,
-                  "agent_session_id": f"web-{uuid.uuid4().hex}", "store": "true"}
+                  "agent_session_id": f"web-{uuid.uuid4().hex}", "store": "true",
+                  "features": "include_estimated_cost:true"}
         # The default service transport is WebSocket; only WebRTC needs a selector.
         if transport == "webrtc":
             params["transport"] = "webrtc"
@@ -579,8 +588,12 @@ def model_definition(definition, model, transcription=None):
         raise AgentPreparationError("Choose one of the supported transcription models.")
     updated = copy.deepcopy(definition)
     updated["model_type"], updated["model"] = "managed", model
+    if model == FLASH_MODEL:
+        updated.pop("greeting", None)
     audio = updated.setdefault("audio", {})
     input_audio, output = audio.setdefault("input", {}), audio.setdefault("output", {})
+    if model == FLASH_MODEL and isinstance(input_audio.get("turn_detection"), dict):
+        input_audio["turn_detection"]["auto_truncate"] = False
     if transcription is not None:
         settings = input_audio.get("transcription")
         input_audio["transcription"] = {**(settings if isinstance(settings, dict) else {}), "model": transcription}
@@ -694,6 +707,11 @@ async def change_agent_model(request):
                         if not isinstance(source, dict) or source.get("sub_protocol") == "live":
                             raise AgentPreparationError("The original realtime definition could not be verified.")
                         metadata.pop("realtime_source_version", None)
+                    if body["model"] == FLASH_MODEL and "greeting" in source:
+                        metadata.setdefault("flash_greeting", json.dumps(source["greeting"]))
+                    elif body["model"] != FLASH_MODEL and "flash_greeting" in metadata:
+                        source = copy.deepcopy(source)
+                        source["greeting"] = json.loads(metadata.pop("flash_greeting"))
                     definition = model_definition(source, body["model"], body.get("transcriptionModel"))
                 if definition != latest["definition"]:
                     url = f"{cfg.project_url()}/agents/{quote(cfg.agent, safe='')}/versions"
@@ -825,7 +843,7 @@ async def manage_agent(request, *, recreate=False, inspect=False):
 
 async def asset(request):
     name = request.match_info.get("file", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "favicon.svg", "pcm-audio.mjs", "pcm-capture.js", "retained-history.mjs", "weather.mjs", "city-scenes.mjs", "city-nature.mjs"}:
+    if name not in {"index.html", "app.js", "style.css", "favicon.svg", "pcm-audio.mjs", "pcm-capture.js", "retained-history.mjs", "call-cost.mjs", "weather.mjs", "city-scenes.mjs", "city-nature.mjs"}:
         raise web.HTTPNotFound()
     return web.FileResponse(ROOT / "public" / name)
 
@@ -850,6 +868,10 @@ def validate_client_frame(raw, started, transport="webrtc"):
         if not frame["sdp_offer"].startswith("v=0"):
             raise ValueError("Invalid SDP offer.")
         return {"type": kind, "sdp_offer": frame["sdp_offer"]}
+    if kind == "session.close":
+        if set(frame) != {"type"}:
+            raise ValueError("Session close accepts no configuration overrides.")
+        return {"type": kind}
     if kind == "conversation.item.create":
         item = frame.get("item")
         if not isinstance(item, dict) or item.get("type") != "message" or item.get("role") != "user":
@@ -898,6 +920,13 @@ async def forward_browser(browser, upstream, transport, configuration):
             if not configuration.ready and frame["type"] not in {"rtc.call.sdp.create", "conversation.item.retrieve"}:
                 raise SessionConfigurationError("Wait for the retained-history configuration acknowledgment before sending input.")
             await upstream.send_json(frame)
+            if frame["type"] == "session.close":
+                try:
+                    async with asyncio.timeout(20):
+                        await configuration.closed.wait()
+                except TimeoutError:
+                    raise SessionConfigurationError("Azure did not confirm final session usage and cost before the close timeout.") from None
+                return
             if frame["type"] == "rtc.call.sdp.create":
                 started = True
         elif message.type == aiohttp.WSMsgType.BINARY:
@@ -921,6 +950,9 @@ async def forward_upstream(upstream, browser, transport, configuration, on_conve
                     if acknowledged:
                         deadline.reschedule(None)
                         await browser.send_json({"type": "bridge.ready"})
+                    if frame.get("type") == "session.closed":
+                        configuration.closed.set()
+                        return
     except TimeoutError:
         raise SessionConfigurationError("Timed out waiting for Azure to acknowledge retained-history session configuration.") from None
 
