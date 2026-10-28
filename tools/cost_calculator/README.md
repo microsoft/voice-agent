@@ -82,6 +82,19 @@ The GPT Live meter is hourly and is divided by 60 for USD-per-minute pricing.
   meter references**, not
   direct OpenAI model API prices. GPT Realtime 2.1 uses the Pro text-output-2
   meter; `gpt-realtime` uses the original output meter.
+- **Azure Realtime** uses the documented Voice Live **Pro** tier.
+  **Azure Realtime Fast** uses a **user-specified Lite-tier reference**,
+  not a verified published Fast tariff. Azure Realtime uses managed native
+  speech-to-speech with no separate STT or Azure HD charge. Azure Realtime Fast
+  uses **Realtime text response + Azure HD**: Lite-tier native audio input,
+  text input/output, and standard-speech output meters, without native audio
+  output charges. Both use the existing Central India tier meters and appear
+  in their respective managed pipeline selection, comparison, and CSV export.
+  Neither adds a GPT Live session charge; no BYOM or alternate-pipeline prices are
+  inferred from GPT models. Fast's assumption is labeled in the UI and CSV.
+  The editable audio tokens/second remain planning assumptions, not verified
+  Azure Realtime-family tokenization. No price-snapshot refresh is required
+  for these existing tier meters.
 - When no managed tier is published, use the exact model's **AOAI Global
   inference prices + Central India BYO speech** as an economic reference.
   This fills GPT-5.4 mini/nano, GPT OSS 120B, and GPT-6 Sol reference scenarios.
@@ -95,6 +108,15 @@ The GPT Live meter is hourly and is divided by 60 for USD-per-minute pricing.
   GPT Realtime 2.1 mini, GPT OSS 120B, and GPT-6 Sol are prefilled from the
   published South India meters. Global describes processing scope, not a
   promise of India-only inference.
+- **GPT-5.6 Luna BYOM** uses South India Global short-context Standard
+  inference prices: **$0.20 input / $0.02 cached input / $1.20 output per
+  1M tokens**, verified on 2026-10-26. These three meters record their own
+  retrieval date; the remaining snapshot retains its original date.
+  Luna is available for the text-LLM cascade and GPT Live backend scenarios,
+  with Central India BYO speech rates for the cascade. Managed-mode rows
+  use the existing explicitly labeled Global-model/BYO-speech reference,
+  not a verified managed Luna tariff. Long-context, Flex, Priority, and
+  cache-write rates are not substituted.
 - **GPT-6 reasoning is explicitly GPT-6 Sol**, using South India Global
   short-context Standard prices: **$2 input / $0.20 cached input / $10 output
   per 1M tokens**. The generic, unspecified GPT-6 placeholder is replaced

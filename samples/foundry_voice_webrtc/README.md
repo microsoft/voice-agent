@@ -14,7 +14,9 @@ definitions are reused by default. An optional confirmed reset can delete and
 recreate only the configured sample Agent. The agent retains its saved instructions, model, and
 voice configuration by default. The backend sends a narrow `session.update` for
 the **active session only** to enable automatic interruption truncation and
-retained-item events, preserving the applied turn-detection settings. This
+retained-item events, preserving the applied turn-detection settings, except for
+Azure Realtime Flash, where automatic truncation and retained-item enrichment
+are disabled. This
 session update does not edit the saved Agent; the browser cannot send one.
 Optional session-start personalization and output-voice selection do not edit the saved Agent.
 
@@ -29,6 +31,61 @@ for model/transcription changes, connection and voice selection, audio-processin
 notes, personalization, and advanced reset controls. The audio-processing notes
 distinguish requested browser processing from the saved Agent's Azure denoising;
 use **Show Agent settings** to inspect the actual saved definition.
+
+### Weather-aware city scenery
+
+Use the **City scene** selector in the floating scenery controls to choose
+Seattle, Mumbai, Tokyo, Paris, Beijing, or New York. The selector remains
+available in **Scenery only** view; press Escape or **Show panels** to return.
+Switching scenery never starts, stops, or reconfigures a voice session.
+The floating controls stay compact: a city selector, pause/view buttons, and
+one short weather line. Hover the weather line for the full observation;
+the selector's accessible description also retains weather and landmark details.
+
+| City | Recognizable scene | Birds and foliage |
+| --- | --- | --- |
+| Seattle | Space Needle, Mount Rainier, evergreen shoreline | Gulls, evergreen trees, maple leaves |
+| Mumbai | Gateway of India, palm-lined waterfront, warm streetlights | Soaring black kites, green palms and sparse windblown palm leaflets |
+| Tokyo | Red-and-white Tokyo Tower, layered city skyline | Small, fast-flapping sparrows and fan-shaped ginkgo leaves |
+| Paris | Eiffel Tower, mansard rooftops, Seine and stone bridge | Pigeons, broad plane-tree canopies and lobed plane leaves |
+| Beijing | Temple of Heaven's three blue roofs, marble terraces and courtyard | Long-tailed black-and-white magpies, cypresses and ginkgo |
+| New York | Brooklyn Bridge's twin Gothic towers and suspension cables, Manhattan skyline | Pigeons and pointed maple leaves |
+
+These are original procedural Canvas illustrations, not photographs or live
+camera feeds. Each city fetches its own current weather from Open-Meteo,
+including temperature, cloud cover, precipitation, wind speed and direction,
+and a timestamp in the city's timezone. Sky, haze, rain/snow, wet surfaces,
+water ripples, and wind-driven trees respond to those observations. Solar
+lighting uses the selected city's coordinates and the current UTC time, so
+day/night and twilight do not follow the browser's timezone. Building windows,
+streetlights, traffic, and boats add restrained animation; not every city has
+every animation (for example, Beijing is a courtyard, not a waterfront).
+
+Bird silhouettes and flight patterns follow the city profile: coastal gulls
+are not reused over Tokyo Tower or the Temple of Heaven. Birds shelter at night,
+in heavier rain, fog, snow, and in strong winds. Foliage follows the city's local calendar
+month: temperate broadleaf trees turn gold/ochre/red in autumn and become bare
+in winter, while Beijing's cypresses and Mumbai's palms stay green. Detached
+leaves appear near canopy height, use the matching leaf shape, and respond to
+wind; Mumbai has only a few green palm leaflets in stronger gusts, not an autumn
+leaf storm. These are illustrative local nature choices and calendar-based
+seasonal approximations, not live wildlife observations or measured leaf phenology.
+
+Weather refreshes every 15 minutes. A city switch cancels the previous request
+and clears its weather immediately, so a late response or failed lookup cannot
+apply one city's conditions to another. Until a city's first successful lookup,
+the canvas stays empty with a loading/unavailable message, rather than inventing
+sunny weather. A failed refresh for the same city retains its last observation
+and explicitly marks it stale. Weather requests time out after 10 seconds.
+
+Only the selected city ID is saved in browser local storage. No geolocation
+permission is requested. The city coordinates are sent to Open-Meteo without
+cookies or referrer; this is separate from the Agent's weather Toolbox and does
+not inject the selected city into the Agent's instructions. If browser storage
+is unavailable, scenery still works for the current page with a console warning.
+Use **Pause scenery** to freeze motion. Reduced-motion preferences are respected,
+animation pauses while the tab is hidden, and the canvas resolution is capped
+at twice CSS resolution to bound rendering work.
 
 | Transport | Audio path | Requirements |
 | --- | --- | --- |
@@ -75,6 +132,8 @@ Set these values in this sample's own `.env` (not the parent samples directory):
 
 ```dotenv
 AZURE_AI_PROJECT_ENDPOINT=https://YOUR-RESOURCE.services.ai.azure.com/api/projects/YOUR-PROJECT
+GPT_LIVE_DEPLOYMENT=gpt-live-1
+GPT_LIVE_BACKEND_DEPLOYMENT=gpt-5.4
 ```
 
 Leave `AZURE_VOICE_AGENT_NAME` unset or blank to use
@@ -119,7 +178,7 @@ and the selected Azure Speech HD output voice. Azure semantic turn detection
 keeps the headset noise-reduction processing on the service-owned audio path;
 GPT Realtime's upstream-owned `server_vad` rejects that denoiser.
 The Agent speaks one brief acknowledgement, such as "Let me check that for
-you," before invoking the weather tool. The saved prompt makes it follow the
+you," before invoking web search on any topic. The saved prompt makes it follow the
 session language policy and keeps the filler out of the final answer. This is
 model-generated speech from the Agent, not browser speech synthesis or an
 extra client response request. This explicit pre-tool prompt is used instead
@@ -135,7 +194,9 @@ sample without adding cross-replica creation coordination.
 ### Models, versions, and Agent YAML
 
 The **Version** line shows the saved Agent's current version. End the call, choose
-`gpt-realtime-2.1`, `azure-realtime`, or `gpt-5.4`, then select **Save new version**.
+`gpt-realtime-2.1`, **GPT Realtime 2.1 mini** (`gpt-realtime-2.1-mini`),
+`azure-realtime`, **Azure Realtime Flash**
+(`azure-realtime-flash-2026-10-14`), `gpt-5.4`, or **GPT Live**, then select **Save new version**.
 This publishes and enables a new version without deleting previous versions.
 Instructions, tools, metadata, and other configuration are preserved except for
 explicit transcription selections, turn-detection, and output-voice compatibility
@@ -145,9 +206,102 @@ single backend replica, not independent Foundry editors.
 
 Selecting a model previews compatible voices immediately; **Model** and **Version**
 continue to report the saved configuration until publication succeeds.
+GPT Realtime 2.1 mini uses the same Azure Speech HD voice selector and independent
+transcription choices as GPT Realtime 2.1.
 `azure-realtime` uses native voice `ava` by default. Switching from native output
-to a GPT model selects `en-US-Tyler:DragonHDLatestNeural`. Other supported HD
-settings are preserved. Model and voice availability depend on the project.
+to a GPT model or Azure Realtime Flash selects `en-US-Tyler:DragonHDLatestNeural`.
+Flash uses the Azure Speech HD voice selector, not the `azure-realtime` native
+voice selector. Other supported HD settings are preserved. Model and voice
+availability depend on the project; adding Flash to the selector does not deploy
+or enable it in the Foundry project.
+
+### Post-call API-returned cost
+
+After a connected call ends, **Last call · API-returned cost** shows the saved
+Agent API's finalized session `estimated_cost.amount` in USD, and that amount
+divided by connected call minutes. The estimate uses the service's finalized
+billing-meter quantities and public retail rates, not assumed tokens, speaking
+time, cache hit rates, a silence discount, or the Cost Lab's planning profile.
+It is not the customer's negotiated or invoiced amount.
+
+The backend opts realtime Agent connections into
+`features=include_estimated_cost:true`. **End call** mutes microphone input and
+requests `session.close`, keeping the signaling connection alive for final
+`session.done` / `session.closed` events. Repeated cumulative cost snapshots are
+replacements, never added together or added to response-level costs. The last
+result remains visible until another call connects. Average cost/minute uses the
+time from connection readiness to the end request (or first terminal event),
+excluding setup and the final close wait; the total itself is never prorated.
+
+The UI preserves `complete`, `partial`, and `unavailable` semantics. A partial
+amount is labeled **Priced subtotal (partial)**, with unpriced component names and
+the returned price version in the details. Missing/invalid costs, an interrupted
+connection without a final snapshot, and a close timeout show **Unavailable**,
+not zero or a sum of observed turns. A failed connection before readiness does
+not create a call result. Charges outside the service's returned estimate,
+such as app hosting, networking and recording storage, are not added locally.
+
+This contract was verified through the saved Agent's
+`/agents/{name}/endpoint/protocols/voice` route with `gpt-realtime-2.1`.
+GPT Live uses a separate native protocol: its `usage.seconds` is not a monetary
+cost. It shows a cost only if its terminal event actually supplies
+`estimated_cost`; otherwise the result is explicitly unavailable. Flash and
+other models likewise rely on the returned API cost, not a local tier mapping.
+
+### GPT Live
+
+GPT Live uses a self-deployed `gpt-live-1` model and the separate native Live
+protocol, not the realtime protocol. Configure its actual deployment name with
+`GPT_LIVE_DEPLOYMENT` and its Responses backend with
+`GPT_LIVE_BACKEND_DEPLOYMENT` (default `gpt-5.4`). Both deployments must exist in
+the configured resource. For the `va-dev-use2` project, the verified endpoint is
+`https://va-dev-use2.services.ai.azure.com/api/projects/va-dev-use2-project` and
+the Live deployment is `gpt-live-1-test`.
+
+Selecting **GPT Live** previews its native voice selector, defaulting to `marin`.
+Its choices follow the OpenAI SDK's
+[Live BuiltInVoice catalog](https://github.com/openai/openai-python/blob/main/src/openai/types/live/built_in_voice.py);
+availability depends on the deployed model. Unsupported voices fail explicitly,
+without substituting an Azure Speech or Azure Realtime voice. Saving the model
+publishes a Live version with a Responses backend and `web_search` for any topic,
+including news, products, prices, documentation, travel, local information, and
+weather. Explicit lookup requests and facts needing verification trigger search;
+it is not limited to weather or current events. It does not attach the realtime
+weather Toolbox.
+The source instructions are supplied to that backend; its original complete
+realtime definition remains in the previous version. Version metadata records
+that source version so switching back restores its prompt, structured inputs,
+greeting, tools, audio settings and transcription before applying the selected
+realtime model/transcription.
+The deployment script passes both Live deployment settings to Azure Container
+Apps, and `check_websocket.py` detects Live Agents and checks native startup
+and graceful close without sending microphone audio.
+
+GPT Live uses **WebSocket audio only** in this sample. The target project's
+saved-Agent Live WebRTC session-creation route returns HTTP 405, and its
+realtime WebRTC signaling route rejects a Live Agent. The UI selects and locks
+WebSocket for Live, while other models retain both transports. No direct-model
+fallback bypasses the saved Agent or its Foundry conversation recording.
+WebSocket startup waits for `session.started` and streams native
+`session.input_audio.append` / `session.output_audio.delta` events through the
+Agent's `/endpoint/protocols/voice/live/sessions` WebSocket endpoint.
+Credentials never leave the server. **End** sends `session.close` and waits
+for final cumulative usage.
+
+GPT Live listens and speaks concurrently. Its timed transcript fragments are
+shown as **captions, not authoritative retained history**; there is no realtime
+truncation handshake or complete-turn guarantee. Independent transcription,
+text-only replies, and realtime conversation-item retrieval are disabled for
+Live. Browser echo cancellation/noise suppression still apply, but the
+realtime Agent's Azure headset denoiser/VAD settings do not. Optional
+personalization becomes trusted language-policy and untrusted-context append
+events after `session.started`, rather than a realtime AI greeting. The bridge
+waits for their acknowledgments before enabling microphone input; browsers
+cannot submit arbitrary instruction events.
+The [direct-model Live WebRTC guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/gpt-live-webrtc)
+does not establish support for saved-Agent WebRTC. See the
+[event reference](https://learn.microsoft.com/en-us/azure/foundry/openai/gpt-live-reference)
+for Live audio and session events.
 
 Use **Transcription model** to select input speech recognition independently of
 the Agent model, then select **Save new version**. **Transcription** shows the
@@ -155,6 +309,17 @@ actual saved model and updates only after a successful save. A transcription-onl
 change preserves the existing prompt, AI greeting, tools, output voice, language,
 and turn detection. Switching the Agent model also retains the saved
 transcription choice. Controls are disabled during calls and publication.
+
+`azure-realtime-flash-2026-10-14` disables the automatic greeting and waits for
+the caller's first turn. Saving this model also removes a greeting from an
+existing Flash definition. The previous greeting is retained in version metadata
+and restored when switching back to another realtime model. Other models keep
+their configured greetings. This does not resolve unrelated Flash inference errors.
+Flash also disables automatic interruption truncation (`auto_truncate: false`)
+for both WebSocket and WebRTC sessions, while keeping interruption enabled.
+The retained-item include selector is removed for Flash, and the transcript
+warns that interrupted text may include unheard output. Other realtime models
+continue using automatic truncation and authoritative retained-item events.
 
 New Agents default to **`mai-transcribe-2`**. Existing Agents retain their saved
 choice until explicitly changed. The selector offers these exact IDs:
@@ -184,11 +349,13 @@ read/create/enable permission. An invoke-only identity is not sufficient for thi
 configured name is the only creation target, but anyone with access to the demo
 can trigger preparation; use Entra sign-in for deployments outside a controlled demo.
 
-### Weather through Foundry Toolbox
+### General web search through Foundry Toolbox
 
-Weather is part of the normal Agent setup, not a browser-side function or a
-separate weather API. Before publishing a new demo Agent, the backend checks for
-the **weather** Toolbox in the same Foundry project:
+Web search is part of the normal Agent setup, not a browser-side function or a
+weather-only API. The Toolbox retains its legacy **weather** name for
+compatibility, but its prompt and tool descriptions allow searches on any topic.
+Before publishing a new demo Agent, the backend checks for this Toolbox in the
+same Foundry project:
 
 - If present, it validates that the latest immutable version contains a
   `web_search` tool and pins that exact version in the Agent.
@@ -197,21 +364,28 @@ the **weather** Toolbox in the same Foundry project:
 - Permission errors, incompatible Toolboxes, or failed creation stop setup
   visibly; an existing Toolbox is never overwritten.
 
-The Agent uses web search through Foundry Toolbox for current conditions and
-forecasts. It asks for a location when needed and must ground its reply in tool
-results rather than inventing weather. Try **"What is the weather in Seattle
-today?"** after starting a conversation. These are web-search results, not a
-dedicated meteorological-feed SLA.
+The Agent searches when the caller requests a lookup or facts need verification,
+then gives a concise answer grounded in the results. It asks for a location or
+date only when relevant to the question, not before every search. Try **"Search
+the web for the latest Azure AI announcements"** or **"Find the official Python
+asyncio documentation"**. Weather searches retain location/date guidance; try
+**"What is the weather in Seattle today?"**. Weather results are web-search
+results, not a dedicated meteorological-feed SLA.
 
 The Toolbox and Agent stay saved for future sessions; repeated setup does not
 publish extra versions. Reset checks the weather dependency before deleting an
 Agent and does not delete the shared Toolbox. If Agent publication fails after
 Toolbox creation, retry setup to reuse that Toolbox.
 
-Existing Agent definitions remain unchanged. To add weather to an older demo
-Agent, explicitly use **Advanced → Reset Agent**, or choose a new Agent name.
-Reset removes previous Agent versions after confirmation. The UI advertises
-weather for new demo setup or when the saved Agent has the weather reference.
+Existing saved definitions remain unchanged when local templates are edited.
+To broaden an existing weather-only Agent, publish a new Toolbox version with
+the general-search descriptions, then publish an Agent version with the updated
+prompt and pinned Toolbox version; no reset or deletion is required. For a Live
+Agent, update both its speech instructions and Responses backend instructions.
+If it has a `realtime_source_version`, publish the updated realtime source too
+and point the Live version's metadata to it, so switching back retains general
+search. The UI advertises web search for new demo setup or when the saved Agent
+has the legacy weather reference.
 If publishing `personalized-agent.json` manually, provision the referenced
 Toolbox first; automatic setup resolves the actual immutable version for you.
 
@@ -565,6 +739,11 @@ preserves the reported VAD type/options and the **whole existing include list**,
 adds `conversation.item.truncated.item` without duplicates, and sets
 `auto_truncate: true` and its prerequisite `interrupt_response: true`.
 It does not change instructions, model, voice, tools, formats, or saved agents.
+For `azure-realtime-flash-2026-10-14`, the same handshake instead sets
+`auto_truncate: false`, keeps `interrupt_response: true`, and removes only
+`conversation.item.truncated.item` from the include list. Input remains disabled
+until Azure acknowledges truncation is off and the selector is absent.
+The runtime model ID `azure-realtime-flash-1` receives the same Flash policy.
 A disabled/missing VAD or disabled automatic responses is reported as a setup
 error rather than silently replacing the saved turn-detection mode.
 
@@ -614,6 +793,12 @@ above, not the separate Azure OpenAI `/openai/v1/realtime/calls` flow.
 
 ## Troubleshooting
 
+The call panel shows the Azure **Session ID** when the service reports it and
+keeps it visible after a failed response, connection failure, or disconnect.
+Copy it when reporting a problem. If startup fails before Azure returns an ID,
+the panel explicitly reports that the Session ID is unavailable. Starting a new
+call clears the previous call's ID; session IDs are not saved in browser storage.
+
 | Symptom | Action |
 | --- | --- |
 | Setup needed | Fill in this directory's `.env` and restart. |
@@ -641,13 +826,24 @@ node --check public\app.js
 node --check public\pcm-audio.mjs
 node --check public\pcm-capture.js
 node --check public\retained-history.mjs
-node --test test_text_input.mjs test_retained_history.mjs
+node --check public\weather.mjs
+node --check public\city-scenes.mjs
+node --check public\city-nature.mjs
+node --test test_text_input.mjs test_retained_history.mjs test_weather.mjs test_city_scenes.mjs test_city_nature.mjs
 ```
 
 Offline regressions cover session update/acknowledgment and preserved settings,
 both transports' input readiness, text input, per-item retained history, empty and
 repeated cuts, delayed full-answer events, retrieval/error/timeout races, and
 clear/reconnect behavior. They also check `store=true` and transport selection.
+Scenery checks cover per-city weather URLs and solar lighting, stale-request
+isolation, failed refreshes, native browser fetch binding, and deterministic
+landmark geometry at mobile and desktop sizes.
+Nature regressions cover city-specific bird and leaf silhouettes, local-month
+season changes, tropical/evergreen exceptions, and weather-dependent visibility.
+For visual checks, try all cities
+in normal and scenery-only views, pause/play, reduced motion, and a failed weather
+lookup; use controlled weather fixtures for rain, snow, fog, and night scenarios.
 Synthetic/offline UI verification is not an Azure audio test. An end-to-end Azure
 spoken interruption is **not verified by these tests**; run the connection check
 and the manual microphone repro in your own project.

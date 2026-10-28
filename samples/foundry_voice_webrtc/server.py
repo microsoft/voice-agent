@@ -15,7 +15,7 @@ import time
 import uuid
 import zipfile
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
@@ -25,6 +25,7 @@ from aiohttp import web
 from dotenv import load_dotenv
 
 from auth import AuthenticationError, AzureTokenProvider, authentication_mode, find_azure_cli
+from live import LIVE_VOICES, LiveSessionError, connect_live, live_definition
 
 ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -51,8 +52,11 @@ def truncation_update(session):
         include = []
     if not isinstance(include, list) or any(not isinstance(value, str) for value in include):
         raise SessionConfigurationError("Azure returned an invalid session include list.")
-    include = list(dict.fromkeys([*include, TRUNCATED_ITEM_INCLUDE]))
-    vad = {**vad, "auto_truncate": True, "interrupt_response": True}
+    auto_truncate = session.get("model") not in {FLASH_MODEL, "azure-realtime-flash-1"}
+    include = list(dict.fromkeys(
+        [*include, TRUNCATED_ITEM_INCLUDE] if auto_truncate else
+        [value for value in include if value != TRUNCATED_ITEM_INCLUDE]))
+    vad = {**vad, "auto_truncate": auto_truncate, "interrupt_response": True}
     settings = {"include": include}
     if stable:
         settings.update({"type": "realtime", "audio": {"input": {"turn_detection": vad}}})
@@ -66,6 +70,7 @@ class SessionConfiguration:
     update: dict | None = None
     session_id: str | None = None
     ready: bool = False
+    closed: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def observe(self, frame, upstream):
         # The first session.updated applies the saved agent, unlike session.created.
@@ -79,15 +84,18 @@ class SessionConfiguration:
             return False
         expected = self.update["session"]
         stable = "audio" in expected
+        expected_vad = expected["audio"]["input"]["turn_detection"] if stable else expected["turn_detection"]
         vad = ((session.get("audio") or {}).get("input") or {}).get("turn_detection") if stable else session.get("turn_detection")
         include = session.get("include", [])
         if (session.get("id") != self.session_id or not isinstance(vad, dict)
-                or vad.get("auto_truncate") is not True or vad.get("interrupt_response") is not True
+                or vad.get("auto_truncate") is not expected_vad["auto_truncate"]
+                or vad.get("interrupt_response") is not True
                 or not isinstance(include, list)
+                or (not expected_vad["auto_truncate"] and TRUNCATED_ITEM_INCLUDE in include)
                 or any(value not in include for value in expected["include"])):
             self.ready = False
             raise SessionConfigurationError(
-                "Azure did not acknowledge auto_truncate, interrupt_response and the retained-item include selector. "
+                "Azure did not acknowledge the requested auto_truncate, interrupt_response and retained-item include settings. "
                 "Input remains disabled; check support for this agent endpoint/API version.")
         first_ack = not self.ready
         self.ready = True
@@ -101,7 +109,9 @@ HD_VOICES = {f"en-US-{name}:DragonHDLatestNeural" for name in ("Tessa", "Tyler",
     "en-IN-Diya:DragonHDLatestNeural", "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-Xiaoke:DragonHDFlashLatestNeural"}
 MAI_FLASH_VOICES = {"en-US-Harper:MAI-Voice-2.1-Flash", "en-GB-Harry:MAI-Voice-2.1-Flash"}
 NATIVE_VOICES = {"ava", "andrew", "emma", "clara", "liam", "natasha", "rayn", "alvaro", "dalia", "jorge"}
-MODELS = {"gpt-realtime-2.1", "azure-realtime", "gpt-5.4"}
+FLASH_MODEL = "azure-realtime-flash-2026-10-14"
+MODELS = {"gpt-realtime-2.1", "gpt-realtime-2.1-mini", "azure-realtime", FLASH_MODEL, "gpt-5.4"}
+LIVE_MODEL = "gpt-live-1"
 TRANSCRIPTION_MODELS = {
     "azure-speech", "azure-speech-streaming", "azure-llm-speech",
     "mai-transcribe", "mai-transcribe-2", "mai-transcribe-2-streaming",
@@ -332,6 +342,8 @@ class Settings:
     public_origin: str = ""
     personalization_required: bool = False
     allow_agent_recreate: bool = False
+    live_deployment: str = "gpt-live-1"
+    live_backend_deployment: str = "gpt-5.4"
 
     def __post_init__(self):
         object.__setattr__(self, "agent", self.agent.strip() or DEFAULT_AGENT_NAME)
@@ -369,7 +381,8 @@ class Settings:
             raise ValueError("Unsupported transport.")
         project = self.project_url().replace("https://", "wss://", 1)
         params = {"api-version": self.api_version,
-                  "agent_session_id": f"web-{uuid.uuid4().hex}", "store": "true"}
+                  "agent_session_id": f"web-{uuid.uuid4().hex}", "store": "true",
+                  "features": "include_estimated_cost:true"}
         # The default service transport is WebSocket; only WebRTC needs a selector.
         if transport == "webrtc":
             params["transport"] = "webrtc"
@@ -394,7 +407,9 @@ def load_settings():
                     os.getenv("AZURE_API_VERSION", "v1"),
                     os.getenv("FOUNDRY_FEATURES", "VoiceAgents=V1Preview"), tuple(ice),
                     public_origin, os.getenv("PERSONALIZATION_REQUIRED", "").lower() == "true",
-                    os.getenv("ALLOW_AGENT_RECREATE", "").lower() == "true")
+                    os.getenv("ALLOW_AGENT_RECREATE", "").lower() == "true",
+                    os.getenv("GPT_LIVE_DEPLOYMENT", "gpt-live-1").strip(),
+                    os.getenv("GPT_LIVE_BACKEND_DEPLOYMENT", "gpt-5.4").strip())
 
 
 def origin_allowed(host_value, scheme, origin, public_origin=""):
@@ -434,7 +449,8 @@ async def public_config(request):
                               "setupIssues": cfg.setup_issues,
                               "personalizationRequired": cfg.personalization_required,
                               "agentRecreateAllowed": cfg.allow_agent_recreate,
-                              "models": sorted(MODELS),
+                              "models": sorted(MODELS | {LIVE_MODEL}),
+                              "liveVoices": sorted(LIVE_VOICES),
                               "transcriptionModels": sorted(TRANSCRIPTION_MODELS),
                               "defaultTranscriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
                               "transports": ["websocket", "webrtc"], "defaultTransport": "websocket"})
@@ -523,6 +539,8 @@ async def inspect_configured_agent(client, cfg, headers):
     required = set(demo["structured_inputs"])
     return {"agent": cfg.agent, "exists": definition is not None,
             "model": (demo if definition is None else definition).get("model"),
+            "modelChoice": LIVE_MODEL if (definition or {}).get("sub_protocol") == "live" else
+                (demo if definition is None else definition).get("model"),
             "transcriptionModel": transcription_model(demo if definition is None else definition),
             "version": latest.get("version") if latest is not None else None,
             "weatherEnabled": definition is not None and weather_toolbox_attached(definition),
@@ -556,6 +574,7 @@ async def prepare_configured_agent(client, cfg, headers):
             raise AgentPreparationError(f"Agent enable failed (HTTP {enabled.status}). Retry preparation; an existing version will not be overwritten.")
     required = set(json.loads((ROOT / "personalized-agent.json").read_text())["structured_inputs"])
     return {"agent": cfg.agent, "created": created, "model": definition.get("model"),
+            "modelChoice": LIVE_MODEL if definition.get("sub_protocol") == "live" else definition.get("model"),
             "transcriptionModel": transcription_model(definition),
             "version": version,
             "weatherEnabled": weather_toolbox_attached(definition),
@@ -569,8 +588,12 @@ def model_definition(definition, model, transcription=None):
         raise AgentPreparationError("Choose one of the supported transcription models.")
     updated = copy.deepcopy(definition)
     updated["model_type"], updated["model"] = "managed", model
+    if model == FLASH_MODEL:
+        updated.pop("greeting", None)
     audio = updated.setdefault("audio", {})
     input_audio, output = audio.setdefault("input", {}), audio.setdefault("output", {})
+    if model == FLASH_MODEL and isinstance(input_audio.get("turn_detection"), dict):
+        input_audio["turn_detection"]["auto_truncate"] = False
     if transcription is not None:
         settings = input_audio.get("transcription")
         input_audio["transcription"] = {**(settings if isinstance(settings, dict) else {}), "model": transcription}
@@ -639,7 +662,7 @@ async def change_agent_model(request):
     except ValueError:
         return web.json_response({"error": "Choose a model and the current Agent version."}, status=400)
     if (not isinstance(body, dict) or set(body) not in ({"model", "version"}, {"model", "version", "transcriptionModel"})
-            or not isinstance(body["model"], str) or body["model"] not in MODELS
+            or not isinstance(body["model"], str) or body["model"] not in MODELS | {LIVE_MODEL}
             or not isinstance(body["version"], str) or not body["version"]
             or ("transcriptionModel" in body and (
                 not isinstance(body["transcriptionModel"], str) or body["transcriptionModel"] not in TRANSCRIPTION_MODELS))):
@@ -657,11 +680,43 @@ async def change_agent_model(request):
                 if latest.get("version") != body["version"]:
                     return web.json_response({"error": "The Agent version changed. Reload the page before saving."}, status=409)
                 expected_version = latest["version"]
-                definition = model_definition(latest["definition"], body["model"], body.get("transcriptionModel"))
+                metadata = copy.deepcopy(latest.get("metadata") or {})
+                source = latest["definition"]
+                was_live = source.get("sub_protocol") == "live"
+                if body["model"] == LIVE_MODEL:
+                    if "transcriptionModel" in body:
+                        raise AgentPreparationError("GPT Live owns transcription; do not select a separate transcription model.")
+                    if was_live:
+                        definition = copy.deepcopy(source)
+                    else:
+                        if not cfg.live_deployment or not cfg.live_backend_deployment:
+                            raise AgentPreparationError("Configure GPT_LIVE_DEPLOYMENT and GPT_LIVE_BACKEND_DEPLOYMENT.")
+                        definition = live_definition(source, cfg.live_deployment, cfg.live_backend_deployment)
+                        metadata["realtime_source_version"] = latest["version"]
+                else:
+                    if was_live:
+                        version = metadata.get("realtime_source_version")
+                        if not isinstance(version, str) or not version:
+                            raise AgentPreparationError("This GPT Live Agent has no original realtime version to restore. Choose a separate realtime Agent.")
+                        url = f"{cfg.project_url()}/agents/{quote(cfg.agent, safe='')}/versions/{quote(version, safe='')}"
+                        async with client.get(url, params={"api-version": cfg.api_version}, headers=headers,
+                                              allow_redirects=False) as response:
+                            if response.status != 200:
+                                raise AgentPreparationError("Could not read the original realtime version. No replacement was saved.")
+                            source = (await response.json()).get("definition")
+                        if not isinstance(source, dict) or source.get("sub_protocol") == "live":
+                            raise AgentPreparationError("The original realtime definition could not be verified.")
+                        metadata.pop("realtime_source_version", None)
+                    if body["model"] == FLASH_MODEL and "greeting" in source:
+                        metadata.setdefault("flash_greeting", json.dumps(source["greeting"]))
+                    elif body["model"] != FLASH_MODEL and "flash_greeting" in metadata:
+                        source = copy.deepcopy(source)
+                        source["greeting"] = json.loads(metadata.pop("flash_greeting"))
+                    definition = model_definition(source, body["model"], body.get("transcriptionModel"))
                 if definition != latest["definition"]:
                     url = f"{cfg.project_url()}/agents/{quote(cfg.agent, safe='')}/versions"
                     async with client.post(url, params={"api-version": cfg.api_version}, headers=headers,
-                                           json={"definition": definition, "metadata": latest.get("metadata") or {}},
+                                           json={"definition": definition, "metadata": metadata},
                                            allow_redirects=False) as response:
                         if response.status not in {200, 201}:
                             raise AgentPreparationError(
@@ -676,7 +731,7 @@ async def change_agent_model(request):
                     if response.status != 204:
                         raise AgentPreparationError("The model version was saved but could not be enabled. Retry setup before starting a call.")
                 result = await inspect_configured_agent(client, cfg, headers)
-                if (result.get("version") != expected_version or result.get("model") != body["model"]
+                if (result.get("version") != expected_version or result.get("modelChoice") != body["model"]
                         or ("transcriptionModel" in body and result.get("transcriptionModel") != body["transcriptionModel"])):
                     raise AgentPreparationError("The saved settings changed or could not be verified. Reload before retrying.")
                 return web.json_response(result)
@@ -788,7 +843,7 @@ async def manage_agent(request, *, recreate=False, inspect=False):
 
 async def asset(request):
     name = request.match_info.get("file", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "favicon.svg", "pcm-audio.mjs", "pcm-capture.js", "retained-history.mjs", "weather.mjs"}:
+    if name not in {"index.html", "app.js", "style.css", "favicon.svg", "pcm-audio.mjs", "pcm-capture.js", "retained-history.mjs", "call-cost.mjs", "weather.mjs", "city-scenes.mjs", "city-nature.mjs"}:
         raise web.HTTPNotFound()
     return web.FileResponse(ROOT / "public" / name)
 
@@ -813,6 +868,10 @@ def validate_client_frame(raw, started, transport="webrtc"):
         if not frame["sdp_offer"].startswith("v=0"):
             raise ValueError("Invalid SDP offer.")
         return {"type": kind, "sdp_offer": frame["sdp_offer"]}
+    if kind == "session.close":
+        if set(frame) != {"type"}:
+            raise ValueError("Session close accepts no configuration overrides.")
+        return {"type": kind}
     if kind == "conversation.item.create":
         item = frame.get("item")
         if not isinstance(item, dict) or item.get("type") != "message" or item.get("role") != "user":
@@ -861,6 +920,13 @@ async def forward_browser(browser, upstream, transport, configuration):
             if not configuration.ready and frame["type"] not in {"rtc.call.sdp.create", "conversation.item.retrieve"}:
                 raise SessionConfigurationError("Wait for the retained-history configuration acknowledgment before sending input.")
             await upstream.send_json(frame)
+            if frame["type"] == "session.close":
+                try:
+                    async with asyncio.timeout(20):
+                        await configuration.closed.wait()
+                except TimeoutError:
+                    raise SessionConfigurationError("Azure did not confirm final session usage and cost before the close timeout.") from None
+                return
             if frame["type"] == "rtc.call.sdp.create":
                 started = True
         elif message.type == aiohttp.WSMsgType.BINARY:
@@ -884,6 +950,9 @@ async def forward_upstream(upstream, browser, transport, configuration, on_conve
                     if acknowledged:
                         deadline.reschedule(None)
                         await browser.send_json({"type": "bridge.ready"})
+                    if frame.get("type") == "session.closed":
+                        configuration.closed.set()
+                        return
     except TimeoutError:
         raise SessionConfigurationError("Timed out waiting for Azure to acknowledge retained-history session configuration.") from None
 
@@ -976,7 +1045,7 @@ async def connect_voice(client, cfg, headers, transport):
 
 def describe_connection_error(error):
     """Return actionable diagnostics without exposing URLs, keys or raw exceptions."""
-    if isinstance(error, (AuthenticationError, VoiceEndpointError, SessionConfigurationError)):
+    if isinstance(error, (AuthenticationError, VoiceEndpointError, SessionConfigurationError, LiveSessionError)):
         return str(error)
     if isinstance(error, aiohttp.WSServerHandshakeError):
         if error.status == 401:
@@ -1020,7 +1089,8 @@ async def bridge(request):
         await browser.prepare(request)
         structured = None
         voice = request.query.get("voice", "")
-        if voice and voice not in HD_VOICES | MAI_FLASH_VOICES | NATIVE_VOICES:
+        live = request.query.get("protocol") == "live"
+        if voice and voice not in (LIVE_VOICES if live else HD_VOICES | MAI_FLASH_VOICES | NATIVE_VOICES):
             raise ValueError("Choose a supported demo output voice.")
         if cfg.personalization_required and request.query.get("personalize") != "true":
             raise ValueError("This Agent requires session personalization.")
@@ -1033,6 +1103,20 @@ async def bridge(request):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=35)) as client:
             token = await request.app[TOKENS].get_token(client)
             headers = {"Authorization": f"Bearer {token}", "Foundry-Features": cfg.features}
+            async def announce_conversation(conversation):
+                await browser.send_json({
+                    "type": "bridge.conversation", "conversationId": conversation,
+                    "downloadToken": conversation_download_token(request.app[DOWNLOAD_SECRET], cfg.agent, conversation),
+                })
+            if live:
+                latest = await lookup_configured_agent(client, cfg, headers, include_version=True)
+                if latest is None or latest["definition"].get("sub_protocol") != "live":
+                    raise LiveSessionError("Save the GPT Live model version before starting a live session.")
+                if voice:
+                    headers["x-ms-voice-session-override"] = json.dumps({"audio": {"output": {"voice": voice}}})
+                await connect_live(client, browser, cfg, headers, transport, latest["version"], announce_conversation,
+                                   json.loads(structured) if structured is not None else None)
+                return browser
             if structured is not None:
                 headers["x-ms-voice-structured-inputs"] = structured
             if voice:
@@ -1041,11 +1125,6 @@ async def bridge(request):
                         "azure-realtime-native" if voice in NATIVE_VOICES else "azure-standard"}}
                 })
             async with connect_voice(client, cfg, headers, transport) as upstream:
-                async def announce_conversation(conversation):
-                    await browser.send_json({
-                        "type": "bridge.conversation", "conversationId": conversation,
-                        "downloadToken": conversation_download_token(request.app[DOWNLOAD_SECRET], cfg.agent, conversation),
-                    })
                 await relay(browser, upstream, transport, on_conversation=announce_conversation)
     except Exception as exc:
         # Never send auth exceptions, headers or tokens to the browser or logs.

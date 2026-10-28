@@ -9,7 +9,29 @@
 </head>
 <body>
   <canvas id="weather-scene" aria-hidden="true"></canvas>
-  <div class="scenery-toolbar" role="group" aria-label="Scenery controls"><p id="scenery-call-note" class="scenery-call-note">Active calls continue. Show panels to access call controls.</p><div><button id="weather-motion" type="button" aria-pressed="false" aria-label="Pause scenery" title="Pause scenery">Pause scenery</button><button id="scenery-toggle" type="button" aria-pressed="false" aria-label="Scenery only" aria-controls="app-header app-content app-footer" aria-describedby="scenery-call-note" title="Scenery only. Active calls continue.">Scenery only</button></div><a class="scenery-attribution" href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a></div>
+  <div class="scenery-toolbar" role="group" aria-label="Scenery controls">
+    <p id="scenery-call-note" class="scenery-call-note">Active calls continue. Show panels to access call controls.</p>
+    <div class="scene-picker">
+      <label for="scene-city">City scene</label>
+      <select id="scene-city" aria-describedby="scene-landmark scenery-weather">
+        <option value="seattle">Seattle</option>
+        <option value="mumbai">Mumbai</option>
+        <option value="tokyo">Tokyo</option>
+        <option value="paris">Paris</option>
+        <option value="beijing">Beijing</option>
+        <option value="new-york">New York</option>
+      </select>
+    </div>
+    <p id="scene-landmark" class="scene-landmark">Space Needle &amp; Mount Rainier · United States</p>
+    <div class="scenery-actions">
+      <button id="weather-motion" type="button" aria-pressed="false" aria-label="Pause scenery" title="Pause scenery">Pause scenery</button>
+      <button id="scenery-toggle" type="button" aria-pressed="false" aria-label="Scenery only" aria-controls="app-header app-content app-footer" aria-describedby="scenery-call-note" title="Scenery only. Active calls continue.">Scenery only</button>
+    </div>
+    <div class="scenery-meta">
+      <p id="scenery-weather" class="scenery-weather">Loading Seattle weather...</p>
+      <a class="scenery-attribution" href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
+    </div>
+  </div>
   <header id="app-header"><a class="brand" href="/">◉ <span>Voice Agent In Foundry Agent Service</span></a><span class="tag">AZURE FOUNDRY <span> / </span> LIVE VOICE</span><a class="repository-link" href="https://github.com/microsoft/voice-agent" target="_blank" rel="noopener noreferrer">microsoft/voice-agent on GitHub</a></header>
   <main id="app-content">
     <section class="intro"><p class="eyebrow">YOUR FIRST VOICE AGENT</p><h1>A little more human.</h1><p>Speak or type. Hear a reply. Interrupt naturally.</p><div class="weather-controls"><span id="weather-status" role="status">Loading Seattle weather...</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather: Open-Meteo</a></div></section>
@@ -25,10 +47,12 @@
         <div class="controls"><button id="start" class="primary" disabled>Start conversation <span>↗</span></button><button id="mute" disabled aria-pressed="false">Mute mic</button><button id="stop" class="end" disabled>End</button></div>
         <button id="play" class="play" hidden>Enable speaker audio</button>
         <p id="error" class="error" role="alert" hidden></p>
+        <p id="session-reference" role="status" hidden></p>
         <details id="agent-audio-settings" class="settings-panel">
           <summary>Agent &amp; audio settings</summary>
-        <div class="transport-control"><h2>Saved Agent</h2><p id="weather-tool-hint" hidden>Weather lookup is included through Foundry Toolbox.</p>
-          <label for="agent-model-choice">Change model</label><select id="agent-model-choice" disabled><option value="gpt-realtime-2.1">gpt-realtime-2.1</option><option value="azure-realtime">azure-realtime</option><option value="gpt-5.4">gpt-5.4</option></select>
+        <div class="transport-control"><h2>Saved Agent</h2><p id="weather-tool-hint" hidden>General web search, including weather, is included through Foundry Toolbox.</p>
+          <label for="agent-model-choice">Change model</label><select id="agent-model-choice" disabled><option value="gpt-realtime-2.1">gpt-realtime-2.1</option><option value="gpt-realtime-2.1-mini">gpt-realtime-2.1-mini</option><option value="azure-realtime">azure-realtime</option><option value="azure-realtime-flash-2026-10-14">azure-realtime-flash-2026-10-14</option><option value="gpt-5.4">gpt-5.4</option><option value="gpt-live-1">gpt-live-1</option></select>
+          <p id="live-model-hint" hidden>GPT Live uses WebSocket audio: saved-Agent WebRTC is not supported by this project. Other models still support WebRTC. GPT Live is full duplex, with built-in transcription and a Responses backend using web search for any topic, not just weather. Independent transcription, text-only replies, and retained-after-interruption history do not apply. Your original realtime configuration is restored when switching back.</p>
           <label for="agent-transcription-choice">Transcription model</label>
           <select id="agent-transcription-choice" disabled>
             <option value="" disabled>Choose a transcription model</option>
@@ -79,6 +103,32 @@
             <option value="dalia">dalia</option>
             <option value="jorge">jorge</option>
           </select>
+          <select id="live-voice" hidden disabled>
+            <option value="">Saved Agent voice</option>
+            <option value="marin" selected>marin</option>
+            <option value="alloy">alloy</option>
+            <option value="ash">ash</option>
+            <option value="ballad">ballad</option>
+            <option value="beacon">beacon</option>
+            <option value="bossa">bossa</option>
+            <option value="cedar">cedar</option>
+            <option value="cinder">cinder</option>
+            <option value="coral">coral</option>
+            <option value="delta">delta</option>
+            <option value="echo">echo</option>
+            <option value="gleam">gleam</option>
+            <option value="meridian">meridian</option>
+            <option value="quartz">quartz</option>
+            <option value="ripple">ripple</option>
+            <option value="sage">sage</option>
+            <option value="shida">shida</option>
+            <option value="shimmer">shimmer</option>
+            <option value="stone">stone</option>
+            <option value="tempo">tempo</option>
+            <option value="verse">verse</option>
+            <option value="vesper">vesper</option>
+            <option value="willow">willow</option>
+          </select>
           <p>Availability depends on the project and voice catalog. Unsupported selections fail without substituting a voice. A voice preview for a different model applies after you save that model.</p>
         </div>
         <div class="transport-control audio-processing"><h2>Audio processing</h2><p>The browser requests microphone noise suppression and echo cancellation with mono input. Support depends on your browser and device.</p><p>Azure denoising is configured separately in the saved Agent. Use <strong>Show Agent settings</strong> above to inspect <code>audio.input.noise_reduction</code>. The bundled example uses headset noise suppression; an existing Agent may differ.</p></div>
@@ -104,7 +154,7 @@
       </section>
       <section class="transcript-panel" aria-labelledby="transcript-title">
         <div class="panel-top"><h2 id="transcript-title">The conversation</h2><div class="transcript-actions"><button id="download-conversation" class="text-button" disabled>Download log + audio</button><button id="clear" class="text-button">Clear</button></div></div>
-        <p class="history-help">Replies stream here as live drafts. After an interruption, only the service's retained text remains; unheard text is removed.</p>
+        <p id="history-help" class="history-help">Replies stream here as live drafts. After an interruption, only the service's retained text remains; unheard text is removed.</p>
         <div id="transcript" role="log" aria-live="polite" aria-relevant="additions text"><div id="empty"><span>“</span><h3>Good conversations start with hello.</h3><p>Your words and the agent’s replies will appear here.</p></div></div>
         <form id="text-form" class="text-composer">
           <label for="text-input">Message your agent</label>
@@ -112,6 +162,12 @@
           <p id="text-help">Start a conversation to send text. Press Enter or Send for a text-only reply; wait for the agent's response before sending another message. Mute the mic to use text only.</p>
           <p id="download-status" role="status">End a conversation to download its stored JSON log and WAV audio.</p>
         </form>
+        <section id="call-cost" class="transport-control" aria-labelledby="call-cost-title" aria-live="polite" hidden>
+          <h2 id="call-cost-title">Last call · API-returned cost</h2>
+          <dl><dt id="call-cost-total-label">API-estimated call total</dt><dd id="call-cost-total"></dd><dt>Average cost per minute</dt><dd id="call-cost-minute"></dd></dl>
+          <p id="call-cost-note"></p>
+          <details><summary>API pricing details and completeness</summary><p id="call-cost-details"></p></details>
+        </section>
         <div class="transcript-footer"><span class="dot"></span> Live conversation <span id="elapsed">00:00</span></div>
       </section>
     </div>

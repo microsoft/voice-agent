@@ -14,9 +14,13 @@ export const MODELS = [
   { id: "gpt-realtime-2.1-mini", name: "GPT Realtime 2.1 mini", tier: "Std", realtime: true },
   { id: "gpt-realtime", name: "GPT Realtime 1.0 (gpt-realtime)", tier: "Pro", realtime: true },
   { id: "gpt-realtime-1.5", name: "GPT Realtime 1.5", tier: "Pro", realtime: true },
+  { id: "azure-realtime", name: "Azure Realtime", tier: "Pro", realtime: true, managedPipeline: "native" },
+  { id: "azure-realtime-fast", name: "Azure Realtime Fast", tier: "Lite", realtime: true,
+    managedPipeline: "hybrid", tierAssumption: true },
   { id: "gpt-4.1", name: "GPT-4.1", tier: "Pro" },
   { id: "gpt-4.1-mini", name: "GPT-4.1 mini", tier: "Std" },
   { id: "gpt-4.1-nano", name: "GPT-4.1 nano", tier: "Lite" },
+  { id: "gpt-5.6-luna", name: "GPT-5.6 Luna" },
   { id: "gpt-5.4", name: "GPT-5.4", tier: "Pro", byomPrefix: "5.4" },
   { id: "gpt-5.4-mini", name: "GPT-5.4 mini", byomPrefix: "5.4 mini" },
   { id: "gpt-5.4-nano", name: "GPT-5.4 nano", byomPrefix: "5.4 nano" },
@@ -25,6 +29,11 @@ export const MODELS = [
   { id: "gpt-oss-120b", name: "GPT OSS 120B", oss: true },
   { id: "gpt-6-sol", name: "GPT-6 Sol" },
 ];
+
+export function supportsScenario(model, hosting, pipeline) {
+  if (model.managedPipeline) return hosting === "managed" && pipeline === model.managedPipeline;
+  return ["native", "hybrid"].includes(pipeline) ? Boolean(model.realtime) : !model.realtime;
+}
 
 export function validateAssumptions(a) {
   for (const key of Object.keys(DEFAULTS)) {
@@ -54,7 +63,10 @@ export function meterRate(snapshot, name, unit = "tokens") {
   return meter.retailPrice * factor;
 }
 
-export function getRates(snapshot, model, hosting, pipeline = "cascade") {
+export function getRates(snapshot, model, hosting, pipeline = model.managedPipeline || "cascade") {
+  if (model.managedPipeline && !supportsScenario(model, hosting, pipeline)) {
+    throw new Error(`${model.name} uses a managed ${model.managedPipeline} tier reference; no BYOM or alternative-pipeline rates are verified.`);
+  }
   const rates = { textInput: null, textCached: null, textOutput: null,
     audioInput: null, audioCached: null, audioOutput: null, speechInput: null, speechOutput: null,
     liveMinute: null };
@@ -113,10 +125,11 @@ export function getRates(snapshot, model, hosting, pipeline = "cascade") {
       // pricing for reused tokens rather than inventing a cache discount.
       rates.textCached = rates.textInput;
       sources.textCached = sources.textInput;
-    } else if (model.id === "gpt-6-sol") {
-      read("textInput", "6-sol ShortCo Inp Std Gl 1M Tokens");
-      read("textCached", "6-sol ShortCo Cd Inp Std Gl 1M Tokens");
-      read("textOutput", "6-sol ShortCo Opt Std Gl 1M Tokens");
+    } else if (model.id === "gpt-6-sol" || model.id === "gpt-5.6-luna") {
+      const p = model.id === "gpt-6-sol" ? "6-sol" : "5.6 luna";
+      read("textInput", `${p} ShortCo Inp Std Gl 1M Tokens`);
+      read("textCached", `${p} ShortCo Cd Inp Std Gl 1M Tokens`);
+      read("textOutput", `${p} ShortCo Opt Std Gl 1M Tokens`);
     } else if (model.byomPrefix) {
       const p = model.byomPrefix;
       read("textInput", `${p} ${p.startsWith("5.4 ") ? "Inp" : "inp"} Gl 1M Tokens`);
