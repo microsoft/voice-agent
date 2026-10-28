@@ -793,6 +793,12 @@ above, not the separate Azure OpenAI `/openai/v1/realtime/calls` flow.
 
 ## Troubleshooting
 
+The call panel shows the Azure **Session ID** when the service reports it and
+keeps it visible after a failed response, connection failure, or disconnect.
+Copy it when reporting a problem. If startup fails before Azure returns an ID,
+the panel explicitly reports that the Session ID is unavailable. Starting a new
+call clears the previous call's ID; session IDs are not saved in browser storage.
+
 | Symptom | Action |
 | --- | --- |
 | Setup needed | Fill in this directory's `.env` and restart. |
