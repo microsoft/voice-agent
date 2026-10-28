@@ -166,9 +166,9 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definition["tools"], [self.weather.return_value])
         self.assertNotIn("WEATHER LOOKUP", definition["instructions"])
         self.assertNotIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
-        self.assertIn("You are Foundry Voice Agent.", definition["instructions"])
-        self.assertIn("identify yourself as Foundry Voice Agent, not ChatGPT", definition["instructions"])
-        self.assertIn("Do not repeat your identity in ordinary replies", definition["instructions"])
+        self.assertIn("You are Riley, a general-purpose voice assistant.", definition["instructions"])
+        self.assertIn("{{language_policy}}", definition["instructions"])
+        self.assertIn("The configured greeting opens the conversation. Do not repeat it.", definition["instructions"])
         self.assertIn(":enable?", client.writes[1][0])
 
     async def test_failed_weather_setup_never_publishes_an_agent(self):

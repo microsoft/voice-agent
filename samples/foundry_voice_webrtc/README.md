@@ -168,11 +168,12 @@ name, definition, or Azure credential is accepted from the browser.
 
 The **Model** line reads the saved Agent's model, rather than assuming the demo
 default. Before creation it shows `gpt-realtime-2.1 (after setup)`; a failed lookup
-shows `Unavailable`. New demo Agents answer only the latest request, avoid
-repeating earlier capability lists or adding routine follow-up questions, and
-do not claim reminder or messaging tools that are not connected.
-When asked to introduce itself, the Agent identifies itself as **Foundry Voice
-Agent**, not ChatGPT, without repeating that identity in ordinary replies.
+shows `Unavailable`. New demo Agents use the **Riley** prompt, organized into
+Personality, Environment, Tone, Goal, and Guardrails. Replies are brief and spoken,
+with one question at a time. The existing structured-input language policy and
+untrusted personalization context remain appended, and the configured greeting
+opens the conversation without being repeated. The prompt requests human handoff,
+but this sample does not provide a handoff integration.
 The saved setup uses managed **gpt-realtime-2.1**, **mai-transcribe-2** input transcription,
 and the selected Azure Speech HD output voice. Azure semantic turn detection
 keeps the headset noise-reduction processing on the service-owned audio path;
