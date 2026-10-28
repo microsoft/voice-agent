@@ -66,7 +66,7 @@ test("Azure Realtime uses Pro and Fast uses Lite native speech-to-speech billing
 test("Azure models use their correct managed pipeline, never substituted with GPT BYOM rates", () => {
   for (const id of ["azure-realtime", "azure-realtime-fast"]) {
     for (const hosting of ["managed", "byom"]) for (const pipeline of ["native", "hybrid", "cascade", "live"]) {
-      const supported = hosting === "managed" && pipeline === "native";
+      const supported = hosting === "managed" && pipeline === (id === "azure-realtime-fast" ? "hybrid" : "native");
       assert.equal(supportsScenario(model(id), hosting, pipeline), supported);
       if (!supported) assert.throws(() => getRates(snapshot, model(id), hosting, pipeline), /no BYOM or alternative-pipeline rates/);
     }
