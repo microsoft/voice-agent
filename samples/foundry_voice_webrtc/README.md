@@ -152,7 +152,9 @@ saved Agent without creating or enabling anything:
    weather Toolbox, then creates, saves, and enables the Agent before requesting
    microphone access.
 2. **Saved Agent found:** select **Start conversation** to reuse it. No new Agent
-   or version is created.
+   or version is created unless its weather Toolbox references a missing version.
+   In that case, setup publishes a corrected Agent version using the project's
+   latest published weather Toolbox version containing a `web_search` tool.
 3. **Next visit or restart:** the same project and stable name find the saved
    Agent automatically; there is no setup to repeat.
 
@@ -184,7 +186,12 @@ acknowledgements; tool selection uses the available tool definitions with
 `tool_choice: auto`.
 
 An existing voice Agent is reused without changing its instructions, voice,
-denoise settings, or versions. A non-voice Agent, or an Agent missing required
+denoise settings, or valid Toolbox version pins. Setup checks the saved weather
+Toolbox version before enabling the Agent; only a confirmed missing version is
+repaired. The corrected version preserves metadata, other tools, and all other
+Agent settings. Permission and service errors stop setup rather than triggering
+a replacement. An existing Agent without a weather Toolbox is left unchanged.
+A non-voice Agent, or an Agent missing required
 demo inputs when `PERSONALIZATION_REQUIRED=true`, fails visibly instead of being
 overwritten. A lookup authorization failure is never treated as a missing Agent.
 Agent preparation is serialized within the single-replica demo; do not scale this
