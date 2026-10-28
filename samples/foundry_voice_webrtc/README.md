@@ -15,8 +15,8 @@ recreate only the configured sample Agent. The agent retains its saved instructi
 voice configuration by default. The backend sends a narrow `session.update` for
 the **active session only** to enable automatic interruption truncation and
 retained-item events, preserving the applied turn-detection settings, except for
-Azure Realtime Flash, where automatic truncation and retained-item enrichment
-are disabled. This
+Azure Realtime Flash, where the additional startup update is skipped and
+the service-applied settings are left unchanged. This
 session update does not edit the saved Agent; the browser cannot send one.
 Optional session-start personalization and output-voice selection do not edit the saved Agent.
 
@@ -323,7 +323,9 @@ and restored when switching back to another realtime model. Other models keep
 their configured greetings. This does not resolve unrelated Flash inference errors.
 Flash also disables automatic interruption truncation (`auto_truncate: false`)
 for both WebSocket and WebRTC sessions, while keeping interruption enabled.
-The retained-item include selector is removed for Flash, and the transcript
+For Flash, the bridge skips its additional startup `session.update` and enables
+input after Foundry's first `session.updated` event. It does not modify the
+applied VAD settings or include selectors. The transcript
 warns that interrupted text may include unheard output. Other realtime models
 continue using automatic truncation and authoritative retained-item events.
 
@@ -695,7 +697,8 @@ short-lived, limited TURN credentials: ICE configuration is sent to the browser.
 ```
 
 This opens a short-lived WebSocket session using Azure CLI authentication, applies
-the same active-session truncation update as the app, waits for its acknowledgment,
+the same startup policy as the app (no additional update for Flash; truncation
+update and acknowledgment for other realtime models),
 and closes. It sends no microphone audio or user message.
 It prints sanitized status information, not tokens or session contents. A saved
 agent may still generate a greeting. Success establishes session readiness, not
@@ -745,11 +748,11 @@ preserves the reported VAD type/options and the **whole existing include list**,
 adds `conversation.item.truncated.item` without duplicates, and sets
 `auto_truncate: true` and its prerequisite `interrupt_response: true`.
 It does not change instructions, model, voice, tools, formats, or saved agents.
-For `azure-realtime-flash-2026-10-14`, the same handshake instead sets
-`auto_truncate: false`, keeps `interrupt_response: true`, and removes only
-`conversation.item.truncated.item` from the include list. Input remains disabled
-until Azure acknowledges truncation is off and the selector is absent.
-The runtime model ID `azure-realtime-flash-1` receives the same Flash policy.
+For `azure-realtime-flash-2026-10-14`, the bridge instead skips the additional
+startup update entirely. Input becomes ready after the first `session.updated`;
+the service-applied truncation, interruption, include selectors, and tools remain
+unchanged. The runtime model ID `azure-realtime-flash-1` receives the same
+Flash-only bypass. Other realtime models retain the update/acknowledgment handshake.
 A disabled/missing VAD or disabled automatic responses is reported as a setup
 error rather than silently replacing the saved turn-detection mode.
 

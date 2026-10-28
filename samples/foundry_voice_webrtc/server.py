@@ -77,6 +77,19 @@ class SessionConfiguration:
         if frame.get("type") != "session.updated":
             return False
         session = frame.get("session") or {}
+        if self.update is None and session.get("model") in {FLASH_MODEL, "azure-realtime-flash-1"}:
+            audio_input = (session.get("audio") or {}).get("input") or {}
+            vad = audio_input.get("turn_detection") if "turn_detection" in audio_input else session.get("turn_detection")
+            if (not session.get("id") or not isinstance(vad, dict) or not vad.get("type")
+                    or vad.get("create_response") is False
+                    or (self.session_id is not None and session["id"] != self.session_id)):
+                self.ready = False
+                raise SessionConfigurationError(
+                    "The saved Flash Agent must report a consistent session ID and server-side turn detection with automatic responses.")
+            self.session_id = session["id"]
+            first_ready = not self.ready
+            self.ready = True
+            return first_ready
         if self.update is None:
             self.update = truncation_update(session)
             self.session_id = session.get("id")
