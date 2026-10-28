@@ -164,8 +164,8 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definition["audio"]["input"]["noise_reduction"]["type"],
                          "azure_deep_noise_suppression_headset")
         self.assertEqual(definition["tools"], [self.weather.return_value])
-        self.assertIn("WEATHER LOOKUP", definition["instructions"])
-        self.assertIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
+        self.assertNotIn("WEATHER LOOKUP", definition["instructions"])
+        self.assertNotIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
         self.assertIn("You are Foundry Voice Agent.", definition["instructions"])
         self.assertIn("identify yourself as Foundry Voice Agent, not ChatGPT", definition["instructions"])
         self.assertIn("Do not repeat your identity in ordinary replies", definition["instructions"])

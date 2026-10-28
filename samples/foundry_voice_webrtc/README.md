@@ -177,12 +177,10 @@ The saved setup uses managed **gpt-realtime-2.1**, **mai-transcribe-2** input tr
 and the selected Azure Speech HD output voice. Azure semantic turn detection
 keeps the headset noise-reduction processing on the service-owned audio path;
 GPT Realtime's upstream-owned `server_vad` rejects that denoiser.
-The Agent speaks one brief acknowledgement, such as "Let me check that for
-you," before invoking web search on any topic. The saved prompt makes it follow the
-session language policy and keeps the filler out of the final answer. This is
-model-generated speech from the Agent, not browser speech synthesis or an
-extra client response request. This explicit pre-tool prompt is used instead
-of relying on service `interim_response` support for Toolbox calls.
+Tool descriptions remain in the attached Toolbox rather than the bundled Agent
+instructions. The prompt does not require weather searches or spoken pre-tool
+acknowledgements; tool selection uses the available tool definitions with
+`tool_choice: auto`.
 
 An existing voice Agent is reused without changing its instructions, voice,
 denoise settings, or versions. A non-voice Agent, or an Agent missing required
@@ -353,7 +351,7 @@ can trigger preparation; use Entra sign-in for deployments outside a controlled 
 
 Web search is part of the normal Agent setup, not a browser-side function or a
 weather-only API. The Toolbox retains its legacy **weather** name for
-compatibility, but its prompt and tool descriptions allow searches on any topic.
+compatibility, but its tool descriptions allow searches on any topic.
 Before publishing a new demo Agent, the backend checks for this Toolbox in the
 same Foundry project:
 
