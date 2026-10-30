@@ -41,7 +41,9 @@ function updateVoiceChoices(model) {
   $('voice').hidden = native || live;
   $('native-voice').hidden = !native;
   $('live-voice').hidden = !live;
-  for (const id of ['voice', 'native-voice', 'live-voice']) $(id).disabled = Boolean(call) || $(id).hidden;
+  if (live) $('live-voice').value = '';
+  for (const id of ['voice', 'native-voice', 'live-voice'])
+    $(id).disabled = Boolean(call) || $(id).hidden || id === 'live-voice';
   $('voice-label').htmlFor = live ? 'live-voice' : native ? 'native-voice' : 'voice';
   $('live-model-hint').hidden = !live;
 }

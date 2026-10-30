@@ -266,11 +266,16 @@ the configured resource. For the `va-dev-use2` project, the verified endpoint is
 `https://va-dev-use2.services.ai.azure.com/api/projects/va-dev-use2-project` and
 the Live deployment is `gpt-live-1-test`.
 
-Selecting **GPT Live** previews its native voice selector, defaulting to `marin`.
-Its choices follow the OpenAI SDK's
+GPT Live uses the voice in the saved Agent's `audio.output.voice`; new companions
+default to `marin`. The Live voice selector is disabled and displays **Saved Agent
+voice**. This endpoint rejects the realtime `x-ms-voice-session-override` header,
+and Live voices are immutable after startup. Change the saved voice in Foundry,
+using the OpenAI SDK's
 [Live BuiltInVoice catalog](https://github.com/openai/openai-python/blob/main/src/openai/types/live/built_in_voice.py);
-availability depends on the deployed model. Unsupported voices fail explicitly,
-without substituting an Azure Speech or Azure Realtime voice. Azure does not
+availability depends on the deployed model. Cached pages requesting the same
+voice already saved on the Agent connect without an override. A different
+per-call voice is rejected explicitly instead of substituting a voice or editing
+the Agent during a call. Azure does not
 allow changing `sub_protocol` across versions of a saved Agent. Saving GPT Live
 therefore creates a **separate saved companion Agent**, normally named
 `<AZURE_VOICE_AGENT_NAME>-live` (long names use a shortened prefix and stable hash).
@@ -594,13 +599,15 @@ there is no silent fallback to a greeting without context.
 
 ### Output voice
 
-The voice list displays full service IDs, with
+For realtime Agents, the voice list displays full service IDs, with
 `en-US-Tyler:DragonHDLatestNeural` selected by default. For GPT models, choose
 an HD or MAI Flash voice before connecting, or choose **Saved Agent voice** to preserve the stored setting. The backend
 allowlists these choices and sends an `x-ms-voice-session-override` containing
 `audio.output.voice` and `voice_type: "azure-standard"` at connection time
 (the HD model is selected by the voice name, not a separate `azure-hd` type).
 This applies to the greeting and subsequent output without editing the Agent.
+GPT Live instead uses its saved voice, with no voice-override header; its voice
+control is disabled because per-call overrides are unavailable on this endpoint.
 
 The configured HD voices are:
 

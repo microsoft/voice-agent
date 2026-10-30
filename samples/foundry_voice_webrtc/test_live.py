@@ -12,7 +12,7 @@ import aiohttp
 from aiohttp.test_utils import TestClient, TestServer
 
 from check_websocket import check_live
-from live import (LIVE_VOICES, LiveSessionError, connect_live, live_client_frame,
+from live import (LiveSessionError, connect_live, live_client_frame,
                   live_definition, personalization_events, relay_live)
 from server import (ACTIVE, DOWNLOAD_SECRET, SETTINGS, Settings, create_app,
                     verify_download_token)
@@ -29,11 +29,12 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
     def definition(self):
         return json.loads(Path(__file__).with_name("personalized-agent.json").read_text())
 
-    def test_voice_catalog_matches_html_and_is_distinct_from_azure_voices(self):
+    def test_live_voice_control_only_offers_saved_voice(self):
         page = Path(__file__).with_name("public").joinpath("index.html").read_text(encoding="utf-8")
         select = re.search(r'<select id="live-voice".*?</select>', page, re.S).group()
-        self.assertEqual(set(re.findall(r'<option value="([a-z]+)"', select)), LIVE_VOICES)
-        self.assertIn('<option value="marin" selected>', select)
+        self.assertEqual(re.findall(r'<option value="([^"]*)"', select), [""])
+        self.assertIn("disabled", select.split(">")[0])
+        self.assertIn("Saved Agent voice (configured in Foundry)", select)
 
     def test_live_definition_uses_deployments_and_no_realtime_only_fields(self):
         source = self.definition()
@@ -335,6 +336,7 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(selected.agent, "demo-agent-live")
             self.assertEqual(version, "4")
             self.assertIsNone(values)
+            self.assertNotIn("x-ms-voice-session-override", headers)
             await announce("conv_live")
         async with TestClient(TestServer(app)) as client:
             with patch("server.aiohttp.ClientSession", return_value=service), patch("server.connect_live", connect):
@@ -344,6 +346,48 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event["agent"], "demo-agent-live")
         self.assertEqual(verify_download_token(app[DOWNLOAD_SECRET], "demo-agent-live",
                                               event["downloadToken"]), "conv_live")
+
+    async def test_browser_live_voice_and_personalization_do_not_send_realtime_override(self):
+        cfg = self.config(personalization_required=True)
+        live = live_definition(self.definition(), "live", "backend")
+        for voice in ("", "marin"):
+            service = ServiceClient([Response(200, self.companion(cfg, live))])
+            async def connect(client, browser, selected, headers, transport, version, announce, values):
+                self.assertNotIn("x-ms-voice-session-override", headers)
+                self.assertNotIn("x-ms-voice-structured-inputs", headers)
+                self.assertEqual(values["display_name"], "Test")
+                self.assertEqual(values["client_language"], "en-US")
+                self.assertIn("entire conversation in English", values["language_policy"])
+                await browser.send_json({"type": "bridge.ready", "protocol": "live"})
+            async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+                with patch("server.aiohttp.ClientSession", return_value=service), patch("server.connect_live", connect):
+                    async with client.ws_connect(
+                            "/api/voice?transport=websocket&protocol=live&agent=demo-agent-live"
+                            f"&personalize=true&voice={voice}",
+                            headers={"Origin": str(client.make_url("")).rstrip("/")}) as ws:
+                        await ws.send_json({"type": "bridge.personalize", "display_name": "Test",
+                            "user_context": "", "client_language": "en-US", "english_only": True})
+                        self.assertEqual((await ws.receive_json())["type"], "bridge.ready")
+            self.assertEqual(service.writes, [])
+
+    async def test_different_live_voice_fails_explicitly_without_changing_saved_agent(self):
+        cfg = self.config()
+        live = live_definition(self.definition(), "live", "backend")
+        saved = self.companion(cfg, live)
+        before = copy.deepcopy(saved)
+        service = ServiceClient([Response(200, saved)])
+        async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+            with patch("server.aiohttp.ClientSession", return_value=service), patch(
+                    "server.connect_live", AsyncMock()) as connect:
+                async with client.ws_connect(
+                        "/api/voice?transport=websocket&protocol=live&agent=demo-agent-live&voice=alloy",
+                        headers={"Origin": str(client.make_url("")).rstrip("/")}) as ws:
+                    event = await ws.receive_json()
+        self.assertEqual(event["type"], "bridge.error")
+        self.assertIn("does not support per-call voice overrides", event["error"]["message"])
+        self.assertEqual(saved, before)
+        self.assertEqual(service.writes, [])
+        connect.assert_not_awaited()
 
     async def test_directly_configured_live_agent_does_not_create_nested_companion(self):
         cfg = self.config(personalization_required=True)

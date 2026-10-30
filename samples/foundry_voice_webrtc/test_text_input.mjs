@@ -322,6 +322,8 @@ test('GPT Live selection previews only its voices and omits independent transcri
   ui.element('agent-model-choice').value = 'gpt-live-1';
   ui.element('agent-model-choice').onchange();
   assert.equal(ui.element('live-voice').hidden, false);
+  assert.equal(ui.element('live-voice').disabled, true);
+  assert.equal(ui.element('live-voice').value, '');
   assert.equal(ui.element('native-voice').hidden, true);
   assert.equal(ui.element('voice').hidden, true);
   assert.equal(ui.element('agent-transcription-choice').disabled, true);

@@ -1230,8 +1230,11 @@ async def bridge(request):
                 latest = await lookup_configured_agent(client, cfg, headers, include_version=True)
                 if latest is None or latest["definition"].get("sub_protocol") != "live":
                     raise LiveSessionError("Save the GPT Live model version before starting a live session.")
-                if voice:
-                    headers["x-ms-voice-session-override"] = json.dumps({"audio": {"output": {"voice": voice}}})
+                saved_voice = ((latest["definition"].get("audio") or {}).get("output") or {}).get("voice")
+                if voice and voice != saved_voice:
+                    raise LiveSessionError(
+                        "GPT Live uses its saved Agent voice; this endpoint does not support per-call voice overrides. "
+                        "Refresh the page to use Saved Agent voice, or change the saved voice in Foundry.")
                 await connect_live(client, browser, cfg, headers, transport, latest["version"], announce_conversation,
                                    json.loads(structured) if structured is not None else None)
                 return browser
