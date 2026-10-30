@@ -270,17 +270,36 @@ Selecting **GPT Live** previews its native voice selector, defaulting to `marin`
 Its choices follow the OpenAI SDK's
 [Live BuiltInVoice catalog](https://github.com/openai/openai-python/blob/main/src/openai/types/live/built_in_voice.py);
 availability depends on the deployed model. Unsupported voices fail explicitly,
-without substituting an Azure Speech or Azure Realtime voice. Saving the model
-publishes a Live version with a Responses backend and `web_search` for any topic,
+without substituting an Azure Speech or Azure Realtime voice. Azure does not
+allow changing `sub_protocol` across versions of a saved Agent. Saving GPT Live
+therefore creates a **separate saved companion Agent**, normally named
+`<AZURE_VOICE_AGENT_NAME>-live` (long names use a shortened prefix and stable hash).
+The original realtime Agent and all its versions remain unchanged.
+The companion uses a Responses backend and `web_search` for any topic,
 including news, products, prices, documentation, travel, local information, and
 weather. Explicit lookup requests and facts needing verification trigger search;
 it is not limited to weather or current events. It does not attach the realtime
 weather Toolbox.
-The source instructions are supplied to that backend; its original complete
-realtime definition remains in the previous version. Version metadata records
-that source version so switching back restores its prompt, structured inputs,
-greeting, tools, audio settings and transcription before applying the selected
-realtime model/transcription.
+The source instructions are copied to that backend at companion creation.
+Later switches reuse the saved companion, including independently edited
+instructions; they do not recopy or overwrite its configuration. Ownership
+metadata binds it to the original Agent. An unrelated Agent at the companion
+name causes an explicit error and is never overwritten.
+Switching back selects the original Agent's **latest** saved configuration,
+including its prompt, structured inputs, greeting, tools, audio and transcription,
+before applying any explicitly selected realtime model/transcription changes.
+Selecting an unchanged model does not publish an unnecessary version.
+
+Selection is scoped to the current page, not a mutable server-wide Agent pointer.
+Calls, preparation and YAML settings use the selected Agent; recording download
+tokens remain bound to the Agent that created the conversation, even after
+switching. Reloading the page selects the configured Agent again; selecting GPT
+Live reuses its existing companion across server restarts. Reset is disabled
+while GPT Live is selected, and resetting the realtime Agent does not delete the
+companion. To create a companion from updated realtime instructions, use a new
+configured Agent name or manage the saved companion explicitly in Foundry.
+An explicitly configured Live Agent can still be invoked directly, but cannot
+be converted to realtime by publishing another version.
 The deployment script passes both Live deployment settings to Azure Container
 Apps, and `check_websocket.py` detects Live Agents and checks native startup
 and graceful close without sending microphone audio.
