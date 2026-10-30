@@ -209,7 +209,11 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         source = self.definition()
         live = live_definition(source, "live", "backend")
         for definition, metadata in ((live, {}), (live, {"voice_companion_for": "another-agent"}),
-                                      (source, {"voice_companion_for": cfg.agent})):
+                (source, {"voice_companion_for": cfg.agent}),
+                (live, {"sample": "foundry_voice_webrtc", "companion_of": "another-agent"}),
+                (live, {"companion_of": cfg.agent}),
+                (live, {"sample": "foundry_voice_webrtc", "companion_of": cfg.agent,
+                        "voice_companion_for": "another-agent"})):
             service = ServiceClient([Response(200, self.saved(source)),
                                      Response(200, self.saved(definition, metadata=metadata))])
             async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
@@ -222,6 +226,28 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("unrelated Agent", result["error"])
             self.assertEqual(service.writes, [])
             self.assertEqual(service.removals, [])
+
+    async def test_legacy_sample_companion_is_reused_without_republishing_or_metadata_changes(self):
+        cfg = self.config()
+        source = self.definition()
+        live = live_definition(source, "saved-live-deployment", "saved-backend")
+        saved = self.saved(live, "5", {"sample": "foundry_voice_webrtc", "companion_of": cfg.agent})
+        before = copy.deepcopy(saved)
+        service = ServiceClient([Response(200, self.saved(source)), Response(200, saved), Response(200, saved)],
+                                [Response(204)])
+        async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+            with patch("server.aiohttp.ClientSession", return_value=service):
+                response = await client.post("/api/agent/model",
+                    headers={"Origin": str(client.make_url("")).rstrip("/")},
+                    json={"model": "gpt-live-1", "version": "1"})
+                result = await response.json()
+        self.assertEqual(response.status, 200, result)
+        self.assertEqual(result["agent"], "demo-agent-live")
+        self.assertEqual(result["version"], "5")
+        self.assertEqual(saved, before)
+        self.assertEqual(len(service.writes), 1)
+        self.assertTrue(service.writes[0][0].endswith("/agents/demo-agent-live:enable"))
+        self.assertEqual(service.removals, [])
 
     async def test_switch_rejects_stale_version_and_active_call_before_any_write(self):
         cfg = self.config()

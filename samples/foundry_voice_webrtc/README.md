@@ -285,6 +285,9 @@ Later switches reuse the saved companion, including independently edited
 instructions; they do not recopy or overwrite its configuration. Ownership
 metadata binds it to the original Agent. An unrelated Agent at the companion
 name causes an explicit error and is never overwritten.
+Companions from earlier sample deployments are also reused when their metadata
+identifies this sample and their `companion_of` matches the configured Agent;
+their definitions, metadata and versions are not rewritten during switching.
 Switching back selects the original Agent's **latest** saved configuration,
 including its prompt, structured inputs, greeting, tools, audio and transcription,
 before applying any explicitly selected realtime model/transcription changes.

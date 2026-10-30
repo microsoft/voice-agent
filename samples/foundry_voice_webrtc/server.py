@@ -571,11 +571,14 @@ async def lookup_configured_agent(client, cfg, headers, *, include_version=False
             definition = latest.get("definition") or {}
             if definition.get("kind") != "voice":
                 raise AgentPreparationError("The configured Agent exists but is not a voice Agent. It was not changed.")
-            if cfg.companion_for and (
-                    definition.get("sub_protocol") != "live"
-                    or (latest.get("metadata") or {}).get("voice_companion_for") != cfg.companion_for):
-                raise AgentPreparationError(
-                    "The GPT Live companion name is already used by an unrelated Agent. It was not changed.")
+            if cfg.companion_for:
+                metadata = latest.get("metadata") or {}
+                owner = metadata.get("voice_companion_for")
+                if owner is None and metadata.get("sample") == "foundry_voice_webrtc":
+                    owner = metadata.get("companion_of")
+                if definition.get("sub_protocol") != "live" or owner != cfg.companion_for:
+                    raise AgentPreparationError(
+                        "The GPT Live companion name is already used by an unrelated Agent. It was not changed.")
             if cfg.personalization_required and definition.get("sub_protocol") != "live":
                 if not required.issubset(definition.get("structured_inputs") or {}):
                     raise AgentPreparationError("The existing Agent lacks the demo structured inputs. Choose a new Agent name; it was not overwritten.")
