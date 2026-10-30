@@ -1385,15 +1385,40 @@ def try_it_turns(readme: Path) -> list[str]:
     return [turn.replace("mock_tool_call_", "") for turn in turns]
 
 
+def try_it_note(readme: Path) -> str:
+    """The paragraph between the "Try these turns" heading and its first bullet, if the README has one.
+
+    A Template whose tools serve live data uses it to replace the default test-data notice.
+    """
+    try:
+        lines = readme.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    note: list[str] = []
+    inside = False
+    for line in lines:
+        if line.strip() == TRY_TURNS_HEADING:
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.startswith(("## ", "- ")):
+            break
+        if line.strip():
+            note.append(line.strip())
+    return " ".join(note)
+
+
 async def template_try_it(request: web.Request) -> web.Response:
     """Sample turns and test data for a Template's mock tools, for the conversation page."""
     source = _catalog(request).source(request.match_info["template_id"])
     if source is None:
         raise web.HTTPNotFound(text="Unknown template.")
-    turns = try_it_turns(source.path.parent / "README.md")
+    readme = source.path.parent / "README.md"
+    turns = try_it_turns(readme)
     if not turns:
         raise web.HTTPNotFound(text="This template has no sample turns.")
-    return web.json_response({"id": source.id, "name": source.name, "turns": turns})
+    return web.json_response({"id": source.id, "name": source.name, "turns": turns, "note": try_it_note(readme)})
 
 
 async def logic_apps_mcp_guide(_: web.Request) -> web.Response:

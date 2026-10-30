@@ -589,6 +589,22 @@
         "source_label": "Public no-auth MCP",
         "source_reference": "VoiceAgent/shared_mcp"
       }
+    },
+    {
+      "id": "conference-concierge-example",
+      "folder": "../samples/example35_conference_concierge",
+      "name": "Example 35: Conference Concierge (Ignite 2026)",
+      "target_locale": "en-US",
+      "category": "Events",
+      "summary": "A hands-free event concierge: find sessions, build an agenda with clash checks, get recommendations, hear what's starting now and official room changes, and ask official FAQ questions in any language. Ignite 2026 is the example event, with official data only.",
+      "accent_color": "#0078d4",
+      "lock_runtime": true,
+      "mcp": {
+        "connection_mode": "public",
+        "server_url": "https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/conference",
+        "source_label": "Conference MCP pack (shared no-auth MCP)",
+        "source_reference": "voice-agent/shared_mcp conference"
+      }
     }
   ]
 }

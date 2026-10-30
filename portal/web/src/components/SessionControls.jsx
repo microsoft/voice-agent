@@ -16,7 +16,7 @@ export function SessionControls({
     searching: false,
     error: "",
   });
-  const { isConnected, sessionReady, micMuted, status } = session;
+  const { isConnected, sessionReady, toolsLoading, micMuted, status } = session;
   const agentListBusy = agentListState.loading || agentListState.loadingMore;
   const agentQueryMatchesSelection = agentQuery.trim() === (agent?.name || "");
 
@@ -164,7 +164,7 @@ export function SessionControls({
           {isConnected ? (
             <>
               <button type="button" className="icon-button" onClick={session.toggleMute}
-                disabled={!sessionReady} title={micMuted ? "Unmute mic" : "Mute mic"}
+                disabled={!sessionReady || toolsLoading} title={toolsLoading ? "Loading tools…" : micMuted ? "Unmute mic" : "Mute mic"}
                 aria-label={micMuted ? "Unmute mic" : "Mute mic"}>
                 <Icon name={micMuted ? "muted" : "voice"} />
               </button>
