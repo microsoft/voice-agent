@@ -8,6 +8,7 @@ import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
+import re
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -85,6 +86,23 @@ HINDI_TEMPLATE_IDS = [
 ]
 EXPECTED_TEMPLATES.extend(HINDI_TEMPLATE_IDS)
 MCP_TEMPLATES.extend(HINDI_TEMPLATE_IDS)
+# Generic conference concierge with official Ignite 2026 data, on the conference MCP pack.
+CONFERENCE_TEMPLATE = "conference-concierge-example"
+CONFERENCE_TOOLS = [
+    "conference_get_event_info",
+    "conference_search_sessions",
+    "conference_get_session",
+    "conference_recommend_sessions",
+    "conference_similar_sessions",
+    "conference_sessions_starting_soon",
+    "conference_get_session_changes",
+    "conference_agenda_add",
+    "conference_agenda_remove",
+    "conference_agenda_list",
+    "conference_get_faq",
+]
+EXPECTED_TEMPLATES.append(CONFERENCE_TEMPLATE)
+MCP_TEMPLATES.append(CONFERENCE_TEMPLATE)
 END_CONVERSATION_TOOL = {"type": "system", "name": "end_conversation"}
 MCP_BASE_URL = (
     "https://voice-agent-noauth-mcp"
@@ -98,6 +116,7 @@ MCP_ROUTES = {
     "elevator-service-example": "/mcp/elevator-service",
     "frontdesk-receptionist-example": "/mcp/frontdesk",
     **{template_id: "/mcp/mock-tool-call" for template_id in MOCK_TOOL_TEMPLATE_IDS},
+    CONFERENCE_TEMPLATE: "/mcp/conference",
 }
 MOCK_TOOL_PREFIX = "mock_tool_call_"
 
@@ -309,6 +328,55 @@ class TemplateCatalogTests(unittest.TestCase):
                     {"type": "azure-standard", "name": expected},
                     definition["audio"]["output"]["voice"],
                 )
+
+    def test_conference_concierge_binds_the_conference_pack(self) -> None:
+        catalog = TemplateCatalog()
+        card = next(card for card in catalog.cards() if card["id"] == CONFERENCE_TEMPLATE)
+        detail = catalog.detail(CONFERENCE_TEMPLATE)
+        source = catalog.source(CONFERENCE_TEMPLATE)
+        assert detail is not None and source is not None
+        self.assertTrue(detail["requires_mcp"])
+        self.assertTrue(detail["runtime_locked"])
+        # Single node on purpose: with a handoff graph Voice Live intermittently emitted the MCP tools as
+        # plain function calls (never executed) and the entrypoint sometimes spoke tool JSON aloud.
+        self.assertEqual(0, detail["edge_count"])
+        self.assertEqual("public", source.connection_mode)
+        self.assertFalse(card["mock_tools"])
+        agent = json.loads(
+            (ROOT.parent / "samples" / "example35_conference_concierge" / "agent.json").read_text(encoding="utf-8")
+        )
+        authored = agent["definition"]
+        self.assertEqual(CONFERENCE_TEMPLATE, agent["name"])
+        # Foundry rejects an Agent description longer than 512 characters at publication.
+        self.assertLessEqual(len(agent["description"]), 512)
+        self.assertEqual(("managed", "gpt-realtime", False), (authored["model_type"], authored["model"], authored["store"]))
+        self.assertEqual("en-US-Emma:DragonHDLatestNeural", authored["audio"]["output"]["voice"]["name"])
+        self.assertTrue(authored["audio"]["input"]["turn_detection"]["interrupt_response"])
+        self.assertEqual("llm_interim_response", authored["interim_response"]["type"])
+        self.assertNotIn("handoff", authored)
+        self.assertEqual("auto", authored["tool_choice"])
+        mcp_tools = list(template_portal.iter_mcp_tools(authored))
+        self.assertEqual(1, len(mcp_tools))
+        tool = mcp_tools[0]
+        self.assertEqual(("conference", "", "never"), (tool["server_label"], tool["server_url"], tool["require_approval"]))
+        self.assertEqual(CONFERENCE_TOOLS, tool["allowed_tools"])
+        for key in ("project_connection_id", "authorization", "headers"):
+            self.assertNotIn(key, tool)
+        self.assertIn(END_CONVERSATION_TOOL, authored["tools"])
+        instructions = authored["instructions"]
+        mentioned = set(re.findall(r"(?:conference|mock_tool_call)_[a-z_]+", instructions))
+        self.assertTrue(mentioned <= set(CONFERENCE_TOOLS), mentioned - set(CONFERENCE_TOOLS))
+        for text in ("language of that message", "no official data", "### Dev mode", "BRK244", "end_conversation"):
+            self.assertIn(text, instructions)
+        self.assertNotIn("sample data", instructions.lower())
+        server_url = MCP_BASE_URL + MCP_ROUTES[CONFERENCE_TEMPLATE]
+        definition = materialize_template(
+            catalog.document(CONFERENCE_TEMPLATE), model="", voice="",
+            mcp_server_url=server_url, mcp_connection_id="", mcp_public=True,
+        )
+        for tool in template_portal.iter_mcp_tools(definition):
+            self.assertEqual(server_url, tool["server_url"])
+        self.assertEqual(instructions, definition["instructions"])
 
     def test_tool_map_suggestion_and_per_system_rewrite(self) -> None:
         required = [
@@ -1177,7 +1245,17 @@ class TemplateRouteTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(template_id=template_id):
                 response = await self.client.get(f"/api/templates/{template_id}/try-it")
                 self.assertEqual(200, response.status)
-                self.assertIn(expected, " ".join((await response.json())["turns"]))
+                payload = await response.json()
+                self.assertIn(expected, " ".join(payload["turns"]))
+                self.assertEqual("", payload["note"])
+
+    async def test_live_data_template_replaces_the_test_data_notice(self) -> None:
+        response = await self.client.get(f"/api/templates/{CONFERENCE_TEMPLATE}/try-it")
+        self.assertEqual(200, response.status)
+        payload = await response.json()
+        self.assertIn("live official Microsoft Ignite data", payload["note"])
+        self.assertNotIn("fictional", payload["note"])
+        self.assertTrue(any("BRK244" in turn for turn in payload["turns"]))
 
     async def test_logic_apps_mcp_guide_is_served(self) -> None:
         response = await self.client.get("/guide/logic-apps-mcp")

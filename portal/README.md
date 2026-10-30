@@ -512,7 +512,9 @@ publish operations, including the template catalog consumed by Handoff Graph.
   `example7_receptionist_messaging` handoff examples, and the 27
   reference-template `example8_*` through `example34_*` handoff examples,
   call mock tools on the public `/mcp/mock-tool-call` route by default and
-  need no MCP setup. Each card has a **Version** selector: **Default** loads
+  need no MCP setup. `example35_conference_concierge` (Conference Concierge, Ignite 2026,
+  official data only) uses the hosted `/mcp/conference` route; its README also describes running
+  the pack locally. Each card has a **Version** selector: **Default** loads
   the configured Agent file;
   other versions are discovered recursively under that sample folder using
   the same filename (normally `agent.json`). Version names join the relative
