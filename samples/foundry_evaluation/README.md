@@ -10,6 +10,10 @@ whether the booking meets a fixed 24-hour refund eligibility rule. It cannot
 cancel a reservation or process a refund. This is a smoke test with fixed sample
 data, not production airline policy, identity verification, or a customer benchmark.
 
+**Prefer code?** The [end-to-end Python runner](#run-the-entire-example-with-python)
+creates a new agent/toolbox, simulates the caller, registers this custom rubric,
+and collects evaluation results without using the portal.
+
 ## Follow the illustrated tutorial
 
 Every numbered step below has its screenshot **embedded directly after the
@@ -32,9 +36,10 @@ deployments; see [evaluation permissions](https://learn.microsoft.com/azure/foun
 Only attach mock tools: a simulated caller can invoke the target's tools.
 
 You do not need access to the original project or SharePoint guide. All inputs
-are [included below](#input-files-and-offline-preparation). This is a portal
-walkthrough, not a one-click provisioning script; only the final **Submit**
-starts an evaluation. Preview-portal labels and model availability can vary.
+are [included below](#input-files-and-offline-preparation). In the portal path,
+only the final **Submit** starts an evaluation. The optional Python `run` command
+also creates resources and submits a billable evaluation. Preview-portal labels
+and model availability can vary.
 
 ## Prepare the agent, scenario, and rubric
 
@@ -427,6 +432,137 @@ Use **Download results** and **Download user logs** to retain authorized evidenc
 according to your project's policy. Keep raw conversations, internal portal
 links, signed storage URLs, and credentials out of the repository.
 
+## Run the entire example with Python
+
+[run_evaluation.py](run_evaluation.py) is the single entry point for agent
+creation, cloud conversation simulation, and custom-rubric evaluation. Keep it
+with the other files in this directory; it reads the supplied prompt, Python
+tool, scenario, rubric, settings, and `prepare_example.py`.
+
+**Prerequisites:** Python 3.10+, an existing Foundry project with the features
+listed above, resource-creation/evaluation permissions, and actual deployed
+simulator and judge models. This script does not create an Azure project,
+deploy models, grant permissions, or configure billing. Native Voice Agents,
+Code Interpreter toolboxes, Files/Containers, simulation, and custom rubric
+APIs must all be available in the target project. There is no text-only or
+different-evaluator fallback if a preview feature is unavailable.
+
+From the repository root, set up this sample in PowerShell:
+
+```powershell
+Set-Location samples\foundry_evaluation
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# If using Azure CLI credentials, sign in to the tenant owning your project.
+az login
+
+$env:AZURE_AI_PROJECT_ENDPOINT = "https://<resource>.services.ai.azure.com/api/projects/<project>"
+$env:AZURE_AI_SIMULATOR_MODEL = "<your-simulator-deployment>"
+$env:AZURE_AI_MODEL_DEPLOYMENT_NAME = "<your-judge-deployment>"
+```
+
+Replace **all** placeholders with your project's values. The two model values
+are deployment names, not an assumption that the screenshot's `gpt-5.6-luna`
+exists in your project. Authentication uses `DefaultAzureCredential`; Azure CLI
+is one supported credential source, not a requirement if another source is
+configured. GitHub sign-in does not authenticate Azure.
+
+First inspect the proposed request. `plan` needs no third-party imports,
+credentials, network access, or output directory:
+
+```powershell
+.\.venv\Scripts\python.exe run_evaluation.py plan
+```
+
+Then explicitly start the **billable** end-to-end operation:
+
+```powershell
+.\.venv\Scripts\python.exe run_evaluation.py run `
+  --output .\voice-agent-output\airline-eval-01 `
+  --timeout-seconds 900
+```
+
+Each `run` uses unique resource names and creates new resources; it does not
+modify the original `Airline-Agent`, toolbox, or evaluation. The command:
+
+1. Uploads `airline_lookup_default.py` and waits for **Processed**.
+2. Creates a Code Interpreter container, reads the actual mounted file path
+   from service metadata, and verifies the mounted file's SHA-256.
+3. Creates a toolbox and Voice Agent, substitutes that path/toolbox in the
+   original prompt, reads back the agent, and enables it.
+4. Registers the five supplied rubric dimensions with weights `4, 4, 9, 3, 5`,
+   `general_quality` always applicable, and a normalized threshold of `0.5`.
+5. Pins the toolbox, agent, and evaluator versions, then submits cloud voice
+   conversation simulation with **conversation-level** evaluation.
+6. Polls the run, downloads every page of output items, and writes the scores.
+
+Defaults match the sample: managed `gpt-realtime-2.1`, OpenAI `Marin`, simulated
+caller `en-US-Ava:DragonHDLatestNeural`, one scenario/repetition, and a maximum
+of ten turns. Use `--agent-model`, `--agent-voice`, `--agent-voice-type`,
+`--simulator-model`, `--judge-model`, or `--caller-voice` when necessary.
+Inspect `run --help` for the full options. The runner caps each run at twenty
+conversations, each with at most twenty turns, to bound accidental spend.
+
+**Artifacts and recovery:** the output folder must not already exist. It holds
+`request.json`, a progressively updated `receipt.json`, upload/container
+metadata, rendered `agent_prompt.txt`, `resolved_request.json`, `run.json`,
+`output_items.json`, and, for an entirely passing run, `summary.json`. Files
+appear as their stages complete. The raw run and conversation results are
+retained before checking completion, expected counts, and rubric scores.
+A failed/errored/incomplete run, invalid result, or failing rubric returns a
+nonzero exit code; the runner does not interpret mere completion as success.
+
+After a polling timeout, **do not repeat `run`**. The cloud run continues and is
+not canceled. Retrieve the same submitted evaluation into a new local folder:
+
+```powershell
+.\.venv\Scripts\python.exe run_evaluation.py results `
+  --receipt .\voice-agent-output\airline-eval-01\receipt.json `
+  --output .\voice-agent-output\airline-eval-01-results `
+  --timeout-seconds 900
+```
+
+`results` only retrieves results; it never creates another agent or evaluation.
+If provisioning failed before a run ID was saved, inspect the receipt and
+Foundry before submitting again. Creation calls are not automatically retried;
+a lost response may still mean the server created a resource. There is no
+automatic deletion, cancellation, or provisioning-resume operation. Retain the
+receipt and clean up its uniquely named test resources through your project's
+approved process.
+
+### Differences from the portal run
+
+The runner uses the native SDK rubric definition, translating the snapshot's
+`pass_score_threshold` to API field `pass_threshold`; `rubric.json` itself is
+still not an API import payload. It uses the SDK's `evaluators.create_version`
+and the conversation-simulation preview API (`2025-11-15-preview`).
+The original rubric generation prompt is documentation: the script registers
+the already-reviewed dimensions directly instead of generating them again.
+It honors the service's `passed` flag as well as the threshold; a dimension
+scoring 1 can cause failure regardless of the aggregate score.
+
+Unlike the portal's automatic Code Interpreter container, the runner uses an
+explicit container so it can resolve the mounted path without an extra LLM
+conversation or an invented filename. All conversations in this run share that
+container. The supplied functions are stateless, but this is not isolated
+per-conversation tool execution. Containers expire according to the service's
+lifetime rules; create a fresh run rather than reusing an expired toolbox.
+
+The agent sets `store=True`, retaining cloud conversation/audio artifacts for
+inspection. `--save-conversations` additionally asks the simulator to generate
+a conversation dataset; it does not control agent storage. This command saves
+returned evaluation JSON, not downloaded WAV files or independently verified
+tool execution traces. Use only the fictional sample inputs and keep the
+ignored output directory private.
+
+The runner is covered by offline SDK request/response tests. **It has not been
+executed against a live Azure project for this guide.** Preview feature support,
+quotas, permissions, and the Files/Containers endpoint must be confirmed in your
+target project. A new simulation is nondeterministic and need not reproduce the
+original `0.943` score. The fifteen screenshots above document the original
+portal workflow, not execution of this script.
+
 ## Input files and offline preparation
 
 Only the **Python file** and **scenario JSONL** are uploaded as files. Paste the
@@ -442,7 +578,9 @@ as agent tools.
 | [rubric.json](rubric.json) | Step 5: copy the generation prompt, dimensions, weights, and threshold; **not** an API import payload. |
 | [evaluation_settings.json](evaluation_settings.json) | Steps 2-13: reference checklist for all portal values; **not** an API import payload. |
 | [prepare_example.py](prepare_example.py) | Optional offline generation of ready-to-paste inputs. |
+| [run_evaluation.py](run_evaluation.py) / [requirements.txt](requirements.txt) | Optional end-to-end SDK runner and pinned dependencies. |
 | [test_airline_lookup_default.py](test_airline_lookup_default.py) / [test_prepare_example.py](test_prepare_example.py) | Offline checks for the mock functions and input preparation. |
+| [test_run_evaluation.py](test_run_evaluation.py) | Offline SDK serialization, orchestration, and failure-handling tests. |
 | [screenshots/](screenshots/) | Image assets for the fifteen figures embedded in this tutorial. |
 
 The helper needs Python 3.10+ but no third-party packages or repository SDK
@@ -576,15 +714,24 @@ and configuration values have not been altered.
 
 ## Offline checks
 
-From the repository root, no third-party packages or Azure calls are needed:
+From the repository root, the original mock/preparation checks need no
+third-party packages or Azure calls:
 
 ```powershell
-python -m unittest discover -s samples\foundry_evaluation -p "test_*.py" -v
+python -m unittest discover -s samples\foundry_evaluation -p "test_airline_lookup_default.py" -v
+python -m unittest discover -s samples\foundry_evaluation -p "test_prepare_example.py" -v
 ```
 
-These checks cover the deterministic toolbox functions and local input
-preparation, not a new live evaluation. No new cloud run was submitted to
-prepare this walkthrough.
+For all checks, including the end-to-end runner's synthetic HTTP tests, install
+this sample's `requirements.txt` as above, then run from the sample directory:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s . -p "test_*.py" -v
+```
+
+All tests are offline. The runner tests use the real pinned SDK clients and
+synthetic service responses, not Azure credentials or live evaluations. No new
+cloud run was submitted to prepare this walkthrough.
 
 ## Limits and follow-up coverage
 
