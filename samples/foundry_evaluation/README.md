@@ -10,9 +10,11 @@ whether the booking meets a fixed 24-hour refund eligibility rule. It cannot
 cancel a reservation or process a refund. This is a smoke test with fixed sample
 data, not production airline policy, identity verification, or a customer benchmark.
 
-**Prefer code?** The [end-to-end Python runner](#run-the-entire-example-with-python)
-creates a new agent/toolbox, simulates the caller, registers this custom rubric,
-and collects evaluation results without using the portal.
+**Python compatibility warning:** the [SDK runner](#run-the-entire-example-with-python)
+did not run unchanged in a reported live test. That test needed compatibility
+wrappers and a separate transcript-grading step that are not included here.
+Read the [known issues](#reported-live-compatibility-issues) before creating
+resources; this is not currently a verified one-command SDK reproduction.
 
 ## Follow the illustrated tutorial
 
@@ -38,8 +40,10 @@ Only attach mock tools: a simulated caller can invoke the target's tools.
 You do not need access to the original project or SharePoint guide. All inputs
 are [included below](#input-files-and-offline-preparation). In the portal path,
 only the final **Submit** starts an evaluation. The optional Python `run` command
-also creates resources and submits a billable evaluation. Preview-portal labels
-and model availability can vary.
+also attempts to create resources and submit a billable evaluation, but has the
+compatibility issues noted above. Preview-portal labels and model availability
+can vary. The screenshots and saved settings describe the original portal run;
+they are not proof that the same configuration works unchanged through the SDK.
 
 ## Prepare the agent, scenario, and rubric
 
@@ -315,6 +319,15 @@ definitions** is `{{sample.tool_definitions}}`. The current editor also displays
 original evaluation JSON stored the messages/tool-definitions mappings.
 Keep the judge selection consistent and return to the wizard.
 
+**Portal snapshot, not an SDK mapping guarantee:** these mappings were observed
+in the original portal configuration. In the reported SDK simulation,
+`sample.tool_definitions` was absent. The working wrapper supplied the actual
+tool definitions in its custom dataset record and mapped
+`{{item.tool_definitions}}` instead. For that separate grading step, messages
+were mapped from `{{item.transcript}}`; see the
+[compatibility workflow](#reported-live-compatibility-issues). Do not assume a
+field is available just because the portal or request template displays it.
+
 **Checkpoint:** the evaluator receives the full **Messages** mapping, not just
 an isolated response string.
 
@@ -434,10 +447,69 @@ links, signed storage URLs, and credentials out of the repository.
 
 ## Run the entire example with Python
 
-[run_evaluation.py](run_evaluation.py) is the single entry point for agent
-creation, cloud conversation simulation, and custom-rubric evaluation. Keep it
-with the other files in this directory; it reads the supplied prompt, Python
-tool, scenario, rubric, settings, and `prepare_example.py`.
+[run_evaluation.py](run_evaluation.py) is intended to orchestrate agent creation,
+cloud conversation simulation, and custom-rubric evaluation. **The checked-in
+runner has known live compatibility failures and has not been corrected to
+implement the reported working workflow.** Offline SDK tests check synthetic
+responses, not service acceptance.
+
+### Reported live compatibility issues
+
+Feedback on the pinned example at commit `1951e61` reported that it did not
+work unchanged. The successful run used external compatibility wrappers without
+modifying this repository. The following are reported runtime findings, not an
+independently reproduced run by this guide's author:
+
+| Area | Checked-in behavior / reported failure | Reported working change |
+| --- | --- | --- |
+| Voice configuration | The runner takes portal label `Marin` as its voice value and does not specify the complete audio input/output configuration; runtime validation failed. | Lowercase `marin`, explicit PCM at 24 kHz, server VAD, and Whisper transcription, matching the existing working agent. |
+| Tool-definition mapping | The runner copies `{{sample.tool_definitions}}` from the portal snapshot, but that field was absent from simulation output. | Supply the actual exposed Toolbox definitions in each grading record and map `{{item.tool_definitions}}`. |
+| Tool-definition format | The evaluator rejected nested function definitions supplied during the compatibility attempt. The runner does not currently export and normalize definitions for a separate grading dataset. | Use the evaluator's accepted top-level `name`, `description`, and `parameters` fields, preserving the actual definitions. |
+| Grading mode | The service rejected this custom rubric at the runner's `conversation` evaluation level. | Save the entire transcript and grade it separately as one custom dataset record, mapping `{{item.transcript}}` to the evaluator's `messages` input. |
+| Authentication | The compatibility run used existing cached Azure authentication instead of the example's credential setup. | Treat this as environment-specific; use an authorized credential source for your tenant/project rather than copying tokens. This does not establish that `DefaultAzureCredential` is universally unsuitable. |
+
+The reported working sequence is:
+
+```text
+Create/configure the Voice Agent and Toolbox
+    -> Simulate the conversation and save its entire transcript
+    -> Assemble one custom dataset record per conversation:
+         transcript + actual, evaluator-compatible tool_definitions
+    -> Submit a separate custom-dataset rubric evaluation
+    -> Collect that grading run's scores and pass/fail results
+```
+
+In that grading record, `transcript` holds the entire saved conversation,
+preserving roles and turn order, not just the final assistant reply. The
+evaluator input mappings are `messages: {{item.transcript}}` and
+`tool_definitions: {{item.tool_definitions}}`. This is transcript-level coverage
+through a custom dataset, **not** a claim that the service accepted the rubric
+at `evaluation_level="conversation"`.
+
+The tool definitions must describe the actual exposed Toolbox tools. Do not
+invent separate function tools for `lookup_reservation` and
+`check_refund_eligibility`: those functions run inside Code Interpreter.
+Definitions describe tool capabilities; they are not execution logs.
+
+One script can orchestrate both simulation and separate grading, but the
+checked-in runner does not yet implement this two-stage flow. The working
+wrappers, exact accepted audio/definition payloads, and service responses have
+not been supplied with this feedback, so this guide does not invent a
+ready-to-run replacement or claim that a voice-name change alone fixes it.
+
+**Result attribution:** the reported `0.943` rubric score (94.3% of the
+normalized score scale), reported as passing, came from the corrected
+**separate grading step**, not an unchanged execution of the documented
+command. It is not a 94.3% aggregate pass rate. This report is separate evidence
+from the original portal result shown in figures 14-15. Neither result
+independently proves Python tool execution; inspect runtime traces separately.
+
+### Inspect the existing runner
+
+Keep the runner with the other files in this directory; it reads the supplied
+prompt, Python tool, scenario, rubric, settings, and `prepare_example.py`.
+The following setup and offline planning instructions remain useful for
+inspection. They do not resolve the compatibility issues above.
 
 **Prerequisites:** Python 3.10+, an existing Foundry project with the features
 listed above, resource-creation/evaluation permissions, and actual deployed
@@ -475,16 +547,15 @@ credentials, network access, or output directory:
 .\.venv\Scripts\python.exe run_evaluation.py plan
 ```
 
-Then explicitly start the **billable** end-to-end operation:
+**Do not start `run` unchanged in the reported environment.** It may create
+billable resources before failing. `plan` checks local inputs and prints the
+proposed payload; it cannot detect live API incompatibilities. Changing only
+`--agent-voice marin` does not add the missing audio settings, supply tool
+definitions, or implement the separate grading flow.
 
-```powershell
-.\.venv\Scripts\python.exe run_evaluation.py run `
-  --output .\voice-agent-output\airline-eval-01 `
-  --timeout-seconds 900
-```
-
-Each `run` uses unique resource names and creates new resources; it does not
-modify the original `Airline-Agent`, toolbox, or evaluation. The command:
+The current `run` implementation attempts the following sequence with uniquely
+named resources, without modifying the original agent/toolbox. These are
+implementation details, **not a verified successful execution**:
 
 1. Uploads `airline_lookup_default.py` and waits for **Processed**.
 2. Creates a Code Interpreter container, reads the actual mounted file path
@@ -497,7 +568,7 @@ modify the original `Airline-Agent`, toolbox, or evaluation. The command:
    conversation simulation with **conversation-level** evaluation.
 6. Polls the run, downloads every page of output items, and writes the scores.
 
-Defaults match the sample: managed `gpt-realtime-2.1`, OpenAI `Marin`, simulated
+Defaults were copied from the portal snapshot: managed `gpt-realtime-2.1`, OpenAI `Marin`, simulated
 caller `en-US-Ava:DragonHDLatestNeural`, one scenario/repetition, and a maximum
 of ten turns. Use `--agent-model`, `--agent-voice`, `--agent-voice-type`,
 `--simulator-model`, `--judge-model`, or `--caller-voice` when necessary.
@@ -513,8 +584,9 @@ retained before checking completion, expected counts, and rubric scores.
 A failed/errored/incomplete run, invalid result, or failing rubric returns a
 nonzero exit code; the runner does not interpret mere completion as success.
 
-After a polling timeout, **do not repeat `run`**. The cloud run continues and is
-not canceled. Retrieve the same submitted evaluation into a new local folder:
+If an earlier attempt submitted a run and saved its IDs in `receipt.json`, a
+polling timeout does not cancel that cloud run. **Do not repeat `run`.**
+Retrieve that same submitted evaluation into a new local folder:
 
 ```powershell
 .\.venv\Scripts\python.exe run_evaluation.py results `
@@ -524,6 +596,8 @@ not canceled. Retrieve the same submitted evaluation into a new local folder:
 ```
 
 `results` only retrieves results; it never creates another agent or evaluation.
+It does not fix a rejected rubric, change mappings, or submit the separate
+transcript-grading step described above.
 If provisioning failed before a run ID was saved, inspect the receipt and
 Foundry before submitting again. Creation calls are not automatically retried;
 a lost response may still mean the server created a resource. There is no
@@ -531,7 +605,7 @@ automatic deletion, cancellation, or provisioning-resume operation. Retain the
 receipt and clean up its uniquely named test resources through your project's
 approved process.
 
-### Differences from the portal run
+### Implementation details and differences from the portal run
 
 The runner uses the native SDK rubric definition, translating the snapshot's
 `pass_score_threshold` to API field `pass_threshold`; `rubric.json` itself is
@@ -556,12 +630,15 @@ returned evaluation JSON, not downloaded WAV files or independently verified
 tool execution traces. Use only the fictional sample inputs and keep the
 ignored output directory private.
 
-The runner is covered by offline SDK request/response tests. **It has not been
-executed against a live Azure project for this guide.** Preview feature support,
-quotas, permissions, and the Files/Containers endpoint must be confirmed in your
-target project. A new simulation is nondeterministic and need not reproduce the
+The runner is covered by offline SDK request/response tests, whose synthetic
+fixtures assume the original mappings and grading mode are accepted. Those
+tests did not reveal the live failures reported above and must not be cited as
+evidence of end-to-end service compatibility. **The author has not independently
+executed the corrected workflow against Azure.** Feature support, quotas,
+permissions, and the Files/Containers endpoint also depend on the target
+project. A new simulation is nondeterministic and need not reproduce the
 original `0.943` score. The fifteen screenshots above document the original
-portal workflow, not execution of this script.
+portal workflow, not execution of the runner or the external wrappers.
 
 ## Input files and offline preparation
 
@@ -578,7 +655,7 @@ as agent tools.
 | [rubric.json](rubric.json) | Step 5: copy the generation prompt, dimensions, weights, and threshold; **not** an API import payload. |
 | [evaluation_settings.json](evaluation_settings.json) | Steps 2-13: reference checklist for all portal values; **not** an API import payload. |
 | [prepare_example.py](prepare_example.py) | Optional offline generation of ready-to-paste inputs. |
-| [run_evaluation.py](run_evaluation.py) / [requirements.txt](requirements.txt) | Optional end-to-end SDK runner and pinned dependencies. |
+| [run_evaluation.py](run_evaluation.py) / [requirements.txt](requirements.txt) | Preliminary SDK runner and pinned dependencies; see the known live compatibility issues before running. |
 | [test_airline_lookup_default.py](test_airline_lookup_default.py) / [test_prepare_example.py](test_prepare_example.py) | Offline checks for the mock functions and input preparation. |
 | [test_run_evaluation.py](test_run_evaluation.py) | Offline SDK serialization, orchestration, and failure-handling tests. |
 | [screenshots/](screenshots/) | Image assets for the fifteen figures embedded in this tutorial. |
