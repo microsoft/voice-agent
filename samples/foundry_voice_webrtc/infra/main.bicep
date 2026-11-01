@@ -36,6 +36,7 @@ param foundryFeatures string
 param gptLiveDeployment string = 'gpt-live-1'
 param gptLiveBackendDeployment string = 'gpt-5.4'
 
+@secure()
 param iceServersJson string = '[{"urls":"stun:stun.l.google.com:19302"}]'
 param personalizationRequired bool = false
 param allowAgentRecreate bool = false
