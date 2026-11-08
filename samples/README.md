@@ -104,7 +104,9 @@ real is booked, sent, or charged. To use your own systems, see
 
 ### Realtime sample: Project region, model, and GPU routing
 
-The eight original Portal template cards (Examples 1–7) use 400 ms `azure_semantic_vad` silence.
+Examples 1 and 2 use 400 ms `azure_semantic_vad` silence. Examples 3–34 use Example 1's turn
+detection (`profile: normal`, explicit barge-in thresholds, `end_of_utterance_detection: null`,
+no server echo cancellation) with 600 ms silence.
 Most use `gpt-realtime`; Finance Realtime uses `gpt-realtime-regional` and
 Finance Cascade uses `gpt-4.1-mini`. Each card has a single version, its root
 `agent.json`. Runtime configuration does not by itself establish improved
