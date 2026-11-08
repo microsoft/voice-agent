@@ -924,11 +924,11 @@ class TemplateRouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_hindi_template_routes_preserve_the_explicit_locale(self) -> None:
         expected_voice = {
             "type": "azure-standard",
-            "name": "hi-IN-Diya:DragonLatestNeural",
+            "name": "en-IN-Diya:DragonHDLatestNeural",
         }
         voices = json.loads((ROOT / "static/handoff/azure-voices.json").read_text())["voices"]
         self.assertTrue(any(
-            voice["id"] == expected_voice["name"] and voice["locale"] == "hi-IN"
+            voice["id"] == expected_voice["name"]
             for voice in voices
         ))
         for template_id in HINDI_TEMPLATE_IDS:

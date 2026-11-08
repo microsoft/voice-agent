@@ -33,7 +33,7 @@ class HindiFinanceSampleTests(unittest.TestCase):
                     definition["audio"]["input"]["transcription"],
                 )
                 self.assertEqual(
-                    "hi-IN-Diya:DragonLatestNeural", definition["audio"]["output"]["voice"]["name"]
+                    "en-IN-Diya:DragonHDLatestNeural", definition["audio"]["output"]["voice"]["name"]
                 )
                 configs = [
                     definition,
@@ -78,7 +78,7 @@ class HindiFinanceSampleTests(unittest.TestCase):
             })
             self.assertEqual(f"finance-example-{pipeline}-hi-in", name)
             self.assertEqual("hi-IN", definition["audio"]["input"]["transcription"]["language"])
-            self.assertEqual("hi-IN-Diya:DragonLatestNeural", definition["audio"]["output"]["voice"]["name"])
+            self.assertEqual("en-IN-Diya:DragonHDLatestNeural", definition["audio"]["output"]["voice"]["name"])
 
 
 if __name__ == "__main__":
