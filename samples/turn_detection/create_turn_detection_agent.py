@@ -22,11 +22,16 @@ turn_detection = {
     # don't interrupt the agent, and phrases such as "wait" always do.
     "speech_start_detection": {
         "while_assistant_speaking": {
-            "num_words": 3,
             "acknowledgement_phrases": [
                 "mm-hm", "uh-huh", "okay", "yeah", "right", "got it",
             ],
             "interruption_phrases": ["stop", "wait", "hold on"],
+            # For other speech, microsoft-decision-1 judges from what the
+            # caller has heard whether the speech takes the turn: "what?"
+            # does, "yeah, that makes sense" doesn't.
+            "turn_taking_classifier": {"threshold": 0.5},
+            # Used when the model gives no verdict.
+            "num_words": 3,
         },
         "while_assistant_not_speaking": {"num_words": 1},
     },
@@ -93,7 +98,11 @@ with (
     print(f"Created '{created.name}', version {created.version}")
     print(f"turn_detection.type: {saved['type']}")
     speaking = saved["speech_start_detection"]["while_assistant_speaking"]
-    print(f"speech_start_detection while speaking: num_words={speaking['num_words']}")
+    print(
+        f"speech_start_detection while speaking: turn_taking_classifier "
+        f"threshold={speaking['turn_taking_classifier']['threshold']}, "
+        f"num_words={speaking['num_words']}"
+    )
     eou = saved["end_of_utterance_detection"]
     print(
         f"end_of_utterance_detection: model={eou['model']}, "
