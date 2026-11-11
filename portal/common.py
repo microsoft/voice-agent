@@ -26,6 +26,7 @@ FOUNDRY_FEATURES = "VoiceAgents=V1Preview"
 INPUT_TRANSCRIPTION_MODEL = "azure-speech"
 TRANSCRIPTION_MODELS = [
     "azure-speech",
+    "azure-speech-streaming",
     "mai-transcribe",
     "mai-transcribe-2",
     "mai-transcribe-2-streaming",
@@ -37,7 +38,7 @@ TRANSCRIPTION_MODELS = [
     "gpt-4o-transcribe-diarize",
     "whisper-1",
 ]
-CASCADED_TRANSCRIPTION_MODELS = TRANSCRIPTION_MODELS[:4]
+CASCADED_TRANSCRIPTION_MODELS = TRANSCRIPTION_MODELS[:5]
 REALTIME_MODELS = ["gpt-realtime", "gpt-realtime-mini", "gpt-realtime-1.5"]
 CASCADED_MODELS = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]
 MODELS = REALTIME_MODELS + CASCADED_MODELS

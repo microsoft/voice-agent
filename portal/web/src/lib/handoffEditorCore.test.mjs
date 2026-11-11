@@ -328,7 +328,7 @@ test("keeps current Realtime versions distinct and couples compatible speech sta
     voice: "alloy",
     stt: "whisper-1",
   });
-  assert.equal(realtimeStt.length, 11);
+  assert.equal(realtimeStt.length, 12);
   assert.ok(realtimeStt.every((item) => item.compatible));
   assert.ok(realtimeStt.some((item) => item.id === "whisper-1"));
   assert.ok(!realtimeStt.some((item) => item.id === "native-realtime-audio"));
@@ -439,14 +439,18 @@ test("separates verified speech meters from unverified auxiliary transcription a
   });
   assert.equal(realtimeStt.find((item) => item.id === "azure-speech").latencyMs, 1016);
   assert.equal(realtimeStt.find((item) => item.id === "mai-transcribe-2-streaming").latencyMs, 130);
+  // No public latency reference for streaming Azure Speech yet, so the Editor shows "Not available".
+  assert.equal(realtimeStt.find((item) => item.id === "azure-speech-streaming").latencyMs, null);
   assert.equal(realtimeStt.find((item) => item.id === "gpt-realtime-whisper").latencyMs, 740);
   assert.equal(realtimeStt.find((item) => item.id === "gpt-4o-transcribe").latencyMs, 637);
   assert.equal(realtimeStt.find((item) => item.id === "whisper-1").latencyMs, 1507);
   for (const model of ["gpt-realtime", "gpt-realtime-mini"]) {
     const choices = pipelineComponentOptions("stt", { model, voice: "alloy" });
-    assert.equal(choices.length, 11);
+    assert.equal(choices.length, 12);
     for (const choice of choices) {
-      if (["azure-speech", "mai-transcribe", "mai-transcribe-2", "mai-transcribe-2-streaming"].includes(choice.id)) {
+      if ([
+        "azure-speech", "azure-speech-streaming", "mai-transcribe", "mai-transcribe-2", "mai-transcribe-2-streaming",
+      ].includes(choice.id)) {
         assert.equal(choice.costPerMinute, model === "gpt-realtime" ? .0102 : .009);
         assert.equal(choice.costIsAllowance, false);
       } else {
@@ -541,7 +545,7 @@ test("does not assign publicly unverified models bargain rates based on their na
 
 test("prices every compatible catalog combination without omitting or double-counting components", () => {
   assert.equal(PIPELINE_COMPONENTS.model.length, 14);
-  assert.equal(PIPELINE_COMPONENTS.stt.length, 12);
+  assert.equal(PIPELINE_COMPONENTS.stt.length, 13);
   assert.equal(PIPELINE_COMPONENTS.voice.length, 56);
   let checked = 0;
   for (const model of PIPELINE_COMPONENTS.model) {

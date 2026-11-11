@@ -3042,6 +3042,7 @@ function componentDescription(kind, id) {
     "mai-transcribe": "Managed MAI transcription alias resolved by Voice Agent.",
     "mai-transcribe-2-streaming": "Preview streaming MAI transcription.",
     "azure-speech": "Managed Azure Speech transcription for broad language and enterprise scenarios.",
+    "azure-speech-streaming": "Streaming Azure Speech transcription with interim results; requires an input language.",
     "whisper-1": "Whisper transcription; lifecycle and availability remain region dependent.",
     "gpt-realtime-2.1": "Current default Pro speech-to-speech model.",
     "gpt-realtime-2.1-mini": "Standard-tier speech-to-speech model.",
