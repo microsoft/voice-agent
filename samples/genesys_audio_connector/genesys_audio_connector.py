@@ -39,7 +39,7 @@ def project_endpoint(value: str | None) -> str:
         or parsed.password is not None
         or "?" in value
         or "#" in value
-        or not re.fullmatch(r"/api/projects/[A-Za-z0-9][A-Za-z0-9_-]*", parsed.path)
+        or not re.fullmatch(r"/api/projects/(?:_project|[A-Za-z0-9][A-Za-z0-9_-]*)", parsed.path)
     ):
         raise ValueError(message)
     return f"https://{parsed.hostname}{parsed.path}"

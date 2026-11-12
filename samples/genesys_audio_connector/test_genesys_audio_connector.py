@@ -60,6 +60,32 @@ class SampleTests(unittest.TestCase):
                          "wss://example.services.ai.azure.com/api/projects/support/agents/demo/endpoint/protocols/voice/telephony/genesys-audiohook?api-version=v1")
         self.assertEqual(sample.project_endpoint(ENDPOINT.replace(".com", ".com:443")), ENDPOINT)
 
+    def test_default_project_alias_is_preserved_in_endpoint_cli_output(self):
+        endpoint = "https://example.services.ai.azure.com/api/projects/_project"
+        self.assertEqual(sample.project_endpoint(endpoint + "/"), endpoint)
+        with patch.object(sample, "access_token") as token, redirect_stdout(io.StringIO()) as output:
+            sample.main(["endpoint", "--project-endpoint", endpoint, "--agent-name", "demo"])
+        self.assertEqual(output.getvalue().strip(),
+                         "wss://example.services.ai.azure.com/api/projects/_project/agents/demo/endpoint/protocols/voice/telephony/genesys-audiohook?api-version=v1")
+        token.assert_not_called()
+
+    def test_network_commands_preserve_the_default_project_alias(self):
+        endpoint = "https://example.services.ai.azure.com/api/projects/_project"
+        for command, method, suffix in [
+            ("create", "POST", "/agents?api-version=v1"),
+            ("calls", "GET", "/agents/demo/telephony/calls?api-version=v1&provider=genesys-audiohook&limit=20"),
+            ("delete", "DELETE", "/agents/demo?api-version=v1"),
+        ]:
+            opener = Mock()
+            opener.open.return_value = self.response()
+            with self.subTest(command=command), patch.object(sample, "access_token", return_value="test-token"), patch.object(sample, "build_opener", return_value=opener), redirect_stdout(io.StringIO()):
+                sample.main([command, "--project-endpoint", endpoint, "--agent-name", "demo"])
+                outgoing = opener.open.call_args.args[0]
+                self.assertEqual(outgoing.full_url, endpoint + suffix)
+                self.assertEqual(outgoing.get_method(), method)
+                self.assertEqual(outgoing.get_header("Authorization"), "Bearer test-token")
+                opener.open.assert_called_once()
+
     def test_bad_endpoint_is_rejected_before_credentials_are_requested(self):
         endpoints = [
             "", "http://example.services.ai.azure.com/api/projects/support",
@@ -67,6 +93,8 @@ class SampleTests(unittest.TestCase):
             "https://attacker.test/api/projects/support", ENDPOINT + "?api-key=secret",
             ENDPOINT + "#fragment", ENDPOINT + "/extra", ENDPOINT.replace("support", ".."),
             ENDPOINT.replace("support", "a%2fb"), ENDPOINT.replace(".com", ".com:444"),
+            ENDPOINT.replace("support", "_other"), ENDPOINT.replace("support", "_project/extra"),
+            ENDPOINT.replace("support", "_project%2Fextra"),
             ENDPOINT.replace(".com", ".com:private_value"),
             ENDPOINT.replace("https://", "https://user:password@"), ENDPOINT.replace("support", "sup\nport"),
         ]

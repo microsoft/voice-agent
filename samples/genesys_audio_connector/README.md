@@ -51,6 +51,9 @@ python genesys_audio_connector.py create --dry-run
 python genesys_audio_connector.py create
 ```
 
+`PROJECT_ENDPOINT` accepts a project name or `_project` to select the default
+project, as described in the [Foundry REST reference](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#agents---list-agents).
+
 The default model is managed `gpt-realtime`, with the `en-US-AvaNeural` voice.
 To select a model deployment from the project, add these model options to the
 preview and create commands:
