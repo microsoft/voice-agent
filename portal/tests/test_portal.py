@@ -443,7 +443,8 @@ class LiveProxyTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("whisper-1", cfg["cascadedTranscriptionModels"])
         self.assertEqual(
             cfg["cascadedTranscriptionModels"],
-            ["azure-speech", "mai-transcribe", "mai-transcribe-2", "mai-transcribe-2-streaming"],
+            ["azure-speech", "azure-speech-streaming", "mai-transcribe", "mai-transcribe-2",
+             "mai-transcribe-2-streaming"],
         )
         self.cfg._credential.get_token.assert_not_called()
         self.assertEqual(self.calls, [])

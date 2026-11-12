@@ -221,6 +221,13 @@ const TRANSCRIBERS = Object.freeze([
     costSource: "Voice Agent Standard Speech audio-input rate",
   },
   {
+    id: "azure-speech-streaming",
+    label: "Azure Speech Streaming",
+    latencyMs: null,
+    latencySource: "No latency reference for this transcription model",
+    costSource: "Voice Agent Standard Speech audio-input rate",
+  },
+  {
     id: "mai-transcribe",
     label: "MAI Transcribe",
     latencyMs: 525,
@@ -288,7 +295,7 @@ const TRANSCRIBERS = Object.freeze([
     latencySource: "Public hosted-API median",
   },
 ]);
-const METERED_TRANSCRIBER_IDS = Object.freeze(TRANSCRIBERS.slice(1, 5).map((item) => item.id));
+const METERED_TRANSCRIBER_IDS = Object.freeze(TRANSCRIBERS.slice(1, 6).map((item) => item.id));
 const OPENAI_VOICES = Object.freeze(
   ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"]
     .map((id) => ({
