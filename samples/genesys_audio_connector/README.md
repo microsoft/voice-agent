@@ -7,13 +7,35 @@ session ends, Architect continues with the next action configured in the flow.
 
 ```mermaid
 flowchart LR
-    Caller[Caller] <--> Genesys[Genesys Cloud]
-    Genesys <--> Connector[Call Audio Connector]
-    Connector <--> Agent[Foundry Voice Agent]
-    Connector -->|Session ends| Next[Architect flow continues]
-    Next --> End[Disconnect]
-    Next --> Queue[Transfer to ACD]
+    Caller["Caller"]
+
+    subgraph Genesys["Genesys Cloud"]
+        direction TB
+        Flow["Inbound call flow<br/>Architect"]
+        Connector["Audio Connector"]
+        Next["Continue according to<br/>the configured call flow"]
+        End["End call"]
+        Queue["Contact-center queue"]
+
+        Flow <--> Connector
+        Connector -->|Assistant session completes| Next
+        Next -->|Disconnect| End
+        Next -->|Transfer to ACD| Queue
+    end
+
+    subgraph Foundry["Azure AI Foundry"]
+        direction TB
+        Agent["Voice Agent<br/>Conversation instructions and voice"]
+        Model["Speech and AI model"]
+
+        Agent <--> Model
+    end
+
+    Caller <-->|Phone call| Flow
+    Connector <-->|Secure WebSocket<br/>Two-way audio| Agent
 ```
+
+The continuation is selected in the Architect flow.
 
 ## 1. Create the Agent
 
@@ -86,7 +108,7 @@ Configure the flow to continue after the assistant session completes:
 | Finish after speaking with the assistant | [Disconnect](https://help.genesys.cloud/articles/disconnect-action/) |
 | Continue with a contact-center representative | [Transfer to ACD](https://help.genesys.cloud/articles/transfer-acd-action/), with the destination queue selected in Architect |
 
-Choose the continuation for that flow and configure its failure path. Save and
+Choose the continuation for that flow and configure its recovery path. Save and
 publish the flow, then assign it to the Genesys inbound call route.
 
 ## 4. Try a conversation
