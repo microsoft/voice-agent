@@ -58,11 +58,13 @@ The output has this form:
 wss://<resource>.services.ai.azure.com/api/projects/<project>/agents/genesys-voice-demo/endpoint/protocols/voice/telephony/genesys-audiohook?api-version=v1
 ```
 
-In Genesys Cloud, add an **Audio Connector** integration and configure:
+In Genesys Cloud, follow the official [Audio Connector installation guide](https://help.genesys.cloud/articles/install-audio-connector-from-genesys-appfoundry/)
+and [configuration and activation guide](https://help.genesys.cloud/articles/configure-and-activate-audio-connector-in-genesys-cloud/).
+Use the following Foundry connection information:
 
 | Setting | Value |
 | --- | --- |
-| Connection URI | The URI printed above |
+| Final WebSocket URI | The URI printed above |
 | API key credential | An active key for the Foundry account that owns the project |
 | Audio | PCMU, 8 kHz, mono, external channel |
 
@@ -71,13 +73,18 @@ Enter the key in the integration's credential setting. Genesys sends it in the
 
 ## 3. Connect the Architect call flow
 
-Add a **Call Audio Connector** action to an inbound call flow and select the
-integration. Configure the flow to continue after the assistant session completes:
+Add a [Call Audio Connector](https://help.genesys.cloud/articles/call-audio-connector-action/)
+action to an inbound call flow and select the integration. Genesys appends the
+action's **Connector ID** to the integration's **Base Connection URI**. Configure
+these fields so the resulting WebSocket URI matches the full URI printed by the
+sample, including `api-version=v1`.
+
+Configure the flow to continue after the assistant session completes:
 
 | Call experience | Next action in Architect |
 | --- | --- |
-| Finish after speaking with the assistant | **Disconnect** |
-| Continue with a contact-center representative | **Transfer to ACD**, with the destination queue selected in Architect |
+| Finish after speaking with the assistant | [Disconnect](https://help.genesys.cloud/articles/disconnect-action/) |
+| Continue with a contact-center representative | [Transfer to ACD](https://help.genesys.cloud/articles/transfer-acd-action/), with the destination queue selected in Architect |
 
 Choose the continuation for that flow and configure its failure path. Save and
 publish the flow, then assign it to the Genesys inbound call route.
