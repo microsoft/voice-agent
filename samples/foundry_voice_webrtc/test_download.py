@@ -48,7 +48,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_flash_scenario_greeting_is_requested_once_after_configuration(self):
         event = {"type": "session.updated", "session": {
-            "id": "flash-demo", "model": "azure-realtime-flash-2026-10-14",
+            "id": "flash-demo", "model": "microsoft-realtime-flash-1",
             "turn_detection": {"type": "azure_semantic_vad", "create_response": True}}}
         upstream = AsyncMock()
         upstream.__aiter__.return_value = [

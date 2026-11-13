@@ -58,6 +58,17 @@ class PersonalizationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             personalization_header(frame(), "unknown")
 
+    def test_flash_scenarios_omit_the_saved_greeting_for_current_and_legacy_models(self):
+        source = json.loads(Path(__file__).with_name("personalized-agent.json").read_text())
+        for model in ("microsoft-realtime-flash-1", "azure-realtime-flash-2026-10-14",
+                      "azure-realtime-flash-1"):
+            with self.subTest(model=model):
+                source["model"] = model
+                result = scenario_definition(source, "banking")
+                self.assertEqual(result["model"], model)
+                self.assertNotIn("greeting", result)
+                self.assertIn("greeting", source)
+
     def test_voice_choices_match_requested_catalog(self):
         expected = {f"en-US-{name}:DragonHDLatestNeural" for name in ("Tessa", "Tyler", "Paige", "Colin", "Brian", "Emma")} | {
             "en-IN-Diya:DragonHDLatestNeural", "zh-CN-Xiaoqi:DragonHDFlashLatestNeural", "zh-CN-Xiaoke:DragonHDFlashLatestNeural"}
