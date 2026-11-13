@@ -1,0 +1,2 @@
+# Optional, local text-token estimates only; not a runtime dependency.
+tiktoken>=0.9,<1

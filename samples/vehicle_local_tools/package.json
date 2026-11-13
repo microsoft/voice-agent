@@ -1,0 +1,15 @@
+{
+  "name": "vehicle-local-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:model": "node tools/prepare-car-model.mjs",
+    "test": "node --test static/test_*.mjs test_audio.mjs",
+    "test:model": "node --test static/test_car_model.mjs",
+    "test:drive": "node --test static/test_drive_cycle.mjs",
+    "test:ui": "node --test static/test_i18n.mjs static/test_media_presets.mjs static/test_cockpit.mjs static/test_phone_demo.mjs static/test_road_scene.mjs"
+  },
+  "devDependencies": {
+    "three": "0.180.0"
+  }
+}
