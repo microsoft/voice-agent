@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 
 SCENARIOS = json.loads(Path(__file__).with_name("scenarios.json").read_text(encoding="utf-8"))
+FLASH_MODEL = "microsoft-realtime-flash-1"
+FLASH_MODELS = frozenset({FLASH_MODEL, "azure-realtime-flash-2026-10-14", "azure-realtime-flash-1"})
+MAI_MODEL = "mai-realtime"
 DEMO_POLICY = (
     "You are an unbranded demonstration assistant. Never mention a company, customer or caller name, "
     "even if supplied. Do not imply affiliation with any real organization. "
@@ -31,7 +34,12 @@ def scenario_name(agent, scenario):
 def scenario_definition(source, scenario):
     preset = SCENARIOS[scenario]
     definition = copy.deepcopy(source)
-    instructions = DEMO_POLICY + preset["instructions"] + "\n\nLANGUAGE POLICY\n{{language_policy}}"
+    policy = DEMO_POLICY
+    if source.get("model") == MAI_MODEL:
+        policy = policy.replace(
+            "The configured greeting opens the conversation; do not repeat it.",
+            "Wait for the caller's first turn, then greet them briefly and address their request.")
+    instructions = policy + preset["instructions"] + "\n\nLANGUAGE POLICY\n{{language_policy}}"
     definition["instructions"] = instructions
     definition["structured_inputs"] = {
         "language_policy": {"required": True, "schema": {"type": "string"}},
@@ -50,7 +58,9 @@ def scenario_definition(source, scenario):
                     "{{language_policy}}", "Follow the caller's spoken or requested language."),
                 "tools": [],
             }}
-    elif definition.get("model") == "azure-realtime-flash-2026-10-14":
+    elif definition.get("model") in FLASH_MODELS:
         # Flash does not support the saved greeting; the bridge requests one at readiness.
+        definition.pop("greeting")
+    elif definition.get("model") == MAI_MODEL:
         definition.pop("greeting")
     return definition

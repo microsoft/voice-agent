@@ -15,13 +15,13 @@ recreate only the configured sample Agent. The agent retains its saved instructi
 voice configuration by default. The backend sends a narrow `session.update` for
 the **active session only** to enable automatic interruption truncation and
 retained-item events, preserving the applied turn-detection settings, except for
-Azure Realtime Flash, where the additional startup update is skipped and
+Microsoft Realtime Flash and MAI Realtime, where the additional startup update is skipped and
 the service-applied settings are left unchanged. This
 session update does not edit the saved Agent; the browser cannot send one.
 Optional session-start personalization and output-voice selection do not edit the saved Agent.
 
 Features include microphone and text input, spoken replies, live transcripts, mute,
-interruption with authoritative retained history, model/version controls, read-only Agent YAML, downloadable conversation
+interruption with authoritative retained history on supported models, model/version controls, read-only Agent YAML, downloadable conversation
 logs with audio, and end-call cleanup. The frontend uses plain HTML/CSS/JavaScript
 and needs no build step. A Python backend keeps Azure credentials out of the browser.
 
@@ -70,10 +70,11 @@ Unrelated Agents at those names are never overwritten. This requires Agent
 creation/version/enable permissions and incurs normal model usage.
 
 Greetings are supplied before session startup for both protocols, with English
-and Spanish openings and the existing language policy. Azure Realtime Flash
+and Spanish openings and the existing language policy. Microsoft Realtime Flash
 does not support a saved greeting, so the bridge requests its scenario greeting
 after startup configuration. Scenario recordings use the scenario Agent and
 the existing signed download mechanism; GPT Live WebRTC still has no recording.
+MAI Realtime scenarios are caller-first: speak or send a message to begin.
 Healthcare prompts avoid diagnosis and coverage guarantees; banking prompts
 avoid approval promises and invented prices; home prompts avoid hazardous
 remote activation. Loan and property prompts avoid fabricated rates or listing
@@ -266,8 +267,9 @@ sample without adding cross-replica creation coordination.
 
 The **Version** line shows the saved Agent's current version. End the call, choose
 `gpt-realtime-2.1`, **GPT Realtime 2.1 mini** (`gpt-realtime-2.1-mini`),
-`azure-realtime`, **Azure Realtime Flash**
-(`azure-realtime-flash-2026-10-14`), `gpt-5.4`, or **GPT Live**, then select **Save new version**.
+`azure-realtime`, **Microsoft Realtime Flash**
+(`microsoft-realtime-flash-1`), **MAI Realtime**, `gpt-5.4`, or **GPT Live**,
+then select **Save new version**.
 This publishes and enables a new version without deleting previous versions.
 Instructions, tools, metadata, and other configuration are preserved except for
 explicit transcription selections, turn-detection, and output-voice compatibility
@@ -280,11 +282,46 @@ continue to report the saved configuration until publication succeeds.
 GPT Realtime 2.1 mini uses the same Azure Speech HD voice selector and independent
 transcription choices as GPT Realtime 2.1.
 `azure-realtime` uses native voice `ava` by default. Switching from native output
-to a GPT model or Azure Realtime Flash selects `en-US-Tyler:DragonHDLatestNeural`.
+to a GPT model or Microsoft Realtime Flash selects `en-US-Tyler:DragonHDLatestNeural`.
 Flash uses the Azure Speech HD voice selector, not the `azure-realtime` native
 voice selector. Other supported HD settings are preserved. Model and voice
 availability depend on the project; adding Flash to the selector does not deploy
 or enable it in the Foundry project.
+Existing Agents using a legacy Flash model ID remain recognizable; select
+**Apply settings** to publish a version using the new model name.
+
+### Managed MAI Realtime companion
+
+Select **MAI Realtime** to create or reuse a separately owned companion Agent
+using the managed `mai-realtime` model, not the deployed `MAI-Realtime-1`
+catalog model. The original realtime and GPT Live Agents are preserved.
+The companion uses its native voice (Harper in the tested Sweden Central
+project) and native input transcription; it does not send an external
+transcription model or an output voice override. The
+transcription and voice selectors, enhanced turn detection, and weather tool
+are unavailable for MAI. Start speaking or send a text message to begin; typed
+messages receive spoken replies. A scenario is still available, but has no
+automatic greeting. MAI uses WebSocket in this sample: the tested Sweden Central
+project rejected WebRTC startup with API `v1`, and the preview API rejected the
+upgrade. Other models can still use WebRTC.
+
+By default the companion is created in `AZURE_AI_PROJECT_ENDPOINT`. Set
+`MAI_REALTIME_PROJECT_ENDPOINT` to use a different Foundry project; the
+backend identity must have permission to create, read, and enable Agents and
+use voice sessions and conversation recordings there. Scenario Agents and
+their downloads follow the selected companion's project. The project receives
+the selected scenario, session audio, and any stored conversation data.
+Model availability varies by resource: test the chosen project rather than
+assuming every resource in a region supports the model.
+
+The sample uses Azure semantic VAD with interruption enabled and
+`auto_truncate: false`. MAI does not accept the bridge's additional
+startup `session.update` for retained-item events, so the bridge leaves the
+service-applied settings unchanged. Interrupted transcript text can include
+audio the caller did not hear and is not authoritative retained history.
+In testing, MAI closed the connection after `session.close` without returning a
+`session.closed` acknowledgment or a final cost. The UI reports unconfirmed
+finalization and an unavailable cost; completed recordings can still be downloaded.
 
 ### Post-call API-returned cost
 
@@ -470,21 +507,24 @@ Use **Transcription model** to select input speech recognition independently of
 the Agent model, then select **Apply settings**. **Transcription** shows the
 actual saved model and updates only after a successful save. A transcription-only
 change preserves the existing prompt, AI greeting, tools, output voice, language,
-and turn detection. Switching the Agent model also retains the saved
-transcription choice. Controls are disabled during calls and publication.
+and turn detection. Switching between compatible realtime models also retains
+the saved transcription choice. MAI uses native transcription instead.
+Controls are disabled during calls and publication.
 
-`azure-realtime-flash-2026-10-14` disables the automatic greeting and waits for
+`microsoft-realtime-flash-1` disables the automatic greeting and waits for
 the caller's first turn. Saving this model also removes a greeting from an
 existing Flash definition. The previous greeting is retained in version metadata
 and restored when switching back to another realtime model. Other models keep
-their configured greetings. This does not resolve unrelated Flash inference errors.
+their configured greetings except for caller-first MAI. This does not resolve
+unrelated Flash inference errors.
 Flash also disables automatic interruption truncation (`auto_truncate: false`)
 for both WebSocket and WebRTC sessions, while keeping interruption enabled.
 For Flash, the bridge skips its additional startup `session.update` and enables
 input after Foundry's first `session.updated` event. It does not modify the
 applied VAD settings or include selectors. The transcript
 warns that interrupted text may include unheard output. Other realtime models
-continue using automatic truncation and authoritative retained-item events.
+continue using automatic truncation and authoritative retained-item events,
+except for MAI Realtime as described above.
 
 New Agents default to **`mai-transcribe-2-streaming`**. Existing Agents retain their saved
 model choice until explicitly changed. Transcription auto-detects the input language
@@ -528,10 +568,10 @@ In **Agent & audio settings**, select GPT Realtime 2.1, GPT Realtime 2.1 mini,
 or Azure Realtime, then use
 **GPT Live 1-quality turn detection** and **Apply settings**. This demo preset is
 on by default for newly created Agents using a supported model. The control is
-unchecked and disabled for **Azure Realtime Flash** and **GPT-5.4**, where this
-feature is not yet supported. Switching back to a supported model requires
+unchecked and disabled for **Microsoft Realtime Flash**, **MAI Realtime** and
+**GPT-5.4**, where this feature is not yet supported. Switching back to a supported model requires
 **Apply settings** before the control becomes available; the preset stays off
-until explicitly re-enabled. Saving either unsupported model automatically
+until explicitly re-enabled. Saving Flash or GPT-5.4 automatically
 removes the preset, including when saving the same model again. Call preparation
 also repairs older incompatible saved Agents before connecting, and scenario
 Agents use the same compatibility rules.
@@ -560,8 +600,8 @@ saved Agent for all visitors; they are not browser-only preferences. Prompts,
 tools, voice, other audio settings, and unrelated metadata are preserved.
 The transcription selector is locked while this preset is active because
 speech-start detection requires streaming transcription. Turn it off before
-changing transcription. GPT Live remains
-a separate Agent and does not use this checkbox.
+changing transcription. GPT Live and MAI remain separate Agents and do not use
+this checkbox.
 
 The original immutable version is referenced by `turn_detection_before_version`
 in Agent metadata. For new Agents without a previous version, the initial
@@ -572,11 +612,11 @@ was applied outside this UI, an operator must record the verified original
 version in this metadata field or restore the original settings in Foundry
 first; the demo never guesses a baseline. Each toggle publishes a new version.
 The existing bridge still enables runtime automatic truncation and retained-item
-events in both modes for non-Flash realtime models, including when the original saved
+events in both modes for compatible realtime models, including when the original saved
 `auto_truncate` value was false. This preserves the demo's existing interruption
 history behavior; the checkbox compares the old and new turn-detection profiles,
-not that bridge override. Flash retains its existing `auto_truncate: false`
-exception even while this preset is enabled. Model availability and support for
+not that bridge override. Flash and MAI retain their `auto_truncate: false`
+exceptions and do not support the preset. Model availability and support for
 the preset remain service-dependent; unsupported configurations fail visibly.
 
 ### General web search through Foundry Toolbox
@@ -660,10 +700,12 @@ access.
 
 For either transport, type in **Message your agent** and press **Enter** or
 **Send** once connected. Submitted text appears in the conversation and requests
-a text-only reply. Microphone turns still use the saved agent's output settings.
+a text-only reply, except MAI Realtime, which responds with audio. Microphone
+turns still use the saved agent's output settings.
 Messages are limited to 4,000 characters;
 the Send button waits while you are speaking or the agent is generating a reply.
-Mute the microphone to converse by text without spoken replies to typed messages.
+Mute the microphone to converse by text without spoken replies to typed messages
+on models that support text-only output.
 Session startup still requires microphone permission, even if you only plan to type.
 
 Spoken turns reserve a **You** bubble when speech starts, showing **Listening...**
@@ -674,6 +716,9 @@ user transcripts stream into the same bubble. Transcription failures or a call
 ending before any transcript arrives are shown explicitly.
 
 ## Try an interruption
+
+This procedure applies to models with authoritative retained history, not
+Microsoft Realtime Flash or MAI Realtime.
 
 1. Start the server with `.\.venv\Scripts\python server.py`, open
    `http://127.0.0.1:8080`, choose WebSocket or WebRTC, and start a conversation.
@@ -794,15 +839,17 @@ there is no silent fallback to a greeting without context.
 
 ### Output voice
 
-For realtime Agents, the voice list displays full service IDs, with
-`en-US-Tyler:DragonHDLatestNeural` selected by default. For GPT models, choose
-an HD or MAI Flash voice before connecting, or choose **Saved Agent voice** to preserve the stored setting. The backend
+For GPT realtime and Microsoft Realtime Flash Agents, the voice list displays
+full service IDs, with `en-US-Tyler:DragonHDLatestNeural` selected by default.
+Choose an HD or MAI Flash voice before connecting, or choose **Saved Agent
+voice** to preserve the stored setting. The backend
 allowlists these choices and sends an `x-ms-voice-session-override` containing
 `audio.output.voice` and `voice_type: "azure-standard"` at connection time
 (the HD model is selected by the voice name, not a separate `azure-hd` type).
 This applies to the greeting and subsequent output without editing the Agent.
 GPT Live instead uses its saved voice, with no voice-override header; its voice
 control is disabled because per-call overrides are unavailable on this endpoint.
+MAI Realtime also rejects per-call overrides and uses its native voice.
 
 The configured HD voices are:
 
@@ -980,7 +1027,8 @@ the availability status of the WebRTC transport.
   The complete SDP offer is sent only after ICE gathering and socket opening.
 - **Text (both transports):** the browser sends a user `conversation.item.create`
   with one `input_text` content part, followed by `response.create`, through the
-  same backend socket, selecting `output_modalities: ["text"]` for typed turns.
+  same backend socket, selecting `output_modalities: ["text"]` for typed turns
+  except for MAI, which uses the saved audio output.
   The bridge translates this to `modalities: ["text"]` for the WebRTC protocol.
   The backend validates text and allows only this text-only response override,
   not other browser-controlled response or session configuration changes. Read-only
@@ -995,11 +1043,12 @@ preserves the reported VAD type/options and the **whole existing include list**,
 adds `conversation.item.truncated.item` without duplicates, and sets
 `auto_truncate: true` and its prerequisite `interrupt_response: true`.
 It does not change instructions, model, voice, tools, formats, or saved agents.
-For `azure-realtime-flash-2026-10-14`, the bridge instead skips the additional
+For `microsoft-realtime-flash-1` and `mai-realtime`, the bridge instead skips the additional
 startup update entirely. Input becomes ready after the first `session.updated`;
 the service-applied truncation, interruption, include selectors, and tools remain
-unchanged. The runtime model ID `azure-realtime-flash-1` receives the same
-Flash-only bypass. Other realtime models retain the update/acknowledgment handshake.
+unchanged. The legacy IDs `azure-realtime-flash-2026-10-14` and
+`azure-realtime-flash-1` receive the same Flash bypass. Other compatible realtime
+models retain the update/acknowledgment handshake.
 A disabled/missing VAD or disabled automatic responses is reported as a setup
 error rather than silently replacing the saved turn-detection mode.
 

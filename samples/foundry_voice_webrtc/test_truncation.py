@@ -50,17 +50,21 @@ class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(original, untouched)
 
     async def test_flash_ready_after_first_saved_update_for_both_transports(self):
-        for transport in ("websocket", "webrtc"):
-            original = saved_session(transport == "websocket")
-            original["model"] = "azure-realtime-flash-1"
-            config, upstream, browser = SessionConfiguration(), AsyncMock(), AsyncMock()
-            upstream.__aiter__.side_effect = lambda: frames([
-                {"type": "session.updated", "session": original},
-            ])
-            await forward_upstream(upstream, browser, transport, config)
-            self.assertTrue(config.ready)
-            browser.send_json.assert_awaited_once_with({"type": "bridge.ready"})
-            upstream.send_json.assert_not_awaited()
+        for model in ("microsoft-realtime-flash-1", "azure-realtime-flash-2026-10-14",
+                      "azure-realtime-flash-1"):
+            for transport in ("websocket", "webrtc"):
+                with self.subTest(model=model, transport=transport):
+                    original = saved_session(transport == "websocket")
+                    original["model"] = model
+                    config, upstream, browser = SessionConfiguration(), AsyncMock(), AsyncMock()
+                    upstream.__aiter__.side_effect = lambda: frames([
+                        {"type": "session.updated", "session": original},
+                    ])
+                    await forward_upstream(upstream, browser, transport, config)
+                    self.assertTrue(config.ready)
+                    browser.send_json.assert_awaited_once_with({"type": "bridge.ready"})
+                    upstream.send_json.assert_not_awaited()
+                    self.assertNotIn(TRUNCATED_ITEM_INCLUDE, truncation_update(original)["session"]["include"])
 
     async def test_flash_invalid_vad_fails_without_sending_update(self):
         for stable in (True, False):
