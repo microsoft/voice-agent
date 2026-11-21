@@ -1,0 +1,227 @@
+[
+  {
+    "type": "function",
+    "name": "get_calculator_state",
+    "description": "Read the page: the current pricing option, the models with the hostings each supports, every input with its value and range, the price per minute and the cost lines. Call it before answering questions about what is selected.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "set_parameters",
+    "description": "Change one or more inputs on the page; only the given fields change. Choose the pricing option with model and hosting (managed = the voice agent hosts the model and bills it at the tier rate, with STT and TTS; byom = the customer's own Foundry deployment: the voice agent bills only STT and TTS, and the model is billed on that deployment, pay-as-you-go or PTU, and is not priced here); the three standard options are gpt-realtime-2.1, gpt-realtime-2.1-mini and gpt-6-luna, managed. The page animates each changed control. Prices are worked out response by response, calibrated on the team's live calls. Returns the validated inputs and the new and previous price per minute, or ok:false with the reason and no change.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": [
+            "gpt-realtime-2.1",
+            "gpt-realtime-2.1-mini",
+            "gpt-realtime",
+            "gpt-realtime-1.5",
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "gpt-5.6-luna",
+            "gpt-6-luna",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.4-nano",
+            "gpt-5.2",
+            "gpt-5.1",
+            "gpt-oss-120b",
+            "gpt-6-sol"
+          ],
+          "description": "Model id from get_calculator_state."
+        },
+        "hosting": {
+          "type": "string",
+          "enum": [
+            "managed",
+            "byom"
+          ],
+          "description": "How the model is billed; omit to keep the current one if the model supports it."
+        },
+        "minutes": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Length of one call in minutes."
+        },
+        "prompt_design": {
+          "type": "string",
+          "enum": [
+            "single",
+            "stage"
+          ],
+          "description": "single (the default): one mixed prompt with all the logic; stage: split by stage with a handoff at each change, each request carries the system prompt and the current stage logic."
+        },
+        "system_prompt_tokens": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Shared rules sent first with every request."
+        },
+        "logic_tokens": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200000,
+          "description": "Business logic of all stages together."
+        },
+        "stages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Number of stages the logic is split into."
+        },
+        "tool_calls_per_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Tool (MCP) calls per minute; each is one more model response."
+        },
+        "replies_per_minute": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Spoken replies per minute."
+        },
+        "caller_talk_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "agent_talk_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "compaction": {
+          "type": "boolean",
+          "description": "Compact the history: with prompt_design stage at each handoff (the finished stage becomes a summary); with single every 10 caller turns by default, keeping the last 2. Off keeps all history (the default)."
+        },
+        "monthly_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "currency": {
+          "type": "string",
+          "enum": [
+            "USD",
+            "INR"
+          ]
+        },
+        "discount_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "cascade_cache_fallback": {
+          "type": "boolean",
+          "description": "Text models only: price the measured share of requests that fell back to the cached system prompt or missed the cache (on by default); off prices every request as a full cache hit."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "start_walkthrough",
+    "description": "Open the price breakdown, price per minute on top and the cost tree below. Returns a script: sentences to say in your next reply, the price per minute first, then its largest parts, each with its number in cents per minute. While you say it the page opens each part as its number is spoken and shows the bill at the end, so call no function in that reply.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "show_cost_node",
+    "description": "Open one node of the cost tree: the page expands the tree down to it, highlights it and shows below the tree how it is calculated, with its animation. The page waits until your previous sentence has been heard, so call it BEFORE talking about that node. Every cost is in cents per minute. Returns the value, its share of the price, the formula, the numbers, its parts (node ids you can open next) and a sentence to say.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "A node_id from start_walkthrough or from the parts of a node you opened, for example price.model_input.uncached."
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "show_concept",
+    "description": "Show an animation that explains how the model is billed, below the cost tree: request (what each response sends: instructions first, then the conversation, one more turn each time), cache (how the repeated start is billed at the cached rate), handoff (what swapping the stage block does to the cache), compaction (what summarising earlier turns does to the cache).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "concept": {
+          "type": "string",
+          "enum": [
+            "request",
+            "cache",
+            "handoff",
+            "compaction"
+          ]
+        }
+      },
+      "required": [
+        "concept"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "show_result",
+    "description": "Show the bill below the breakdown: the price per minute with what it means per call and per month, the cost lines from largest to smallest, all options compared and the price over call length. Returns those numbers.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "compare_options",
+    "description": "Show the price per minute of several pricing options under the current inputs, cheapest first, with the current option highlighted. Omit option_ids to compare the three standard options, the current one and the three cheapest of all combinations.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "option_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9.-]+@(managed|byom)$",
+            "description": "model@hosting, for example gpt-4.1@byom."
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "show_savings",
+    "description": "Open the ways-to-pay-less panel on the right edge of the page, worked out for the current inputs. Returns each tip with the saving the planning model calculates, what the team measured on real calls about it, and how to apply it.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
+]
