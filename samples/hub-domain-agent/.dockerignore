@@ -1,0 +1,10 @@
+*
+!requirements.txt
+!common/
+!common/**
+!hub/
+!hub/**
+!billing/
+!billing/**
+!booking/
+!booking/**
