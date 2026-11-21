@@ -70,6 +70,7 @@ https://github.com/user-attachments/assets/c62c179a-f181-4d29-ab99-c84dc6091fdd
 
 ## Voice Agent Blogs
 
+- 2026.11 [**Voice agents in Microsoft Foundry Agent Service now generally available**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/voice-agents-in-microsoft-foundry-agent-service-now-generally-available/4573013) — General availability announcement and updates to speech, models, and voice agent capabilities.
 - 2026.10 [**Turn enterprise knowledge into a personalized voice and avatar agent in minutes with Voice Agent**](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/turn-enterprise-knowledge-into-a-personalized-voice-and-avatar-agent-in-minutes-/4564809) — Combine Foundry IQ, Personal Voice, and a custom photo avatar to create a knowledge-grounded Voice Agent in the Foundry portal.
 - 2026.09 [**Ship agents faster with expanded model choice, voice agents, and continuous optimization**](https://azure.microsoft.com/en-us/blog/ship-ai-agents-faster-with-new-capabilities-in-microsoft-foundry-expanded-model-choice-voice-agents-and-built-in-optimization/) — Overview of the latest Foundry Agents capabilities, including a Voice Agent video overview.
 - 2026.09 [**Introducing voice agents in Microsoft Foundry**](https://aka.ms/VoicefirstagentsSept2026) — Voice Agent public preview announcement.
