@@ -22,3 +22,10 @@ release but was a separate preview build. It is no longer a sample dependency.
 - SDK repository commit recorded in package: `4c94d5d53db51d0fd8089a341ccbe11d4ff9f65d`
 - SHA-256: `16f5214c679488943d103a32b7a0fff1321e08815f50400bf14c3f62f3e62329`
 - License: MIT
+
+## Portal package for Windows
+
+[`portal-windows/`](portal-windows/README.md) holds `va-portal-v2.zip`, the Voice Agent portal for a
+Windows x64 machine without internet access, with its own Python and every dependency. Its
+[guide](portal-windows/README.md) covers setup, identity, networks that inspect HTTPS, the `agent.cmd`
+command-line tool and troubleshooting.
