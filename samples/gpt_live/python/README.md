@@ -11,6 +11,10 @@ delegate work:
 | Foundry-managed agent (`foundry_managed_agent`) | `prompt_agent_delegation.py`, `prompt_agent_delegation_tools.py` | A versioned prompt agent that Foundry runs; the tools sample adds an MCP calculator and a local function. |
 | Client (`client`) | `client_delegation.py` | This app: it reads the computer's clock or adds two whole numbers, and replies on the Live session. |
 
+`managed_model.py` uses Responses delegation too, but on a **managed GPT Live model** that Voice Live
+hosts (`model_type: managed`, for example `gpt-live-1-datazone`), so the project needs no GPT Live or
+Responses deployment; see [Managed GPT Live model](#managed-gpt-live-model).
+
 Every agent also has a **greeting** and **structured inputs**: the learner's name and
 English level personalize the instructions and the greeting for each session (see
 [Greeting and structured inputs](#greeting-and-structured-inputs)). With Responses or
@@ -41,9 +45,10 @@ delegation's final status.
 | `prompt_agent_delegation.py` | Creates a prompt agent first, creates a GPT Live voice agent pinned to it, and runs the shared voice conversation. |
 | `prompt_agent_delegation_tools.py` | Adds a server-executed MCP calculator and a client-executed current date/time function to the managed prompt agent. |
 | `client_delegation.py` | Creates a GPT Live agent with client delegation and answers its delegations in this app. |
+| `managed_model.py` | Creates a GPT Live agent on a managed GPT Live model with a managed Responses backend, a local current date/time function, noise suppression, and echo cancellation; talks through the microphone or a WAV file. |
 | `audio_common.py` | Captures microphone audio and plays the agent's response. |
 | `transcript_common.py` | Independently scrollable GPT Live, Delegation, and User terminal panes. |
-| `../../download_conversation_artifacts.py` | Existing separate downloader for conversation JSON, per-item audio, and merged audio. |
+| `../../download_conversation_artifacts.py` | Shared downloader for conversation JSON, per-item audio, and merged audio; it detects GPT Live agents. |
 | `requirements.txt` | Required Python packages and versions, including the Projects SDK 2.11.0 or later. |
 | `../.env.example` | Configuration template, shared with the [JavaScript sample](../js/README.md). |
 | `../.env` | Your local project, agent, deployment, and subscription settings; git-ignored and shared with the JavaScript sample. |
@@ -110,11 +115,26 @@ by this run. Existing agents are never deleted, even with `--auto-delete`.
 New agents are created with `store=True`. When `AGENT_NAME` is set, the existing
 agent's storage policy is left as-is; no session override or agent update is sent.
 After close, if a persisted conversation ID is returned,
-the sample prints the Foundry conversation ID and a command for the existing
+the sample prints the Foundry conversation ID and a command for the shared
 `samples/download_conversation_artifacts.py`; it does not download anything itself.
 Run that command from the repository root, with `AZURE_VOICE_AGENTS_ENDPOINT` set to the
-same value as `FOUNDRY_PROJECT_ENDPOINT`. The separate downloader waits for
-persistence and saves JSON and audio to `voice-agent-output/<conversation-id>/`.
+same value as `FOUNDRY_PROJECT_ENDPOINT` (for example,
+`$env:AZURE_VOICE_AGENTS_ENDPOINT = "<your FOUNDRY_PROJECT_ENDPOINT>"` in PowerShell).
+It uses this environment's Python, which has every package the downloader needs, and
+signs in with your `az login` account.
+
+The downloader sees that the agent uses `sub_protocol: live` and reads the GPT Live
+conversation routes (`AIProjectClient.beta.voice_agents.live_conversations`). It waits
+until the conversation is `completed`, then saves to `voice-agent-output/<conversation-id>/`:
+
+- `conversation.json`: the conversation and its ordered items: `input` (what the
+  learner said), `output` (what GPT Live said), each with `transcription` and `audio`
+  metadata, and `delegation` items with the backend's `output`.
+- `turns/*.wav`: one mono clip per speech item that the service aligned with the
+  recording. It may omit a clip it cannot align; the downloader names those items.
+- `merged.wav`: the whole session in stereo, learner on the left channel and the agent
+  on the right.
+
 Keep the agent (omit `--auto-delete`) if you want to download later.
 
 On macOS/Linux, also run from the repository root: use `python3` to create
@@ -316,6 +336,104 @@ questions and adding two numbers, so this app is the backend:
 Try **"What is 17 plus 25?"** or **"What is the current date and time?"**. The
 Delegation pane shows what the app heard and its answer. No backend model, prompt
 agent, or `response.*` commands are involved.
+
+## Managed GPT Live model
+
+Use the same setup; only `FOUNDRY_PROJECT_ENDPOINT` is needed. Run:
+
+```powershell
+& $py samples\gpt_live\python\managed_model.py
+```
+
+This sample always creates a fresh agent and ignores `AGENT_NAME`. Instead of your own GPT Live
+deployment, the agent names a GPT Live model that Voice Live hosts and bills:
+
+```json
+{
+  "kind": "voice",
+  "sub_protocol": "live",
+  "model_type": "managed",
+  "model": "gpt-live-1-datazone",
+  "audio": {
+    "format": {"type": "audio/pcm", "rate": 24000},
+    "input": {
+      "noise_reduction": {"type": "azure_deep_noise_suppression"},
+      "echo_cancellation": {"type": "server_echo_cancellation"}
+    },
+    "output": {"voice": "marin"}
+  },
+  "delegation": {
+    "type": "responses",
+    "responses": {
+      "model": "gpt-6.1-sol",
+      "instructions": "...",
+      "tools": [{
+        "type": "function",
+        "name": "get_current_datetime",
+        "description": "Get the current date and time on the learner's computer, ...",
+        "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": false},
+        "strict": true
+      }]
+    }
+  },
+  "store": true
+}
+```
+
+The greeting and its structured inputs are the same as in the other samples (omitted above; see
+[Greeting and structured inputs](#greeting-and-structured-inputs)).
+
+- `--model` picks the managed model: `gpt-live-1-datazone` (default, data zone) or `gpt-live-1`
+  (global). Managed GPT Live is offered in a few regions only; both models were tested in a Central US
+  project.
+- `--backend` picks the model's Responses backend: `gpt-6.1-sol` (default) or `gpt-6-luna`. A managed
+  model delegates only to its own backends, not to a deployment in your project. To answer with your own
+  model, use `foundry_managed_agent` delegation to a prompt agent instead.
+- Noise suppression and server echo cancellation are Voice Live features, available only for managed
+  models.
+- The service checks the model and backend against the region when the agent is saved. An unsupported
+  choice fails with HTTP 400, and the sample prints the service's reason, for example
+  `Model 'gpt-4.1' is not a Responses delegation backend of 'gpt-live-1-datazone' in this region.
+  Supported: gpt-6.1-sol, gpt-6-luna.`
+
+### Local function on the Responses backend
+
+The Responses backend has one function tool, `get_current_datetime`, which this app runs. GPT Live
+delegates questions about the current date or time, and the backend calls the function. The sample
+then works as in the [prompt-agent tools sample](#managed-prompt-agent-with-mcp-and-local-function-tools):
+
+1. It collects the completed `function_call` from the backend's `response.event` stream.
+2. When the backend's response completes, it reads this computer's clock and sends the result with
+   `connection.response.item.create` (a `function_call_output` item).
+3. It sends one `connection.response.create` so the backend answers with that result, and GPT Live
+   speaks the answer.
+
+Ask **"What is the current date and time?"**. The Delegation pane shows
+`[local function] get_current_datetime() -> {...}` with the local time, timezone, and UTC time,
+followed by the backend's guidance. The function runs only while this sample is connected.
+
+### SDK support
+
+Projects SDK 2.11.0 can create and talk to these agents; two fields are not modeled yet. Its type
+hints allow only `self_deployed` for Live `model_type`, but the SDK sends `"managed"` unchanged.
+`audio.input` is not part of its Live audio model, so the sample sets that JSON on the definition
+directly. Agent readback still returns `VoiceAgentLiveDefinition`, and the Live session, delegation,
+typed messages, and stored conversation work as for a deployment.
+
+To try it without a microphone, speak a 24 kHz mono PCM16 WAV file instead:
+
+```powershell
+& $py samples\gpt_live\python\managed_model.py --input-wav question.wav --auto-delete
+```
+
+The sample streams the file, then keeps sending silence for 20 seconds so the agent can delegate and
+answer. It then ends the session and prints the transcripts and the delegation. Replies are shown, not
+played. Good recordings to try are "Please correct my English: I go to school yesterday. Explain why."
+and "What is the current date and time?"
+
+The agent is kept unless you pass `--auto-delete`. `response_delegation.py` can reconnect to it with
+`AGENT_NAME=<created-agent>`, and for a managed agent it skips the deployment check. That client does not
+run `get_current_datetime`, though, so date and time questions get no answer there.
 
 ## Tests
 

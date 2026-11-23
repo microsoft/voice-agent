@@ -11,7 +11,7 @@ instead of speaking; the backend answers it and GPT Live speaks the reply.
 
 | Folder | Sample |
 | --- | --- |
-| [`python/`](python/README.md) | Terminal samples with the Python SDK: Responses delegation, managed prompt-agent delegation, a managed prompt agent with MCP and local function tools, and client delegation. |
+| [`python/`](python/README.md) | Terminal samples with the Python SDK: Responses delegation, managed prompt-agent delegation, a managed prompt agent with MCP and local function tools, client delegation, and a managed GPT Live model that Voice Live hosts (no deployment needed). |
 | [`js/`](js/README.md) | A simple browser sample with the JavaScript SDK: the page connects to GPT Live directly with your microphone, and a local Node.js server creates the agents and gives the page an access token from `az login`. Its modes cover Responses, managed prompt-agent (with the MCP calculator and local date/time function), and client delegation. |
 
 Both samples install the published Projects SDK 2.11.0 or later: `azure-ai-projects` from

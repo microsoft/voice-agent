@@ -52,6 +52,9 @@ CONVERSATION_ID = "conversation-1"
 CONVERSATION_PATH = (
     f"/agents/{AGENT_NAME}/endpoint/protocols/voice/conversations/{CONVERSATION_ID}"
 )
+LIVE_CONVERSATION_PATH = (
+    f"/agents/{AGENT_NAME}/endpoint/protocols/voice/live/conversations/{CONVERSATION_ID}"
+)
 NOT_FOUND = {"error": {"code": "not_found", "message": "Not ready."}}
 ENVIRONMENT = {
     "AZURE_VOICE_AGENTS_ENDPOINT": ENDPOINT,
@@ -159,6 +162,31 @@ def conversation(status="completed"):
         "object": "voice.conversation",
         "status": status,
         "created_at": 1700000000,
+    }
+
+
+def voice_agent(sub_protocol="realtime"):
+    """An agent read back with a voice definition; None omits sub_protocol."""
+    definition = {"kind": "voice", "model_type": "managed", "model": "gpt-realtime"}
+    if sub_protocol:
+        definition["sub_protocol"] = sub_protocol
+    if sub_protocol == "live":
+        definition["model"] = "gpt-live-1"
+    return {
+        "object": "agent",
+        "id": "agent-id",
+        "name": AGENT_NAME,
+        "versions": {
+            "latest": {
+                "object": "agent.version",
+                "id": "agent-version-id",
+                "name": AGENT_NAME,
+                "version": "1",
+                "created_at": 1700000000,
+                "metadata": {},
+                "definition": definition,
+            }
+        },
     }
 
 
@@ -795,17 +823,32 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
                 await self.run_lifecycle(sample, transport, AGENT_NAME)
                 self.assertEqual(len(transport.requests), 1)
 
-    async def download_with_responses(self, responses, output_dir):
-        pending = deque(responses)
+    async def download_with_responses(
+        self, responses, output_dir, sub_protocol="realtime"
+    ):
+        # The downloader reads the agent first to choose the conversation route.
+        pending = deque([(None, 200, voice_agent(sub_protocol)), *responses])
+        conversation_path = (
+            LIVE_CONVERSATION_PATH if sub_protocol == "live" else CONVERSATION_PATH
+        )
 
         def respond(request):
             self.assertEqual(request.method, "GET")
-            self.assertIsNone(request.headers.get("Foundry-Features"))
             suffix, status, payload = pending.popleft()
-            parsed = urlparse(request.url)
+            # The SDK sends the preview header on its beta (Live) routes only.
             self.assertEqual(
-                parsed.path, f"/api/projects/sample{CONVERSATION_PATH}{suffix}"
+                request.headers.get("Foundry-Features"),
+                "VoiceAgents=V1Preview"
+                if sub_protocol == "live" and suffix is not None
+                else None,
             )
+            parsed = urlparse(request.url)
+            path = (
+                f"/agents/{AGENT_NAME}"
+                if suffix is None
+                else f"{conversation_path}{suffix}"
+            )
+            self.assertEqual(parsed.path, f"/api/projects/sample{path}")
             query = parse_qs(parsed.query)
             self.assertEqual(query["api-version"], ["v1"])
             if suffix in {"/items", "/responses"}:
@@ -820,12 +863,12 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
                 artifacts, "AioHttpTransport", side_effect=transport.with_session
             ),
             patch.object(artifacts.asyncio, "sleep", AsyncMock()),
-            redirect_stdout(io.StringIO()),
+            redirect_stdout(io.StringIO()) as output,
         ):
             await artifacts.download(AGENT_NAME, CONVERSATION_ID)
         self.assertFalse(pending)
         self.assertTrue(transport.session.closed)
-        return transport
+        return transport, output.getvalue()
 
     async def test_managed_downloads_pagination_and_persistence_retries(self):
         items = [
@@ -863,9 +906,10 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
             ("/audio/content", 200, stereo),
         ]
         with tempfile.TemporaryDirectory() as temporary:
-            transport = await self.download_with_responses(responses, temporary)
+            transport, _ = await self.download_with_responses(responses, temporary)
             folder = Path(temporary) / CONVERSATION_ID
             manifest = json.loads((folder / "conversation.json").read_text())
+            self.assertEqual(manifest["sub_protocol"], "realtime")
             self.assertEqual(
                 [item["id"] for item in manifest["items"]],
                 ["user-1", "agent-1", "tool-1"],
@@ -902,9 +946,11 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
             ("/audio", 200, audio_metadata(blob_uri=merged_uri)),
         ]
         with tempfile.TemporaryDirectory() as temporary:
-            await self.download_with_responses(responses, temporary)
+            # An agent read back without sub_protocol is a Realtime agent.
+            await self.download_with_responses(responses, temporary, sub_protocol=None)
             folder = Path(temporary) / CONVERSATION_ID
             manifest = json.loads((folder / "conversation.json").read_text())
+            self.assertEqual(manifest["sub_protocol"], "realtime")
             self.assertIsNone(manifest["turn_audio"][0]["file"])
             self.assertEqual(
                 manifest["turn_audio"][0]["metadata"]["blob_uri"], item_uri
@@ -914,6 +960,85 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
                 manifest["merged_audio"]["metadata"]["blob_uri"], merged_uri
             )
             self.assertEqual(list(folder.rglob("*.wav")), [])
+
+    async def test_live_agents_download_from_live_conversation_routes(self):
+        items = [
+            {
+                "id": "agent-1",
+                "type": "output",
+                "transcription": " Hi Alex!",
+                "audio": audio_metadata("agent-1"),
+            },
+            {
+                "id": "user-1",
+                "type": "input",
+                "transcription": "I goed to school.",
+                "audio": audio_metadata("user-1"),
+            },
+            {
+                "id": "delegation-1",
+                "type": "delegation",
+                "target": "responses",
+                "response_id": "response-1",
+                "created_at": 1700000000,
+                "output": "Use went.",
+            },
+            # Speech the service could not align has no audio of its own.
+            {"id": "agent-2", "type": "output", "transcription": "Say: I went."},
+        ]
+        mono, stereo = wav_bytes(1), wav_bytes(2)
+        # Only Live routes: no Realtime conversation or responses requests.
+        responses = [
+            ("", 404, NOT_FOUND),
+            ("", 200, conversation("in_progress")),
+            ("", 200, conversation()),
+            ("/items", 200, {"data": items[:2], "last_id": "user-1"}),
+            ("/items", 200, {"data": items[2:]}),
+            ("/items/agent-1/audio", 200, audio_metadata("agent-1")),
+            ("/items/agent-1/audio/content", 200, mono),
+            ("/items/user-1/audio", 200, audio_metadata("user-1")),
+            ("/items/user-1/audio/content", 200, mono),
+            ("/audio", 409, NOT_FOUND),
+            ("/audio", 200, audio_metadata()),
+            ("/audio/content", 200, stereo),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            _, output = await self.download_with_responses(
+                responses, temporary, sub_protocol="live"
+            )
+            folder = Path(temporary) / CONVERSATION_ID
+            manifest = json.loads((folder / "conversation.json").read_text())
+            self.assertEqual(manifest["sub_protocol"], "live")
+            self.assertNotIn("responses", manifest)
+            self.assertEqual(manifest["conversation"]["status"], "completed")
+            self.assertEqual(
+                [item["type"] for item in manifest["items"]],
+                ["output", "input", "delegation", "output"],
+            )
+            self.assertEqual(
+                [audio["role"] for audio in manifest["turn_audio"]],
+                ["agent", "user"],
+            )
+            self.assertEqual(
+                (folder / "turns" / "001_agent_agent-1.wav").read_bytes(), mono
+            )
+            self.assertEqual(
+                (folder / "turns" / "002_user_user-1.wav").read_bytes(), mono
+            )
+            self.assertEqual(len(list((folder / "turns").iterdir())), 2)
+            self.assertEqual((folder / "merged.wav").read_bytes(), stereo)
+            self.assertEqual(
+                manifest["merged_audio"]["metadata"]["channel_layout"],
+                {"left": "user", "right": "agent"},
+            )
+        for expected in (
+            "agent: Hi Alex!",
+            "user: I goed to school.",
+            "delegation (responses): Use went.",
+            "agent: Say: I went.",
+            "No separate audio clip for agent-2.",
+        ):
+            self.assertIn(expected, output)
 
     async def test_download_errors_are_not_hidden_as_persistence_delays(self):
         transport = OfflineTransport(lambda request: (403, NOT_FOUND))

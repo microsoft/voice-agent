@@ -47,6 +47,11 @@ BACKEND_INSTRUCTIONS = (
     "Give one accurate, concise grammar explanation and one example or corrected sentence. "
     "Write guidance for the voice teacher, not a long essay."
 )
+RESPONSES_POLICY = (
+    " Handle greetings and casual conversation yourself. For grammar corrections, "
+    "grammar explanations, or lesson planning, always delegate to the Responses "
+    "English-teacher backend first, then explain its guidance aloud."
+)
 
 # Structured inputs personalize each lesson. The agent declares them, its instructions
 # and greeting use them as {{placeholders}}, and each session supplies values on connect.
@@ -103,15 +108,10 @@ def structured_inputs_for(definition, values):
 # VoiceAgentLiveDefinition sets kind=voice and sub_protocol=live.
 def agent_definition():
     backend = required("RESPONSE_DELEGATION_DEPLOYMENT")
-    instructions = ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + (
-        " Handle greetings and casual conversation yourself. For grammar corrections, "
-        "grammar explanations, or lesson planning, always delegate to the Responses "
-        "English-teacher backend first, then explain its guidance aloud."
-    )
     return VoiceAgentLiveDefinition(
         model=required("GPT_LIVE_DEPLOYMENT"),
         model_type="self_deployed",
-        instructions=instructions,
+        instructions=ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + RESPONSES_POLICY,
         greeting=lesson_greeting(),
         structured_inputs=lesson_inputs(),
         audio=live_audio(),
@@ -435,12 +435,23 @@ async def converse(
 
 async def check_deployments(project, definition):
     """Check the configured model deployments with read-only requests."""
-    deployments = {
-        "GPT_LIVE_DEPLOYMENT": definition.model,
-    }
     # Created definitions hold typed delegation models, while service readback returns
     # a plain dict. Both are mappings, so key access works for either.
     delegation = definition.delegation or {}
+    if definition.get("model_type") == "managed":
+        # Voice Live hosts a managed GPT Live model and its Responses backends, so the
+        # project has no deployment to check; the service validates them when saving.
+        backend = (delegation.get("responses") or {}).get("model")
+        print(
+            f"Managed GPT Live model: {definition.model}"
+            + (f", Responses backend: {backend}" if backend else "")
+            + " (hosted by Voice Live; no project deployment needed)",
+            flush=True,
+        )
+        return
+    deployments = {
+        "GPT_LIVE_DEPLOYMENT": definition.model,
+    }
     if delegation.get("type") == "responses":
         deployments["RESPONSE_DELEGATION_DEPLOYMENT"] = delegation["responses"]["model"]
     for setting, name in deployments.items():
@@ -463,8 +474,15 @@ async def main(
     definition_factory=agent_definition,
     reuse_agent_name: bool = True,
     client_executor=None,
+    audio_options=None,
+    event_handler=None,
 ):
-    """Create the agent from definition_factory, or reuse AGENT_NAME when reuse_agent_name."""
+    """Create the agent from definition_factory, or reuse AGENT_NAME when reuse_agent_name.
+
+    audio_options are Audio keyword arguments, for example input_wav to stream a file
+    instead of the microphone. event_handler(connection, event, transcript) sees every
+    Live event first, for example to run the backend's local functions.
+    """
     base = project_endpoint()
     existing_agent = os.getenv("AGENT_NAME", "").strip() if reuse_agent_name else ""
     name = existing_agent or f"english-teacher-{uuid4().hex[:12]}"
@@ -479,7 +497,7 @@ async def main(
         if definition is not None:
             await check_deployments(project, definition)
         try:
-            with Audio() as audio:
+            with Audio(**(audio_options or {})) as audio:
                 if not existing_agent:
                     with service_errors("Create agent"):
                         version = (
@@ -549,6 +567,7 @@ async def main(
                             transcript,
                             backend_model,
                             managed_delegation=managed_delegation,
+                            event_handler=event_handler,
                             client_executor=client_executor,
                             # Client delegation has no backend to answer typed messages.
                             typed_input=managed_delegation or delegation.get("type") == "responses",
@@ -654,6 +673,9 @@ def service_errors(action, *, not_found=None):
             404: "Check the project endpoint and whether this service has the Live implementation.",
             429: "Deployment quota is exhausted; retry later.",
         }.get(exc.status_code, "Check the request and service configuration.")
+        if exc.status_code == 400 and exc.error is not None and exc.error.message:
+            # The service says what it rejected, for example a managed model's backend.
+            hint = exc.error.message
         raise DemoError(f"{action}: HTTP {exc.status_code}. {hint}") from exc
 
 
@@ -672,7 +694,11 @@ def add_lesson_arguments(parser):
     )
 
 
-def run_cli(main_function=None, *, description=__doc__):
+def run_cli(main_function=None, *, description=__doc__, add_arguments=None):
+    """Parse the shared options, plus any add_arguments(parser) adds, and run main_function.
+
+    Every parsed option is passed to main_function as a keyword argument.
+    """
     parser = argparse.ArgumentParser(description=description, allow_abbrev=False)
     parser.add_argument(
         "--auto-delete",
@@ -681,19 +707,16 @@ def run_cli(main_function=None, *, description=__doc__):
         help="Delete only the agent created by this run on exit (default: keep it).",
     )
     add_lesson_arguments(parser)
+    if add_arguments is not None:
+        add_arguments(parser)
     args = parser.parse_args()
     if not args.learner_name.strip():
         parser.error("--learner-name must not be empty.")
+    args.learner_name = args.learner_name.strip()
     try:
         # samples/gpt_live/.env is shared by the Python and JavaScript samples.
         load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
-        asyncio.run(
-            (main_function or main)(
-                auto_delete=args.auto_delete,
-                learner_name=args.learner_name.strip(),
-                level=args.level,
-            )
-        )
+        asyncio.run((main_function or main)(**vars(args)))
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         raise SystemExit(130)

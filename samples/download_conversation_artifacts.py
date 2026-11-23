@@ -1,4 +1,7 @@
-"""Download a persisted conversation, per-turn audio, and merged audio."""
+"""Download a persisted conversation, per-turn audio, and merged audio.
+
+Works for Realtime voice agents and GPT Live voice agents (``sub_protocol: live``).
+"""
 
 from __future__ import annotations
 
@@ -10,18 +13,34 @@ import re
 from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import aiohttp
 from azure.ai.projects.aio import AIProjectClient
-from azure.ai.projects.aio.operations import VoiceAgentsConversationsOperations
-from azure.ai.projects.models import VoiceConversation
+from azure.ai.projects.aio.operations import (
+    BetaVoiceAgentsLiveConversationsOperations,
+    VoiceAgentsConversationsOperations,
+)
+from azure.ai.projects.models import (
+    VoiceAgentLiveConversation,
+    VoiceAgentLiveDefinition,
+    VoiceConversation,
+)
 from azure.core.exceptions import HttpResponseError
 from azure.core.pipeline.transport import AioHttpTransport
 from azure.identity.aio import DefaultAzureCredential
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Realtime and GPT Live conversations are served by different routes, but their
+# get, list_items, and audio methods take the same arguments.
+ConversationOperations = Union[
+    VoiceAgentsConversationsOperations,
+    BetaVoiceAgentsLiveConversationsOperations,
+]
+# GPT Live items have a type instead of a role.
+LIVE_SPEAKERS = {"input": "user", "output": "agent"}
 
 
 def required_env(name: str) -> str:
@@ -58,12 +77,39 @@ async def _write_stream(stream: Any, path: Path) -> None:
     print(f"Saved audio: {path.resolve()}")
 
 
+async def _is_live_agent(client: AIProjectClient, agent_name: str) -> bool:
+    """Return whether the agent's latest version is a GPT Live voice agent."""
+    agent = await client.agents.get(agent_name)
+    definition = agent.versions.latest.definition
+    # The SDK reads back sub_protocol=live as VoiceAgentLiveDefinition.
+    return isinstance(definition, VoiceAgentLiveDefinition) or (
+        isinstance(definition, Mapping) and definition.get("sub_protocol") == "live"
+    )
+
+
+def _item_transcript(item: Mapping[str, Any], live: bool) -> tuple[str, str]:
+    """Return the speaker and text to print for one conversation item."""
+    if not live:
+        parts = [
+            (part.get("transcript") or part.get("text") or "").strip()
+            for part in (item.get("content") or [])
+        ]
+        speaker = item.get("role", item.get("type", "item"))
+        return speaker, " ".join(part for part in parts if part)
+    if item.get("type") == "delegation":
+        # What the backend returned to GPT Live; not spoken verbatim.
+        speaker = f"delegation ({item.get('target', 'unknown')})"
+        return speaker, (item.get("output") or "").strip()
+    speaker = LIVE_SPEAKERS.get(item.get("type"), item.get("type", "item"))
+    return speaker, (item.get("transcription") or "").strip()
+
+
 async def _wait_for_completed_conversation(
-    conversations: VoiceAgentsConversationsOperations,
+    conversations: ConversationOperations,
     agent_name: str,
     conversation_id: str,
     timeout_seconds: float,
-) -> VoiceConversation:
+) -> VoiceConversation | VoiceAgentLiveConversation:
     """Wait until persistence finishes before requesting final audio."""
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     last_status = "unknown"
@@ -95,7 +141,7 @@ async def _wait_for_completed_conversation(
 
 
 async def _save_item_audio(
-    conversations: VoiceAgentsConversationsOperations,
+    conversations: ConversationOperations,
     agent_name: str,
     conversation_id: str,
     items: list[dict[str, Any]],
@@ -155,7 +201,7 @@ async def _save_item_audio(
 
 
 async def _save_merged_audio(
-    conversations: VoiceAgentsConversationsOperations,
+    conversations: ConversationOperations,
     agent_name: str,
     conversation_id: str,
     output_path: Path,
@@ -212,6 +258,9 @@ async def download_conversation_artifacts(
     ``voice-agent-output/<conversation-id>/conversation.json``
     ``voice-agent-output/<conversation-id>/turns/*.wav``
     ``voice-agent-output/<conversation-id>/merged.wav``
+
+    GPT Live agents (``sub_protocol: live``) store conversations on their own
+    route, so the agent's latest version decides which route to read.
     """
     output_root = Path(
         os.getenv("AZURE_VOICE_AGENTS_OUTPUT_DIR", "voice-agent-output")
@@ -220,7 +269,12 @@ async def download_conversation_artifacts(
     turns_dir = conversation_dir / "turns"
     turns_dir.mkdir(parents=True, exist_ok=True)
 
-    conversations = client.voice_agents.conversations
+    live = await _is_live_agent(client, agent_name)
+    conversations: ConversationOperations = (
+        client.beta.voice_agents.live_conversations
+        if live
+        else client.voice_agents.conversations
+    )
     conversation = await _wait_for_completed_conversation(
         conversations,
         agent_name,
@@ -235,24 +289,24 @@ async def download_conversation_artifacts(
             order="asc",
         )
     ]
-    responses = [
-        _json_value(response)
-        async for response in conversations.list_responses(
-            agent_name,
-            conversation_id,
-            order="asc",
-        )
-    ]
 
     conversation_path = conversation_dir / "conversation.json"
-    payload = {
+    payload: dict[str, Any] = {
         "agent_name": agent_name,
+        "sub_protocol": "live" if live else "realtime",
         "conversation": _json_value(conversation),
-        "responses": responses,
-        "items": items,
-        "turn_audio": [],
-        "merged_audio": None,
     }
+    if not live:
+        # GPT Live has no responses list: delegations are items of their own.
+        payload["responses"] = [
+            _json_value(response)
+            async for response in conversations.list_responses(
+                agent_name,
+                conversation_id,
+                order="asc",
+            )
+        ]
+    payload.update(items=items, turn_audio=[], merged_audio=None)
     # Save transcript data before downloading audio so it is retained even if
     # a later audio download is interrupted.
     conversation_path.write_text(
@@ -263,20 +317,24 @@ async def download_conversation_artifacts(
 
     print(f"Persisted conversation: {conversation.id} ({conversation.status})")
     for item in items:
-        parts = [
-            (part.get("transcript") or part.get("text") or "").strip()
-            for part in (item.get("content") or [])
-        ]
-        text = " ".join(part for part in parts if part)
+        speaker, text = _item_transcript(item, live)
         if text:
-            role = item.get("role", item.get("type", "item"))
-            print(f"{role}: {text}")
+            print(f"{speaker}: {text}")
 
+    audio_items = items
+    if live:
+        # GPT Live lists each speech item's audio metadata inline. Delegation
+        # items have no audio, and speech the service could not align to the
+        # recording has no clip of its own; it is still in merged.wav.
+        audio_items = [item for item in items if item.get("audio")]
+        for item in items:
+            if item.get("type") in LIVE_SPEAKERS and not item.get("audio"):
+                print(f"No separate audio clip for {item.get('id')}.")
     turn_audio = await _save_item_audio(
         conversations,
         agent_name,
         conversation_id,
-        items,
+        audio_items,
         turns_dir,
     )
     merged_audio = await _save_merged_audio(

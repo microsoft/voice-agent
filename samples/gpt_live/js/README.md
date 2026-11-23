@@ -225,7 +225,10 @@ so, which keeps the OpenAI code out of the page (about 150 KB instead of 1 MB).
 
 Agents created by the server are kept when it stops, so you can reconnect or download
 conversations later; after each session the page shows a command for the shared Python
-[`download_conversation_artifacts.py`](../../download_conversation_artifacts.py). Add
+[`download_conversation_artifacts.py`](../../download_conversation_artifacts.py), which saves
+the conversation JSON, per-item clips, and the stereo recording of a GPT Live conversation
+([details](../python/README.md#how-to-run)). Run it with a Python that has the Python
+sample's packages, such as `samples/gpt_live/python/.venv`. Add
 `-- --auto-delete` (for example `npm start -- --auto-delete`) to delete only the agents this
 run created when you press Ctrl+C, voice agent first. Use `-- --port 9000` to change the port.
 

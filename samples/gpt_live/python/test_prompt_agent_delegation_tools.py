@@ -6,11 +6,13 @@ import contextlib
 import io
 import json
 import os
+import sys
 import unittest
 from datetime import datetime, timezone
 from http import HTTPStatus
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -23,6 +25,7 @@ from rich.console import Console
 from websockets.asyncio.server import serve
 
 import client_delegation as client
+import managed_model
 import prompt_agent_delegation as managed
 import prompt_agent_delegation_tools as sample
 import response_delegation as direct
@@ -333,6 +336,43 @@ class ToolHandlerTests(unittest.IsolatedAsyncioTestCase):
             await self.done()
 
 
+class CommandLineTests(unittest.TestCase):
+    def run_cli(self, *argv, add_arguments=None):
+        options = {}
+
+        async def record(**kwargs):
+            options.update(kwargs)
+
+        with (
+            patch.object(sys, "argv", ["sample.py", *argv]),
+            patch.object(direct, "load_dotenv"),
+        ):
+            direct.run_cli(record, add_arguments=add_arguments)
+        return options
+
+    def test_shared_options_reach_main(self):
+        self.assertEqual(
+            self.run_cli("--learner-name", " Mei ", "--level", "beginner"),
+            {"auto_delete": False, "learner_name": "Mei", "level": "beginner"},
+        )
+
+    def test_managed_model_options_reach_main(self):
+        self.assertEqual(
+            self.run_cli(
+                "--model", "gpt-live-1", "--backend", "gpt-6-luna", "--input-wav", "lesson.wav",
+                "--auto-delete", add_arguments=managed_model.add_arguments,
+            ),
+            {
+                "auto_delete": True, "learner_name": direct.DEFAULT_LEARNER_NAME,
+                "level": direct.DEFAULT_LEVEL, "model": "gpt-live-1", "backend": "gpt-6-luna",
+                "input_wav": Path("lesson.wav"),
+            },
+        )
+        self.assertEqual(
+            self.run_cli(add_arguments=managed_model.add_arguments)["model"], "gpt-live-1-datazone"
+        )
+
+
 class ClientExecutorTests(unittest.TestCase):
     NOW = datetime(2026, 11, 9, 4, 5, 6, tzinfo=timezone.utc)
 
@@ -497,6 +537,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             stack.enter_context(patch.object(module, "project_credential", return_value=OfflineCredential()))
             stack.enter_context(patch.object(module, "AIProjectClient", side_effect=project_client))
             stack.enter_context(patch.object(module, "Audio", audio_factory))
+            self.audio_factory = audio_factory
             stack.enter_context(patch.object(module, "TranscriptDisplay", return_value=self.transcript))
             stack.enter_context(contextlib.redirect_stdout(output))
             try:
@@ -522,9 +563,9 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
     def sent_commands(self):
         return [command["type"] for command in self.received]
 
-    def assert_lesson_personalization(self, definition):
+    def assert_lesson_personalization(self, definition, model_type="self_deployed"):
         """Every sample's voice agent declares the lesson inputs and a template greeting."""
-        self.assertEqual(definition["model_type"], "self_deployed")
+        self.assertEqual(definition["model_type"], model_type)
         self.assertEqual(definition["greeting"], {"type": "template", "text": direct.GREETING})
         self.assertIn("{{learner_name}}", definition["greeting"]["text"])
         self.assertIn("{{learner_name}}", definition["instructions"])
@@ -706,6 +747,136 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     )
                 self.assertEqual(self.handshakes, [])
                 self.assertEqual(self.project.deleted, [])
+
+    async def test_managed_model_sample_needs_no_deployments(self):
+        await self.run_main(
+            direct, managed_model.main, session_events=live_session("conversation-managed"),
+            environment={"AGENT_NAME": "teacher"}, model="gpt-live-1", backend="gpt-6-luna",
+            auto_delete=True,
+        )
+        # AGENT_NAME is ignored: the sample always creates a managed-model agent.
+        (agent,) = self.project.created
+        definition = agent["definition"]
+        self.assertEqual(
+            (definition["kind"], definition["sub_protocol"], definition["model_type"], definition["model"]),
+            ("voice", "live", "managed", "gpt-live-1"),
+        )
+        self.assertEqual(
+            definition["delegation"],
+            {
+                "type": "responses",
+                "responses": {
+                    "model": "gpt-6-luna",
+                    "instructions": direct.BACKEND_INSTRUCTIONS + managed_model.BACKEND_TOOL_INSTRUCTIONS,
+                    # The backend calls this local function; the sample runs it.
+                    "tools": [
+                        {
+                            "type": "function",
+                            "name": "get_current_datetime",
+                            "description": managed_model.datetime_tool().description,
+                            "parameters": {
+                                "type": "object", "properties": {}, "required": [],
+                                "additionalProperties": False,
+                            },
+                            "strict": True,
+                        }
+                    ],
+                },
+            },
+        )
+        self.assertEqual(
+            definition["audio"],
+            {
+                "format": {"type": "audio/pcm", "rate": 24000},
+                "output": {"voice": "marin"},
+                "input": managed_model.VOICE_LIVE_INPUT,
+            },
+        )
+        self.assertIn("always delegate to the Responses", definition["instructions"])
+        self.assertIn(managed_model.DATETIME_POLICY, definition["instructions"])
+        self.assertTrue(definition["store"])
+        self.assert_lesson_personalization(definition, model_type="managed")
+        # Voice Live hosts the model and its backend; the project has nothing to look up.
+        self.assertEqual(self.project.deployment_checks(), [])
+        self.assertIn("Managed GPT Live model: gpt-live-1, Responses backend: gpt-6-luna", self.output)
+        self.audio_factory.assert_called_once_with()
+        self.assert_live_handshake(agent["name"], "3")
+        self.assertIn("Conversation id: conversation-managed", self.output)
+        self.assertEqual(self.project.deleted, [agent["name"]])
+
+    async def test_managed_model_sample_streams_a_wav_without_playback(self):
+        await self.run_main(
+            direct, managed_model.main, session_events=live_session("conversation-wav"),
+            model=managed_model.MANAGED_MODELS[0], backend=managed_model.MANAGED_BACKENDS[0],
+            input_wav=Path("lesson.wav"),
+        )
+        self.audio_factory.assert_called_once_with(
+            input_wav=Path("lesson.wav"), no_playback=True, tail_seconds=managed_model.WAV_TAIL_SECONDS,
+        )
+        (agent,) = self.project.created
+        self.assertEqual(agent["definition"]["model"], "gpt-live-1-datazone")
+        self.assertEqual(agent["definition"]["delegation"]["responses"]["model"], "gpt-6.1-sol")
+        self.assertEqual(self.project.deleted, [])
+
+    async def test_managed_model_sample_runs_the_backend_function_and_resumes_it(self):
+        clock = {"local_datetime": "2026-11-23T16:52:11+08:00", "timezone": "CST",
+                 "utc_datetime": "2026-11-23T08:52:11+00:00"}
+        delegation = {"id": "delegation-1", "type": "delegation", "target": "responses"}
+        with patch.object(sample, "get_current_datetime", return_value=clock):
+            await self.run_main(
+                direct, managed_model.main,
+                session_events=live_session(
+                    "conversation-clock",
+                    envelope("session.delegation.created", delegation=delegation),
+                    backend("response.created", response={"id": "response-1", "status": "in_progress"}),
+                    backend("response.output_item.done", item=function_call()),
+                    backend("response.completed", response={"id": "response-1", "status": "completed", "output": []}),
+                ),
+                model="gpt-live-1-datazone", backend="gpt-6.1-sol", auto_delete=True,
+            )
+        commands = [command for command in self.received if command["type"] != "session.input_audio.append"]
+        # The function's output goes back to the Responses backend, then one response.create resumes it.
+        self.assertEqual(
+            [(command["type"], command.get("item")) for command in commands[:2]],
+            [
+                ("response.item.create",
+                 {"type": "function_call_output", "call_id": "call-1", "output": json.dumps(clock)}),
+                ("response.create", None),
+            ],
+        )
+        self.assertIn(
+            call(
+                "delegation-1", title="Local function",
+                status="Local function results sent; resuming the Responses backend",
+                delta=f"\n[local function] get_current_datetime() -> {json.dumps(clock)}\n",
+            ),
+            self.transcript.update_agent_activity.call_args_list,
+        )
+        self.assertIn("Conversation id: conversation-clock", self.output)
+
+    async def test_managed_model_rejection_shows_the_service_message(self):
+        with self.assertRaisesRegex(DemoError, r"Create agent: HTTP 400\. Test failure\."):
+            await self.run_main(
+                direct, managed_model.main, project=OfflineProject(fail_voice=True),
+                session_events=[], model="gpt-live-1", backend="gpt-4.1",
+            )
+        self.assertEqual(self.handshakes, [])
+
+    async def test_responses_sample_reuses_a_managed_agent_without_deployment_checks(self):
+        saved = {
+            "kind": "voice", "sub_protocol": "live", "model_type": "managed",
+            "model": "gpt-live-1-datazone",
+            "delegation": {"type": "responses", "responses": {"model": "gpt-6.1-sol"}},
+        }
+        await self.run_main(
+            direct, direct.main, project=OfflineProject({"teacher": ("5", saved)}),
+            session_events=live_session("conversation-existing-managed"),
+            environment={"AGENT_NAME": "teacher"}, auto_delete=True,
+        )
+        self.assertEqual(self.project.created, [])
+        self.assertEqual(self.project.deleted, [])
+        self.assertEqual(self.project.deployment_checks(), [])
+        self.assert_live_handshake("teacher", "5", structured_inputs=None)
 
     async def run_client(self, learner_said, **lesson):
         received = []
