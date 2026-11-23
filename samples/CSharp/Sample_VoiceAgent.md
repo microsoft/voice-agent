@@ -304,6 +304,7 @@ foreach (string conversationId in newConversationIds)
         timeout.Token);
     string assistantItemId = await ReadPersistedConversationAsync(
         conversationsClient,
+        endpoint,
         agentName,
         conversationId,
         timeout.Token);
@@ -343,6 +344,7 @@ foreach (string conversationId in newConversationIds)
 ```C# Snippet:Sample_VoiceAgent_ReadConversation
 private static async Task<string> ReadPersistedConversationAsync(
     BetaVoiceAgentsConversations conversationsClient,
+    Uri projectEndpoint,
     string agentName,
     string conversationId,
     CancellationToken cancellationToken = default)
@@ -355,19 +357,28 @@ private static async Task<string> ReadPersistedConversationAsync(
     VoiceConversation conversation = conversationResult;
     Console.WriteLine($"Created at {conversation.CreatedOn}; status: {conversation.Status} (GetAgentConversation status: {(int)conversationResult.GetRawResponse().Status})");
 
-    await foreach (VoiceResult response in conversationsClient.GetAgentConversationResponsesAsync(
+    // In Azure.AI.Projects.Agents 3.0.0, deserializing VoiceResult throws
+    // InvalidOperationException ("No ModelReaderWriterTypeBuilder found for
+    // Nullable<RealtimeResponseStatus>"), so the typed response list and get methods
+    // can't be used. Read the responses as JSON instead, through the client's
+    // authenticated pipeline and the protocol (RequestOptions) overload.
+    foreach (string responseId in await ListConversationResponseIdsAsync(
+        conversationsClient.Pipeline,
+        projectEndpoint,
         agentName,
         conversationId,
-        cancellationToken: cancellationToken))
+        cancellationToken))
     {
-        string responseId = response.Id;
-        ClientResult<VoiceResult> detailResult = await conversationsClient.GetAgentConversationResponseAsync(
+        ClientResult detailResult = await conversationsClient.GetAgentConversationResponseAsync(
             agentName,
             conversationId,
             responseId,
-            cancellationToken);
-        VoiceResult detail = detailResult;
-        Console.WriteLine($"Response {responseId}: {detail.Status} (GetAgentConversationResponse status: {(int)detailResult.GetRawResponse().Status})");
+            new RequestOptions { CancellationToken = cancellationToken });
+        using JsonDocument detail = JsonDocument.Parse(detailResult.GetRawResponse().Content);
+        string? responseStatus = detail.RootElement.TryGetProperty("status", out JsonElement statusElement)
+            ? statusElement.GetString()
+            : null;
+        Console.WriteLine($"Response {responseId}: {responseStatus} (GetAgentConversationResponse status: {detailResult.GetRawResponse().Status})");
 
         await foreach (RealtimeItem conversationItem in conversationsClient.GetAgentConversationResponseItemsAsync(
             agentName,
@@ -400,6 +411,49 @@ private static async Task<string> ReadPersistedConversationAsync(
         agentName, conversationId, assistantItemId, cancellationToken);
     Console.WriteLine($"Retrieved item: {DescribeItem(persistedItem)}");
     return assistantItemId;
+}
+
+private static async Task<List<string>> ListConversationResponseIdsAsync(
+    ClientPipeline pipeline,
+    Uri projectEndpoint,
+    string agentName,
+    string conversationId,
+    CancellationToken cancellationToken)
+{
+    List<string> responseIds = new();
+    string? after = null;
+    while (true)
+    {
+        string url = $"{projectEndpoint.AbsoluteUri.TrimEnd('/')}/agents/{Uri.EscapeDataString(agentName)}"
+            + $"/endpoint/protocols/voice/conversations/{Uri.EscapeDataString(conversationId)}/responses?api-version=v1"
+            + (after is null ? string.Empty : $"&after={Uri.EscapeDataString(after)}");
+        using PipelineMessage message = pipeline.CreateMessage();
+        message.Request.Method = "GET";
+        message.Request.Uri = new Uri(url);
+        message.Request.Headers.Set("Accept", "application/json");
+        message.Apply(new RequestOptions { CancellationToken = cancellationToken });
+        await pipeline.SendAsync(message);
+        PipelineResponse response = message.Response!;
+        if (response.IsError)
+        {
+            throw new ClientResultException(response);
+        }
+
+        using JsonDocument page = JsonDocument.Parse(response.Content);
+        foreach (JsonElement item in page.RootElement.GetProperty("data").EnumerateArray())
+        {
+            responseIds.Add(item.GetProperty("id").GetString()!);
+        }
+
+        bool hasMore = page.RootElement.TryGetProperty("has_more", out JsonElement hasMoreElement)
+            && hasMoreElement.ValueKind == JsonValueKind.True;
+        if (!hasMore || responseIds.Count == 0)
+        {
+            return responseIds;
+        }
+
+        after = responseIds[^1];
+    }
 }
 
 /// <summary>
