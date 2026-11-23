@@ -53,6 +53,7 @@ BACKEND_INSTRUCTIONS = (
 LEVELS = ("beginner", "intermediate", "advanced")
 DEFAULT_LEARNER_NAME = "Alex"
 DEFAULT_LEVEL = "intermediate"
+GPT_LIVE_MODEL = "gpt-live-1"
 LESSON_CONTEXT = (
     " The learner's name is {{learner_name}}, and their English level is {{level}}. "
     "Match your vocabulary, sentence length, and pace to that level."
@@ -99,6 +100,16 @@ def structured_inputs_for(definition, values):
     return supplied or None
 
 
+def live_model_settings():
+    model_type = os.getenv("GPT_LIVE_MODEL_TYPE", "managed").strip()
+    if model_type not in {"managed", "self_deployed"}:
+        raise DemoError("GPT_LIVE_MODEL_TYPE must be managed or self_deployed.")
+    return {
+        "model_type": model_type,
+        "model": GPT_LIVE_MODEL if model_type == "managed" else required("GPT_LIVE_DEPLOYMENT"),
+    }
+
+
 # Agent configuration is intentionally fully visible here, separate from the SDK conversation.
 # VoiceAgentLiveDefinition sets kind=voice and sub_protocol=live.
 def agent_definition():
@@ -109,8 +120,7 @@ def agent_definition():
         "English-teacher backend first, then explain its guidance aloud."
     )
     return VoiceAgentLiveDefinition(
-        model=required("GPT_LIVE_DEPLOYMENT"),
-        model_type="self_deployed",
+        **live_model_settings(),
         instructions=instructions,
         greeting=lesson_greeting(),
         structured_inputs=lesson_inputs(),
@@ -435,9 +445,9 @@ async def converse(
 
 async def check_deployments(project, definition):
     """Check the configured model deployments with read-only requests."""
-    deployments = {
-        "GPT_LIVE_DEPLOYMENT": definition.model,
-    }
+    deployments = {}
+    if definition.model_type == "self_deployed":
+        deployments["GPT_LIVE_DEPLOYMENT"] = definition.model
     # Created definitions hold typed delegation models, while service readback returns
     # a plain dict. Both are mappings, so key access works for either.
     delegation = definition.delegation or {}

@@ -47,8 +47,8 @@ export function toolsPromptAgentDefinition(model) {
   };
 }
 
-export function toolsVoiceAgentDefinition(model, promptName, promptVersion) {
-  const definition = managedVoiceAgentDefinition(model, promptName, promptVersion);
+export function toolsVoiceAgentDefinition(model, promptName, promptVersion, modelType = "managed") {
+  const definition = managedVoiceAgentDefinition(model, promptName, promptVersion, modelType);
   definition.instructions +=
     "\nAlso always delegate integer-addition calculations and current-date/time " +
     "questions to the backend prompt agent before answering. It has an MCP " +

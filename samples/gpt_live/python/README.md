@@ -51,7 +51,10 @@ delegation's final status.
 ## How to run
 
 Requires Python 3.11+, Azure CLI, a microphone/headset, and a Foundry project with the
-Voice Agents / GPT Live preview, a GPT Live deployment, and a Responses deployment.
+Voice Agents / GPT Live preview. The default uses managed `gpt-live-1` in
+**Central US**; alternatively set `GPT_LIVE_MODEL_TYPE=self_deployed` and
+`GPT_LIVE_DEPLOYMENT` to your existing Live deployment. Responses or managed prompt
+delegation also requires a compatible text deployment.
 On Linux, install the PortAudio runtime (`libportaudio2` on Ubuntu/Debian).
 
 These samples use their own virtual environment, `samples/gpt_live/python/.venv`, with
@@ -78,11 +81,10 @@ To use an existing GPT Live agent, set `AGENT_NAME=your-agent-name` in `.env`.
 Its latest version and saved configuration are used without creating, updating,
 or deleting the agent. The deployment variables below are ignored in this mode.
 
-Leave `AGENT_NAME` blank to create a new English-teacher agent, and configure both
-deployments:
+Leave `AGENT_NAME` blank to create a new English-teacher agent with managed
+`gpt-live-1`, and configure its text backend:
 
 ```dotenv
-GPT_LIVE_DEPLOYMENT=YOUR-GPT-LIVE-DEPLOYMENT
 RESPONSE_DELEGATION_DEPLOYMENT=YOUR-DELEGATION-DEPLOYMENT
 ```
 
@@ -90,7 +92,8 @@ If you used the older sample, rename `GPT_LIVE_DELEGATION_DEPLOYMENT` in your
 local `.env` to `RESPONSE_DELEGATION_DEPLOYMENT`, and run
 `response_delegation.py` instead of `foundry_gpt_live_openai_sdk.py`.
 
-Both names are required for new agents. Existing agents' saved deployments are
+The text deployment is required for new Responses agents; self-deployed mode also
+requires `GPT_LIVE_DEPLOYMENT`. Existing agents' saved deployments are
 checked instead. The sample does not create deployments. Never commit `.env`.
 
 Run:
@@ -195,7 +198,8 @@ still end the session.
 Use the same environment, dependencies, and `az login` setup above. The project
 must support GPT Live **Foundry-managed delegation with tagged-text results**.
 Both agents are created in that same project; cross-project delegation is not used.
-Set both `GPT_LIVE_DEPLOYMENT` and `RESPONSE_DELEGATION_DEPLOYMENT` in `.env`.
+Set `RESPONSE_DELEGATION_DEPLOYMENT` in `.env`; the voice model defaults to managed
+`gpt-live-1` and also supports the self-deployed settings above.
 Here the latter is the **text-model deployment for the prompt agent**, not a
 direct Responses backend.
 
@@ -293,7 +297,8 @@ No additional packages or `.env` settings are needed.
 
 ## Client delegation
 
-Use the same setup and `.env`; only `GPT_LIVE_DEPLOYMENT` is needed. Run:
+Use the same project setup and `.env`. Managed mode needs no deployment setting;
+self-deployed mode requires `GPT_LIVE_DEPLOYMENT`. Run:
 
 ```powershell
 & $py samples\gpt_live\python\client_delegation.py

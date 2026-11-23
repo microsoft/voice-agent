@@ -59,8 +59,10 @@ def prompt_agent_definition(model):
     return definition
 
 
-def voice_agent_definition(model, prompt_name, prompt_version):
-    definition = managed.voice_agent_definition(model, prompt_name, prompt_version)
+def voice_agent_definition(model, prompt_name, prompt_version, *, model_type="managed"):
+    definition = managed.voice_agent_definition(
+        model, prompt_name, prompt_version, model_type=model_type
+    )
     definition.instructions += (
         "\nAlso always delegate integer-addition calculations and current-date/time "
         "questions to the backend prompt agent before answering. It has an MCP "

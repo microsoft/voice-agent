@@ -140,7 +140,7 @@ class PayloadTests(unittest.TestCase):
         wire = definition.as_dict()
         self.assertEqual(
             (wire["kind"], wire["sub_protocol"], wire["model_type"], wire["model"]),
-            ("voice", "live", "self_deployed", "live"),
+            ("voice", "live", "managed", "live"),
         )
         self.assertEqual(
             wire["delegation"],
@@ -490,6 +490,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             stack.enter_context(patch.dict(os.environ, {
                 "FOUNDRY_PROJECT_ENDPOINT": PROJECT_ENDPOINT,
                 "GPT_LIVE_DEPLOYMENT": "live-model",
+                "GPT_LIVE_MODEL_TYPE": "managed",
                 "RESPONSE_DELEGATION_DEPLOYMENT": "text-model",
                 "AGENT_NAME": "",
                 **(environment or {}),
@@ -524,7 +525,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     def assert_lesson_personalization(self, definition):
         """Every sample's voice agent declares the lesson inputs and a template greeting."""
-        self.assertEqual(definition["model_type"], "self_deployed")
+        self.assertEqual(definition["model_type"], "managed")
         self.assertEqual(definition["greeting"], {"type": "template", "text": direct.GREETING})
         self.assertIn("{{learner_name}}", definition["greeting"]["text"])
         self.assertIn("{{learner_name}}", definition["instructions"])
@@ -563,10 +564,34 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             {"type": "foundry_managed_agent", "agent_name": prompt["name"], "agent_version": "7"},
         )
         self.assert_lesson_personalization(voice["definition"])
-        self.assertEqual([request.method for request in self.project.requests[:2]], ["GET", "GET"])
-        self.assertEqual(self.project.deployment_checks(), ["live-model", "text-model"])
+        self.assertEqual([request.method for request in self.project.requests[:2]], ["GET", "POST"])
+        self.assertEqual(self.project.deployment_checks(), ["text-model"])
         create = next(request for request in self.project.requests if request.method == "POST")
         self.assertIn("VoiceAgents=V1Preview", create.headers["Foundry-Features"])
+
+    async def test_self_deployed_tool_agents_check_live_deployment(self):
+        await self.run_main(
+            managed, sample.main, create_only=True, auto_delete=True,
+            environment={"GPT_LIVE_MODEL_TYPE": "self_deployed"},
+        )
+        self.assertEqual(self.project.deployment_checks(), ["text-model", "live-model"])
+        voice = self.project.created[1]["definition"]
+        self.assertEqual((voice["model_type"], voice["model"]), ("self_deployed", "live-model"))
+
+    def test_live_model_selection_requires_explicit_valid_settings(self):
+        with patch.dict(os.environ, {
+            "GPT_LIVE_MODEL_TYPE": "self_deployed",
+            "GPT_LIVE_DEPLOYMENT": "custom-live",
+            "RESPONSE_DELEGATION_DEPLOYMENT": "text-model",
+        }):
+            for definition in (direct.agent_definition(), client.agent_definition()):
+                self.assertEqual((definition.model_type, definition.model), ("self_deployed", "custom-live"))
+        with patch.dict(os.environ, {"GPT_LIVE_MODEL_TYPE": "self_deployed", "GPT_LIVE_DEPLOYMENT": ""}):
+            with self.assertRaisesRegex(direct.DemoError, "GPT_LIVE_DEPLOYMENT"):
+                direct.live_model_settings()
+        with patch.dict(os.environ, {"GPT_LIVE_MODEL_TYPE": "invalid"}):
+            with self.assertRaisesRegex(direct.DemoError, "managed or self_deployed"):
+                direct.live_model_settings()
 
     async def test_cleanup_deletes_voice_before_prompt(self):
         await self.run_managed()
@@ -655,7 +680,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         definition = agent["definition"]
         self.assertEqual(
             (definition["kind"], definition["sub_protocol"], definition["model_type"], definition["model"]),
-            ("voice", "live", "self_deployed", "live-model"),
+            ("voice", "live", "managed", "gpt-live-1"),
         )
         self.assertEqual(
             definition["delegation"],
@@ -666,7 +691,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(definition["store"])
         self.assert_lesson_personalization(definition)
-        self.assertEqual(self.project.deployment_checks(), ["live-model", "text-model"])
+        self.assertEqual(self.project.deployment_checks(), ["text-model"])
         self.assert_live_handshake(agent["name"], "3")
         self.assertIn("Structured inputs: learner_name=Alex, level=intermediate", self.output)
         # The sample passes raw PCM; the SDK sends it base64-encoded.
@@ -725,7 +750,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(definition["delegation"], {"type": "client"})
         self.assertIn("always delegate before answering", definition["instructions"])
         self.assert_lesson_personalization(definition)
-        self.assertEqual(self.project.deployment_checks(), ["live-model"])
+        self.assertEqual(self.project.deployment_checks(), [])
         self.assert_live_handshake(agent["name"], "3", {"learner_name": "Mei", "level": "beginner"})
         # Unspoken facts first, then the spoken answer, both tied to the delegation.
         self.assertEqual(

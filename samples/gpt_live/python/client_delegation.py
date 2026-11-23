@@ -13,6 +13,7 @@ from response_delegation import (
     lesson_greeting,
     lesson_inputs,
     live_audio,
+    live_model_settings,
     required,
 )
 
@@ -46,8 +47,7 @@ TENS = {
 def agent_definition():
     """A GPT Live English teacher whose delegations go to this app, not a Foundry backend."""
     return VoiceAgentLiveDefinition(
-        model=required("GPT_LIVE_DEPLOYMENT"),
-        model_type="self_deployed",
+        **live_model_settings(),
         instructions=ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + CLIENT_POLICY,
         greeting=lesson_greeting(),
         structured_inputs=lesson_inputs(),

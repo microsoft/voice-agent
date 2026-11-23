@@ -133,13 +133,23 @@ export function liveAudio() {
   return { format: { type: "audio/pcm", rate: RATE }, output: { voice: "marin" } };
 }
 
+export function liveModelSettings(env) {
+  const modelType = (env.GPT_LIVE_MODEL_TYPE ?? "managed").trim();
+  if (!["managed", "self_deployed"].includes(modelType)) {
+    throw new DemoError("GPT_LIVE_MODEL_TYPE must be managed or self_deployed.");
+  }
+  return {
+    model_type: modelType,
+    model: modelType === "managed" ? "gpt-live-1" : required(env, "GPT_LIVE_DEPLOYMENT"),
+  };
+}
+
 // Agent configuration is intentionally fully visible here, separate from the Live session.
 export function responsesAgentDefinition(env) {
   return {
     kind: "voice",
     sub_protocol: "live",
-    model_type: "self_deployed",
-    model: required(env, "GPT_LIVE_DEPLOYMENT"),
+    ...liveModelSettings(env),
     instructions:
       ENGLISH_TEACHER_INSTRUCTIONS +
       LESSON_CONTEXT +
@@ -168,11 +178,11 @@ export function promptAgentDefinition(model) {
   };
 }
 
-export function managedVoiceAgentDefinition(model, promptName, promptVersion) {
+export function managedVoiceAgentDefinition(model, promptName, promptVersion, modelType = "managed") {
   return {
     kind: "voice",
     sub_protocol: "live",
-    model_type: "self_deployed",
+    model_type: modelType,
     model,
     instructions:
       ENGLISH_TEACHER_INSTRUCTIONS +
@@ -201,8 +211,7 @@ export function clientAgentDefinition(env) {
   return {
     kind: "voice",
     sub_protocol: "live",
-    model_type: "self_deployed",
-    model: required(env, "GPT_LIVE_DEPLOYMENT"),
+    ...liveModelSettings(env),
     instructions: ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + CLIENT_POLICY,
     greeting: lessonGreeting(),
     structured_inputs: lessonInputs(),
@@ -250,7 +259,7 @@ export async function checkDeployments(project, deployments, log) {
 
 /** Deployments named by a GPT Live definition: the Live model and any Responses backend. */
 export function definitionDeployments(definition) {
-  const deployments = { GPT_LIVE_DEPLOYMENT: definition.model };
+  const deployments = definition.model_type === "self_deployed" ? { GPT_LIVE_DEPLOYMENT: definition.model } : {};
   if (definition.delegation?.type === "responses") {
     deployments.RESPONSE_DELEGATION_DEPLOYMENT = definition.delegation.responses.model;
   }
@@ -328,11 +337,12 @@ export async function prepareManagedAgents(
   created,
   { promptDefinition = promptAgentDefinition, voiceDefinition = managedVoiceAgentDefinition } = {},
 ) {
+  const liveModel = liveModelSettings(env);
   const deployments = {
-    GPT_LIVE_DEPLOYMENT: required(env, "GPT_LIVE_DEPLOYMENT"),
     RESPONSE_DELEGATION_DEPLOYMENT: required(env, "RESPONSE_DELEGATION_DEPLOYMENT"),
   };
-  // Validate both deployments before creating either agent. Do not create models.
+  if (liveModel.model_type === "self_deployed") deployments.GPT_LIVE_DEPLOYMENT = liveModel.model;
+  // Validate required deployments before creating either agent. Do not create models.
   await checkDeployments(project, deployments, log);
   const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
   const promptName = `english-teacher-prompt-${suffix}`;
@@ -347,7 +357,7 @@ export async function prepareManagedAgents(
   log(`Created prompt agent: ${promptName}:${promptVersion}`);
 
   // 2. Create GPT Live with a pinned managed-agent reference, NOT responses.
-  const definition = voiceDefinition(deployments.GPT_LIVE_DEPLOYMENT, promptName, promptVersion);
+  const definition = voiceDefinition(liveModel.model, promptName, promptVersion, liveModel.model_type);
   const voice = await serviceCall("Create GPT Live voice agent", () =>
     project.agents.create(voiceName, definition, PREVIEW),
   );

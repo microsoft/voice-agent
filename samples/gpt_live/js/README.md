@@ -43,8 +43,11 @@ This sample uses Azure CLI authentication rather than the affected authorization
 ## How to run
 
 Requires Node.js 22+, Azure CLI, Chrome or Edge, a microphone (headphones recommended), and a
-Foundry project with the Voice Agents / GPT Live preview, a GPT Live deployment, and a
-Responses deployment. Configure the shared `samples/gpt_live/.env` as described in
+Foundry project with the Voice Agents / GPT Live preview. The default uses managed
+`gpt-live-1` in Central US with no Live deployment. Alternatively set
+`GPT_LIVE_MODEL_TYPE=self_deployed` and `GPT_LIVE_DEPLOYMENT` to your existing Live
+deployment. Responses or managed delegation also requires a compatible text
+deployment. Configure the shared `samples/gpt_live/.env` as described in
 [`../README.md`](../README.md), then from this folder:
 
 ```powershell
@@ -118,7 +121,8 @@ npm run client
 This is the browser version of the Python [client delegation](../python/README.md#client-delegation)
 sample. It creates a fresh GPT Live agent with `"delegation": {"type": "client"}`, ignoring
 `AGENT_NAME`, whose instructions delegate current date/time questions and adding two numbers.
-Only `GPT_LIVE_DEPLOYMENT` is needed. The page is the backend:
+Managed mode needs no model deployment setting; self-deployed mode requires
+`GPT_LIVE_DEPLOYMENT`. The page is the backend:
 
 - GPT Live sends `session.delegation.created` with `target: "client"` and waits for the page.
 - The event does not repeat the request, so the page waits until the learner's input transcript

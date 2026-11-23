@@ -32,6 +32,7 @@ from response_delegation import (
     lesson_greeting,
     lesson_inputs,
     live_audio,
+    live_model_settings,
     project_credential,
     project_endpoint,
     required,
@@ -71,10 +72,10 @@ def prompt_agent_definition(model):
     )
 
 
-def voice_agent_definition(model, prompt_name, prompt_version):
+def voice_agent_definition(model, prompt_name, prompt_version, *, model_type="managed"):
     return VoiceAgentLiveDefinition(
         model=model,
-        model_type="self_deployed",
+        model_type=model_type,
         instructions=ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + (
             "\nBackchannel policy: Briefly acknowledge the learner while waiting."
             "\nInterruption policy: Stop speaking and listen when interrupted."
@@ -109,10 +110,12 @@ async def main(
 ):
     """Share the managed-agent lifecycle with the tools example."""
     base = project_endpoint()
+    live_model = live_model_settings()
     deployments = {
-        "GPT_LIVE_DEPLOYMENT": required("GPT_LIVE_DEPLOYMENT"),
         "RESPONSE_DELEGATION_DEPLOYMENT": required("RESPONSE_DELEGATION_DEPLOYMENT"),
     }
+    if live_model["model_type"] == "self_deployed":
+        deployments["GPT_LIVE_DEPLOYMENT"] = live_model["model"]
     suffix = uuid4().hex[:12]
     prompt_name = f"english-teacher-prompt-{suffix}"
     voice_name = f"english-teacher-live-{suffix}"
@@ -124,7 +127,7 @@ async def main(
         # allow_preview sends the VoiceAgents=V1Preview feature header for voice agents.
         AIProjectClient(endpoint=base, credential=credential, allow_preview=True) as project,
     ):
-        # Validate both deployments before creating either agent. Do not create models.
+        # Validate required deployments before creating either agent. Do not create models.
         for setting, model in deployments.items():
             with service_errors(f"Check {setting}='{model}'"):
                 deployment = await project.deployments.get(model)
@@ -150,9 +153,10 @@ async def main(
 
                 # 2. Create GPT Live with a pinned managed-agent reference, NOT responses.
                 definition = (voice_definition or voice_agent_definition)(
-                    deployments["GPT_LIVE_DEPLOYMENT"],
+                    live_model["model"],
                     prompt_name,
                     prompt_version,
+                    model_type=live_model["model_type"],
                 )
                 with service_errors("Create GPT Live voice agent"):
                     voice = await project.agents.create_version(
