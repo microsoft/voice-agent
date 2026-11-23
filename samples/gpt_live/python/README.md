@@ -48,7 +48,7 @@ delegation's final status.
 | `managed_model.py` | Creates a GPT Live agent on a managed GPT Live model with a managed Responses backend, a local current date/time function, noise suppression, and echo cancellation; talks through the microphone or a WAV file. |
 | `audio_common.py` | Captures microphone audio and plays the agent's response. |
 | `transcript_common.py` | Independently scrollable GPT Live, Delegation, and User terminal panes. |
-| `../../download_conversation_artifacts.py` | Existing separate downloader for conversation JSON, per-item audio, and merged audio. |
+| `../../download_conversation_artifacts.py` | Shared downloader for conversation JSON, per-item audio, and merged audio; it detects GPT Live agents. |
 | `requirements.txt` | Required Python packages and versions, including the Projects SDK 2.11.0 or later. |
 | `../.env.example` | Configuration template, shared with the [JavaScript sample](../js/README.md). |
 | `../.env` | Your local project, agent, deployment, and subscription settings; git-ignored and shared with the JavaScript sample. |
@@ -115,11 +115,26 @@ by this run. Existing agents are never deleted, even with `--auto-delete`.
 New agents are created with `store=True`. When `AGENT_NAME` is set, the existing
 agent's storage policy is left as-is; no session override or agent update is sent.
 After close, if a persisted conversation ID is returned,
-the sample prints the Foundry conversation ID and a command for the existing
+the sample prints the Foundry conversation ID and a command for the shared
 `samples/download_conversation_artifacts.py`; it does not download anything itself.
 Run that command from the repository root, with `AZURE_VOICE_AGENTS_ENDPOINT` set to the
-same value as `FOUNDRY_PROJECT_ENDPOINT`. The separate downloader waits for
-persistence and saves JSON and audio to `voice-agent-output/<conversation-id>/`.
+same value as `FOUNDRY_PROJECT_ENDPOINT` (for example,
+`$env:AZURE_VOICE_AGENTS_ENDPOINT = "<your FOUNDRY_PROJECT_ENDPOINT>"` in PowerShell).
+It uses this environment's Python, which has every package the downloader needs, and
+signs in with your `az login` account.
+
+The downloader sees that the agent uses `sub_protocol: live` and reads the GPT Live
+conversation routes (`AIProjectClient.beta.voice_agents.live_conversations`). It waits
+until the conversation is `completed`, then saves to `voice-agent-output/<conversation-id>/`:
+
+- `conversation.json`: the conversation and its ordered items: `input` (what the
+  learner said), `output` (what GPT Live said), each with `transcription` and `audio`
+  metadata, and `delegation` items with the backend's `output`.
+- `turns/*.wav`: one mono clip per speech item that the service aligned with the
+  recording. It may omit a clip it cannot align; the downloader names those items.
+- `merged.wav`: the whole session in stereo, learner on the left channel and the agent
+  on the right.
+
 Keep the agent (omit `--auto-delete`) if you want to download later.
 
 On macOS/Linux, also run from the repository root: use `python3` to create

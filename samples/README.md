@@ -114,7 +114,7 @@ caller's goal from what actually happens in the demonstration.
 | [Ignite Session Planner](ignite_planner/README.md) | Run a browser page whose voice Agent operates the page through client-executed functions: it ranks, highlights and compares Ignite 2026 sessions, finds speakers by sound, and builds an agenda. |
 | [C# voice agent sample](CSharp/README.md) | Create and manage a temporary Agent or use an existing Agent, stream audio over WebSocket, and read persisted conversations and recordings. |
 | [Java live audio Voice Agent sample](java/README.md) | Create a temporary Agent and run an asynchronous microphone and speaker conversation with Enter-to-end, barge-in, persisted conversation readback, and cleanup. |
-| [`download_conversation_artifacts.py`](download_conversation_artifacts.py) | Download conversation JSON, per-turn WAV files, and the merged stereo WAV. |
+| [`download_conversation_artifacts.py`](download_conversation_artifacts.py) | Download conversation JSON, per-turn WAV files, and the merged stereo WAV, for Realtime and GPT Live agents. |
 | [`download_conversation_traces.py`](download_conversation_traces.py) | Download correlated Application Insights rows by conversation ID. |
 
 For a mobile customer presentation or a general-purpose browser conversation,
@@ -557,6 +557,19 @@ voice-agent-output/<conversation-id>/
 - `turns/` contains every persisted user and assistant audio segment.
 - `merged.wav` is the final stereo recording: caller on the left channel and
   Agent on the right.
+
+The downloader also works for [GPT Live agents](gpt_live/python/README.md). It
+reads the Agent's latest version first; when its definition has
+`sub_protocol: live`, it reads the GPT Live conversation routes instead of the
+Realtime ones and writes the same layout, with these differences:
+
+- `conversation.json` has `"sub_protocol": "live"` and no `responses` list.
+  Its `items` are `input` (user speech), `output` (agent speech), and
+  `delegation` items: speech items carry `transcription` and `audio` metadata,
+  and delegation items carry the backend's `output`.
+- `turns/` has a clip only for speech the service aligned with the recording;
+  the downloader names any speech item without one. All speech is in
+  `merged.wav`.
 
 Set `AZURE_VOICE_AGENTS_OUTPUT_DIR` in `samples/.env` to change the output
 directory. For bring-your-own storage, the JSON manifest records returned blob
