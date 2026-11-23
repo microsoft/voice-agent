@@ -11,6 +11,10 @@ delegate work:
 | Foundry-managed agent (`foundry_managed_agent`) | `prompt_agent_delegation.py`, `prompt_agent_delegation_tools.py` | A versioned prompt agent that Foundry runs; the tools sample adds an MCP calculator and a local function. |
 | Client (`client`) | `client_delegation.py` | This app: it reads the computer's clock or adds two whole numbers, and replies on the Live session. |
 
+`managed_model.py` uses Responses delegation too, but on a **managed GPT Live model** that Voice Live
+hosts (`model_type: managed`, for example `gpt-live-1-datazone`), so the project needs no GPT Live or
+Responses deployment; see [Managed GPT Live model](#managed-gpt-live-model).
+
 Every agent also has a **greeting** and **structured inputs**: the learner's name and
 English level personalize the instructions and the greeting for each session (see
 [Greeting and structured inputs](#greeting-and-structured-inputs)). With Responses or
@@ -41,6 +45,7 @@ delegation's final status.
 | `prompt_agent_delegation.py` | Creates a prompt agent first, creates a GPT Live voice agent pinned to it, and runs the shared voice conversation. |
 | `prompt_agent_delegation_tools.py` | Adds a server-executed MCP calculator and a client-executed current date/time function to the managed prompt agent. |
 | `client_delegation.py` | Creates a GPT Live agent with client delegation and answers its delegations in this app. |
+| `managed_model.py` | Creates a GPT Live agent on a managed GPT Live model with a managed Responses backend, noise suppression, and echo cancellation; talks through the microphone or a WAV file. |
 | `audio_common.py` | Captures microphone audio and plays the agent's response. |
 | `transcript_common.py` | Independently scrollable GPT Live, Delegation, and User terminal panes. |
 | `../../download_conversation_artifacts.py` | Existing separate downloader for conversation JSON, per-item audio, and merged audio. |
@@ -316,6 +321,70 @@ questions and adding two numbers, so this app is the backend:
 Try **"What is 17 plus 25?"** or **"What is the current date and time?"**. The
 Delegation pane shows what the app heard and its answer. No backend model, prompt
 agent, or `response.*` commands are involved.
+
+## Managed GPT Live model
+
+Use the same setup; only `FOUNDRY_PROJECT_ENDPOINT` is needed. Run:
+
+```powershell
+& $py samples\gpt_live\python\managed_model.py
+```
+
+This sample always creates a fresh agent and ignores `AGENT_NAME`. Instead of your own GPT Live
+deployment, the agent names a GPT Live model that Voice Live hosts and bills:
+
+```json
+{
+  "kind": "voice",
+  "sub_protocol": "live",
+  "model_type": "managed",
+  "model": "gpt-live-1-datazone",
+  "audio": {
+    "format": {"type": "audio/pcm", "rate": 24000},
+    "input": {
+      "noise_reduction": {"type": "azure_deep_noise_suppression"},
+      "echo_cancellation": {"type": "server_echo_cancellation"}
+    },
+    "output": {"voice": "marin"}
+  },
+  "delegation": {"type": "responses", "responses": {"model": "gpt-6.1-sol", "instructions": "..."}},
+  "store": true
+}
+```
+
+The greeting and structured inputs are the same as in the other samples (omitted above).
+
+- `--model` picks the managed model: `gpt-live-1-datazone` (default, data zone) or `gpt-live-1`
+  (global). Managed GPT Live is offered in a few regions only; both models were tested in a Central US
+  project.
+- `--backend` picks the model's Responses backend: `gpt-6.1-sol` (default) or `gpt-6-luna`. A managed
+  model delegates only to its own backends, not to a deployment in your project. To answer with your own
+  model, use `foundry_managed_agent` delegation to a prompt agent instead.
+- Noise suppression and server echo cancellation are Voice Live features, available only for managed
+  models.
+- The service checks the model and backend against the region when the agent is saved. An unsupported
+  choice fails with HTTP 400, and the sample prints the service's reason, for example
+  `Model 'gpt-4.1' is not a Responses delegation backend of 'gpt-live-1-datazone' in this region.
+  Supported: gpt-6.1-sol, gpt-6-luna.`
+
+Projects SDK 2.11.0 can create and talk to these agents; two fields are not modeled yet. Its type
+hints allow only `self_deployed` for Live `model_type`, but the SDK sends `"managed"` unchanged.
+`audio.input` is not part of its Live audio model, so the sample sets that JSON on the definition
+directly. Agent readback still returns `VoiceAgentLiveDefinition`, and the Live session, delegation,
+typed messages, and stored conversation work as for a deployment.
+
+To try it without a microphone, speak a 24 kHz mono PCM16 WAV file instead:
+
+```powershell
+& $py samples\gpt_live\python\managed_model.py --input-wav question.wav --auto-delete
+```
+
+The sample streams the file, then keeps sending silence for 20 seconds so the agent can delegate and
+answer. It then ends the session and prints the transcripts and the delegation. Replies are shown, not
+played. A good recording to try is "Please correct my English: I go to school yesterday. Explain why."
+
+The agent is kept unless you pass `--auto-delete`. `response_delegation.py` can reconnect to it with
+`AGENT_NAME=<created-agent>`: for a managed agent it skips the deployment check.
 
 ## Tests
 
