@@ -186,7 +186,7 @@ async def run(endpoint: str, scenario: str) -> None:
             validate_definition(saved.definition, expected)
             await client.agents.enable(agent_name)
             print(f"Agent: {agent_name}; model: {expected.model}; scenario: {scenario}")
-            async with client.beta.voice_agents.realtime.connect(
+            async with client.voice_agents.realtime.connect(
                 agent_name=agent_name,
                 structured_inputs=CONTEXT if scenario == "template" else None,
             ) as connection:

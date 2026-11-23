@@ -545,7 +545,7 @@ async def run(args):
         )
         await client.agents.enable(name)
         print(f"AGENT / {name} / {args.model} / retained / store=false", flush=True)
-        async with client.beta.voice_agents.realtime.connect(agent_name=name) as connection:
+        async with client.voice_agents.realtime.connect(agent_name=name) as connection:
             audio = None
             if args.text is None:
                 from wait_audio import Audio

@@ -33,7 +33,15 @@ param azureApiVersion string
 
 @secure()
 param foundryFeatures string
+param gptLiveDeployment string = 'gpt-live-1'
+param gptLiveBackendDeployment string = 'gpt-5.4'
+@secure()
+param gptLiveProjectEndpoint string = ''
+@allowed(['websocket', 'webrtc'])
+param defaultTransport string = 'websocket'
+param startWithGptLive bool = false
 
+@secure()
 param iceServersJson string = '[{"urls":"stun:stun.l.google.com:19302"}]'
 param personalizationRequired bool = false
 param allowAgentRecreate bool = false
@@ -103,6 +111,11 @@ module containerApp './modules/container-app.bicep' = {
     azureVoiceAgentName: azureVoiceAgentName
     azureApiVersion: azureApiVersion
     foundryFeatures: foundryFeatures
+    gptLiveDeployment: gptLiveDeployment
+    gptLiveBackendDeployment: gptLiveBackendDeployment
+    gptLiveProjectEndpoint: gptLiveProjectEndpoint
+    defaultTransport: defaultTransport
+    startWithGptLive: startWithGptLive
     iceServersJson: iceServersJson
     personalizationRequired: personalizationRequired
     allowAgentRecreate: allowAgentRecreate

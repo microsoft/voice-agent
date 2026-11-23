@@ -90,6 +90,26 @@ class TemplateVersionCatalogTests(TemplateVersionFixture, unittest.TestCase):
     def setUp(self) -> None:
         self.create_catalog()
 
+    def test_target_locale_is_explicit_and_shared_by_template_versions(self) -> None:
+        self.assertEqual("", self.catalog.cards()[0]["target_locale"])
+        config = json.loads(self.config.read_text())
+        config["templates"][0]["target_locale"] = "hi-IN"
+        self.config.write_text(json.dumps(config))
+        self.catalog.reload()
+        self.assertEqual("hi-IN", self.catalog.cards()[0]["target_locale"])
+        self.assertEqual("hi-IN", self.catalog.detail("example", VERSION)["target_locale"])
+
+    def test_invalid_target_locale_is_reported_instead_of_guessed(self) -> None:
+        for locale in ("en-*", "hi-in", "English", None, ["hi-IN"]):
+            with self.subTest(locale=locale):
+                config = json.loads(self.config.read_text())
+                config["templates"][0]["target_locale"] = locale
+                self.config.write_text(json.dumps(config))
+                self.catalog.reload()
+                self.assertEqual([], self.catalog.cards())
+                self.assertEqual(1, len(self.catalog.errors))
+                self.assertIn("target_locale", self.catalog.errors[0]["error"])
+
     def test_versions_keep_one_card_and_independent_documents(self) -> None:
         cards = self.catalog.cards()
         self.assertEqual(1, len(cards))
@@ -184,10 +204,8 @@ class TemplateVersionCatalogTests(TemplateVersionFixture, unittest.TestCase):
             for path in root.rglob("agent.json"):
                 version = path.parent.relative_to(root).as_posix()
                 with self.subTest(template_id=template_id, version=version):
-                    self.assertEqual(
-                        json.loads(path.read_text(encoding="utf-8")),
-                        catalog.document(template_id, version),
-                    )
+                    expected = json.loads(path.read_text(encoding="utf-8"))
+                    self.assertEqual(expected, catalog.document(template_id, version))
 
     def test_finance_version_roots_and_models_remain_separate(self) -> None:
         catalog = template_portal.TemplateCatalog()
@@ -215,6 +233,9 @@ class TemplateVersionCatalogTests(TemplateVersionFixture, unittest.TestCase):
             model = {
                 "finance-example-cascade-luna": "gpt-4.1-mini",
                 "finance-example-realtime": "gpt-realtime-regional",
+                "customer-support-example": "gpt-realtime-2.1",
+                "appointment-setter-example": "gpt-realtime-2.1",
+                "receptionist-messaging-example": "gpt-realtime-2.1",
             }.get(card["id"], "gpt-realtime")
             for version in card["versions"]:
                 with self.subTest(template_id=card["id"], version=version["id"]):
@@ -224,7 +245,16 @@ class TemplateVersionCatalogTests(TemplateVersionFixture, unittest.TestCase):
                     self.assertTrue(
                         turn_detection["type"].startswith("azure_semantic_vad"),
                     )
-                    self.assertEqual(400, turn_detection["silence_duration_ms"])
+                    # Examples 3-7 use Example 1's turn detection with 600 ms silence; their
+                    # backup versions keep the prior 400 ms.
+                    silence = 600 if not version["id"].startswith("backups/") and card["id"] in {
+                        "elevator-service-example",
+                        "frontdesk-receptionist-example",
+                        "customer-support-example",
+                        "appointment-setter-example",
+                        "receptionist-messaging-example",
+                    } else 400
+                    self.assertEqual(silence, turn_detection["silence_duration_ms"])
 
     def test_runtime_updated_backup_manifests_keep_exact_prior_sources(self) -> None:
         for manifest_path in template_portal.SAMPLES_DIR.glob("*/backups/**/manifest.json"):
@@ -283,6 +313,10 @@ class TemplateVersionRouteTests(TemplateVersionFixture, unittest.IsolatedAsyncio
 
     async def test_publish_and_mcp_configuration_use_selected_version(self) -> None:
         with (
+            patch.object(
+                demo_server.VoicePolicy, "resolve",
+                side_effect=AssertionError("Template publication must not prevalidate voices"),
+            ),
             patch.object(template_portal, "validate_mcp_probe_url"),
             patch.object(template_portal, "create_mcp_connection") as connection,
             patch.object(template_portal, "publish_agent", return_value={

@@ -141,7 +141,7 @@ The script:
 1. Creates and enables one uniquely named Voice Agent using
    `AIProjectClient.agents.create_version` with `VoiceAgentDefinition` and
    `allow_preview=True`, then enables it.
-2. Opens `project.beta.voice_agents.realtime.connect` four times with the same
+2. Opens `project.voice_agents.realtime.connect` four times with the same
    agent name and waits for readiness. Each turn uploads actual PCM with
    `input_audio_buffer.append`, commits it, and waits for the **service's input
    speech transcript** before requesting a response. It collects real output

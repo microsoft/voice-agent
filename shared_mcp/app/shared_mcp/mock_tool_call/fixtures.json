@@ -203,6 +203,292 @@
       "items": [
         {"name": "Desk lamp", "quantity": 2, "final_sale": false}
       ]
+    },
+    {
+      "order_number": "10048",
+      "customer_name": "Rose Gonzalez",
+      "email": "rose@edge.com",
+      "ordered_days_ago": 45,
+      "shipped_days_ago": 44,
+      "delivered_days_ago": 40,
+      "shipping_method": "standard",
+      "carrier": "Contoso Express",
+      "tracking_number": "CX100480001",
+      "status": "delivered",
+      "items": [
+        {"name": "Over-ear headphones", "quantity": 1, "final_sale": false}
+      ]
+    },
+    {
+      "order_number": "10049",
+      "customer_name": "Tim Barr",
+      "email": "barr_tim@grandhotels.com",
+      "ordered_days_ago": 3,
+      "shipped_days_ago": null,
+      "shipping_method": "standard",
+      "carrier": null,
+      "tracking_number": null,
+      "status": "cancelled",
+      "items": [
+        {"name": "Personal blender", "quantity": 1, "final_sale": false}
+      ]
+    },
+    {
+      "order_number": "10050",
+      "customer_name": "Sam Quinn",
+      "email": "sam.quinn@example.com",
+      "ordered_days_ago": 1,
+      "shipped_days_ago": null,
+      "shipping_method": "express",
+      "carrier": null,
+      "tracking_number": null,
+      "status": "processing",
+      "items": [
+        {"name": "Wireless earbuds Pro", "quantity": 1, "final_sale": false}
+      ]
+    },
+    {
+      "order_number": "10051",
+      "customer_name": "Sam Quinn",
+      "email": "sam.quinn@example.com",
+      "ordered_days_ago": 12,
+      "shipped_days_ago": 11,
+      "delivered_days_ago": 8,
+      "shipping_method": "standard",
+      "carrier": "Contoso Express",
+      "tracking_number": "CX100510001",
+      "status": "delivered",
+      "items": [
+        {"name": "Trail running shoes, size 10", "quantity": 1, "final_sale": false}
+      ]
+    }
+  ],
+  "products": [
+    {
+      "product_id": "SKU-1001",
+      "name": "Rain jacket",
+      "category": "Outerwear",
+      "price": 89.0,
+      "rating": 4.6,
+      "review_count": 412,
+      "sizes": ["S", "M", "L", "XL"],
+      "sizes_in_stock": ["S", "M", "L"],
+      "colors": ["Navy", "Olive"],
+      "features": ["Waterproof, seam-sealed shell", "Packable hood", "Two zip hand pockets"],
+      "tags": ["rain", "waterproof", "jacket", "coat", "hiking", "commute"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1002",
+      "name": "Insulated winter parka",
+      "category": "Outerwear",
+      "price": 189.0,
+      "rating": 4.7,
+      "review_count": 238,
+      "sizes": ["S", "M", "L", "XL"],
+      "sizes_in_stock": ["M", "L"],
+      "colors": ["Black"],
+      "features": ["Synthetic insulation", "Water-resistant shell", "Detachable hood"],
+      "tags": ["winter", "warm", "parka", "jacket", "coat", "snow", "cold"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1003",
+      "name": "Lightweight windbreaker",
+      "category": "Outerwear",
+      "price": 49.0,
+      "rating": 4.2,
+      "review_count": 167,
+      "sizes": ["S", "M", "L"],
+      "sizes_in_stock": ["S", "M", "L"],
+      "colors": ["Red", "Gray"],
+      "features": ["Wind-resistant, not waterproof", "Packs into its own pocket"],
+      "tags": ["wind", "windbreaker", "jacket", "running", "light"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1004",
+      "name": "Wool socks, 3 pack",
+      "category": "Accessories",
+      "price": 18.0,
+      "rating": 4.8,
+      "review_count": 905,
+      "sizes": ["M", "L"],
+      "sizes_in_stock": ["M", "L"],
+      "colors": ["Charcoal"],
+      "features": ["Merino wool blend", "Cushioned sole"],
+      "tags": ["socks", "wool", "warm", "hiking"],
+      "final_sale": true
+    },
+    {
+      "product_id": "SKU-1005",
+      "name": "Kids' rain jacket",
+      "category": "Outerwear",
+      "price": 59.0,
+      "rating": 4.4,
+      "review_count": 126,
+      "sizes": ["XS", "S", "M"],
+      "sizes_in_stock": ["S"],
+      "colors": ["Yellow", "Navy"],
+      "features": ["Waterproof shell", "Reflective trim"],
+      "tags": ["rain", "waterproof", "jacket", "kids", "children", "school"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1101",
+      "name": "Blender, 1.5 L",
+      "category": "Kitchen",
+      "price": 79.0,
+      "rating": 4.4,
+      "review_count": 321,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Silver"],
+      "features": ["900 watt motor", "Three speeds and pulse", "Dishwasher-safe jar"],
+      "tags": ["blender", "smoothie", "kitchen", "appliance"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1102",
+      "name": "Personal blender",
+      "category": "Kitchen",
+      "price": 39.0,
+      "rating": 4.1,
+      "review_count": 188,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["White", "Blue"],
+      "features": ["400 watt motor", "Two 600 ml travel cups"],
+      "tags": ["blender", "smoothie", "portable", "travel", "kitchen"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1103",
+      "name": "High-performance blender, 2 L",
+      "category": "Kitchen",
+      "price": 199.0,
+      "rating": 4.8,
+      "review_count": 97,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Black"],
+      "features": ["1500 watt motor", "Variable speed", "Self-cleaning program"],
+      "tags": ["blender", "smoothie", "kitchen", "appliance", "professional"],
+      "final_sale": false,
+      "in_stock": false
+    },
+    {
+      "product_id": "SKU-1201",
+      "name": "LED desk lamp",
+      "category": "Home office",
+      "price": 45.0,
+      "rating": 4.5,
+      "review_count": 276,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["White", "Black"],
+      "features": ["Dimmable with five color temperatures", "USB-C charging port"],
+      "tags": ["lamp", "desk", "light", "office", "study"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1202",
+      "name": "Clamp desk lamp",
+      "category": "Home office",
+      "price": 29.0,
+      "rating": 4.0,
+      "review_count": 84,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Black"],
+      "features": ["Clamps to a desk edge", "Flexible arm"],
+      "tags": ["lamp", "desk", "light", "office", "clamp"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1203",
+      "name": "LED desk lamp with wireless charger",
+      "category": "Home office",
+      "price": 69.0,
+      "rating": 4.3,
+      "review_count": 58,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["White"],
+      "features": ["Dimmable", "Built-in wireless phone charger"],
+      "tags": ["lamp", "desk", "light", "office", "charger", "wireless"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1301",
+      "name": "Wireless earbuds",
+      "category": "Audio",
+      "price": 99.0,
+      "rating": 4.3,
+      "review_count": 530,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Black", "White"],
+      "features": ["Active noise cancellation", "8 hours of battery, 24 with the case", "Sweat resistant"],
+      "tags": ["earbuds", "headphones", "wireless", "bluetooth", "music", "running"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1302",
+      "name": "Over-ear headphones",
+      "category": "Audio",
+      "price": 149.0,
+      "rating": 4.6,
+      "review_count": 344,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Black", "Sand"],
+      "features": ["Active noise cancellation", "30 hours of battery", "Foldable with a travel case"],
+      "tags": ["headphones", "wireless", "bluetooth", "music", "travel", "noise"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1303",
+      "name": "Wireless earbuds Pro",
+      "category": "Audio",
+      "price": 179.0,
+      "rating": 4.7,
+      "review_count": 211,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["Black"],
+      "features": ["Adaptive noise cancellation", "10 hours of battery, 30 with the case", "Wireless charging case"],
+      "tags": ["earbuds", "headphones", "wireless", "bluetooth", "music", "noise", "pro"],
+      "final_sale": false
+    },
+    {
+      "product_id": "SKU-1304",
+      "name": "Wireless earbuds Lite",
+      "category": "Audio",
+      "price": 49.0,
+      "rating": 3.9,
+      "review_count": 402,
+      "sizes": [],
+      "sizes_in_stock": [],
+      "colors": ["White"],
+      "features": ["No noise cancellation", "6 hours of battery"],
+      "tags": ["earbuds", "headphones", "wireless", "bluetooth", "music", "budget"],
+      "final_sale": false,
+      "in_stock": false
+    },
+    {
+      "product_id": "SKU-1401",
+      "name": "Trail running shoes",
+      "category": "Footwear",
+      "price": 119.0,
+      "rating": 4.5,
+      "review_count": 219,
+      "sizes": ["7", "8", "9", "10", "11", "12"],
+      "sizes_in_stock": ["8", "9", "10", "11"],
+      "colors": ["Blue", "Gray"],
+      "features": ["Grippy outsole for wet trails", "Cushioned midsole"],
+      "tags": ["shoes", "running", "trail", "hiking", "sneakers"],
+      "final_sale": false
     }
   ],
   "hotel": {
@@ -221,6 +507,55 @@
         "arrival_days_from_today": 14,
         "nights": 2,
         "guests": 2
+      }
+    ]
+  },
+  "restaurant": {
+    "name": "Contoso Trattoria",
+    "booking_window_days": 60,
+    "max_party_size": 8,
+    "slot_minutes": 30,
+    "service_hours": {
+      "Tuesday": ["17:00", "21:00"],
+      "Wednesday": ["17:00", "21:00"],
+      "Thursday": ["17:00", "21:00"],
+      "Friday": ["17:00", "22:00"],
+      "Saturday": ["12:00", "22:00"],
+      "Sunday": ["12:00", "20:00"]
+    },
+    "seating": [
+      {"area": "dining room", "max_party_size": 8},
+      {"area": "patio", "max_party_size": 6},
+      {"area": "bar", "max_party_size": 2}
+    ],
+    "fully_booked": [
+      {"weekday": "Friday", "times": ["19:00", "19:30"]},
+      {"weekday": "Saturday", "times": ["18:30", "19:00", "19:30", "20:00"]}
+    ],
+    "reservations": [
+      {
+        "confirmation_number": "TR4K7Q",
+        "first_name": "Dana",
+        "last_name": "Test",
+        "phone": "+14255550111",
+        "days_from_today": 3,
+        "time": "19:00",
+        "party_size": 4,
+        "seating": "dining room",
+        "occasion": "birthday",
+        "special_requests": ""
+      },
+      {
+        "confirmation_number": "TR9X2M",
+        "first_name": "Jordan",
+        "last_name": "Lee",
+        "phone": "+14255550122",
+        "days_from_today": 10,
+        "time": "18:00",
+        "party_size": 2,
+        "seating": "patio",
+        "occasion": "",
+        "special_requests": "high chair"
       }
     ]
   }

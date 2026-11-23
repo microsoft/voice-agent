@@ -74,7 +74,7 @@ def voice_definition(
             ),
         ),
         output_modalities=["audio"],
-        subagent_config=models.VoiceAgentSubagentConfig(
+        subagent_config=models.VoiceAgentDelegateSubagentConfig(
             subagents=[
                 models.VoiceAgentSubagent(
                     agent_name=subagent_name,

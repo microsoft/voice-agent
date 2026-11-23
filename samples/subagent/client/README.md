@@ -5,7 +5,7 @@ ai-usage: ai-assisted
 # Voice agent microphone client
 
 `voice_client.py` connects to an existing Foundry voice agent using the
-Projects Python SDK's `project.beta.voice_agents.realtime.connect()`. It streams 24 kHz PCM
+Projects Python SDK's `project.voice_agents.realtime.connect()`. It streams 24 kHz PCM
 microphone audio, plays the agent's audio response, supports interruption,
 and displays transcripts and subagent lifecycle events.
 
@@ -35,7 +35,7 @@ On Windows PowerShell, activate with:
 .venv\Scripts\Activate.ps1
 ```
 
-The requirements use `azure-ai-projects[voice]>=2.7.0` from PyPI, including
+The requirements use `azure-ai-projects[voice]>=2.11.0` from PyPI, including
 the async connection dependencies. Python 3.10 or later is required.
 
 ## Run

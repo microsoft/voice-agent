@@ -14,7 +14,7 @@ from typing import Any
 
 import aiohttp
 from azure.ai.projects.aio import AIProjectClient
-from azure.ai.projects.aio.operations import BetaVoiceAgentsConversationsOperations
+from azure.ai.projects.aio.operations import VoiceAgentsConversationsOperations
 from azure.ai.projects.models import VoiceConversation
 from azure.core.exceptions import HttpResponseError
 from azure.core.pipeline.transport import AioHttpTransport
@@ -59,7 +59,7 @@ async def _write_stream(stream: Any, path: Path) -> None:
 
 
 async def _wait_for_completed_conversation(
-    conversations: BetaVoiceAgentsConversationsOperations,
+    conversations: VoiceAgentsConversationsOperations,
     agent_name: str,
     conversation_id: str,
     timeout_seconds: float,
@@ -95,7 +95,7 @@ async def _wait_for_completed_conversation(
 
 
 async def _save_item_audio(
-    conversations: BetaVoiceAgentsConversationsOperations,
+    conversations: VoiceAgentsConversationsOperations,
     agent_name: str,
     conversation_id: str,
     items: list[dict[str, Any]],
@@ -155,7 +155,7 @@ async def _save_item_audio(
 
 
 async def _save_merged_audio(
-    conversations: BetaVoiceAgentsConversationsOperations,
+    conversations: VoiceAgentsConversationsOperations,
     agent_name: str,
     conversation_id: str,
     output_path: Path,
@@ -220,7 +220,7 @@ async def download_conversation_artifacts(
     turns_dir = conversation_dir / "turns"
     turns_dir.mkdir(parents=True, exist_ok=True)
 
-    conversations = client.beta.voice_agents.conversations
+    conversations = client.voice_agents.conversations
     conversation = await _wait_for_completed_conversation(
         conversations,
         agent_name,

@@ -14,7 +14,7 @@ the application does not call a TTS service or play a canned reminder.**
 | `gpt-5.4` | Azure Speech recognition (`azure-speech`) -> GPT-5.4 -> Azure Speech synthesis. |
 
 Both create a managed **`kind: voice` Foundry Agent** and connect with
-`AIProjectClient.beta.voice_agents.realtime.connect(agent_name=...)`.
+`AIProjectClient.voice_agents.realtime.connect(agent_name=...)`.
 This is not a direct Voice Live sample. Use a Project enabled for Voice Agents
 and your selected managed model; the sample does not provision a Project or
 fall back to another model. Region support and processing scopes must be

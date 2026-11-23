@@ -6,15 +6,17 @@ ARG PIP_INDEX_URL=https://packagefeedproxy.microsoft.io/pypi/simple
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    BIND_HOST=0.0.0.0 \
     PORT=8080
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r requirements.txt \
+RUN python -m pip install --no-cache-dir --upgrade --index-url "$PIP_INDEX_URL" "pip>=26.2.0" \
+    && python -m pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r requirements.txt \
     && adduser -D -u 10001 appuser
 
-COPY auth.py check_websocket.py server.py personalized-agent.json weather-toolbox.json ./
+COPY auth.py check_websocket.py live.py server.py scenarios.py scenarios.json personalized-agent.json weather-toolbox.json enhanced-turn-detection.json ./
 COPY public ./public
 
 EXPOSE 8080

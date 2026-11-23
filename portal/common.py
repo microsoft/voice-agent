@@ -7,6 +7,8 @@ are acquired lazily when the portal calls that project.
 """
 from __future__ import annotations
 
+import copy
+import logging
 import os
 import re
 import threading
@@ -16,6 +18,8 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 from azure.identity import AzureCliCredential, DefaultAzureCredential
+
+from voice_policy import VOICE_PRESETS
 
 TOKEN_SCOPE = "https://ai.azure.com/.default"
 FOUNDRY_FEATURES = "VoiceAgents=V1Preview"
@@ -41,6 +45,9 @@ OPENAI_VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "
 AZURE_VOICES = [
     "en-US-AvaNeural",
     "en-US-Ava:DragonHDLatestNeural",
+    "en-US-Emma:DragonHDOmniLatestNeural",
+    "en-US-Brian:DragonHDOmniLatestNeural",
+    "en-IN-Diya:DragonHDLatestNeural",
     "en-US-AndrewNeural",
     "en-US-EmmaNeural",
     "en-US-BrianNeural",
@@ -49,6 +56,10 @@ AZURE_VOICES = [
     "en-US-AvaMultilingualNeural",
     "zh-CN-XiaoxiaoNeural",
 ]
+AZURE_VOICES = list(dict.fromkeys([
+    *AZURE_VOICES,
+    *(voice for genders in VOICE_PRESETS.values() for names in genders.values() for voice in names),
+]))
 DEFAULT_AZURE_VOICE = AZURE_VOICES[0]
 
 
@@ -89,7 +100,84 @@ def validate_project_endpoint(endpoint: str) -> str:
 
 def build_voice_config(voice: str) -> dict[str, str]:
     """Classify the voice using the upstream descriptor; writes use flat fields."""
-    return {"type": "openai" if "-" not in voice else "azure-standard", "name": voice}
+    voice_type = (
+        "openai" if voice in OPENAI_VOICES
+        else "azure-standard" if "-" in voice
+        else "azure-realtime-native"
+    )
+    return {"type": voice_type, "name": voice}
+
+
+def _inline_subagent_helpers():
+    """The shared definition helpers, imported lazily from the samples beside the portal."""
+    import sys
+    from pathlib import Path
+
+    samples = str(Path(__file__).resolve().parents[1] / "samples")
+    if samples not in sys.path:
+        sys.path.insert(0, samples)
+    from voice_agent_definition import project_inline_subagents, uses_inline_subagents
+
+    return project_inline_subagents, uses_inline_subagents
+
+
+def regional_model_publish_fallback(
+    definition: dict[str, Any],
+    status_code: int | None,
+    error_message: str,
+) -> dict[str, Any] | None:
+    """Return one repaired definition to retry a rejected publication, or None.
+
+    A service version that rejects inline subagents gets the equivalent legacy
+    handoff graph; a region without managed gpt-realtime-regional gets gpt-realtime.
+    """
+    if status_code != 400 or definition.get("kind") != "voice":
+        return None
+    project_inline_subagents, uses_inline_subagents = _inline_subagent_helpers()
+    if uses_inline_subagents(definition) and "subagent" in error_message.lower():
+        try:
+            projected = project_inline_subagents(copy.deepcopy(definition))
+        except ValueError:
+            return None
+        logging.getLogger("voice_agent_portal").warning(
+            "Publication rejected inline subagents; preparing one retry as the equivalent handoff graph.",
+        )
+        return projected
+    regional_model = "gpt-realtime-regional"
+    fallback_model = "gpt-realtime"
+    if f"Model '{regional_model}' is not supported in managed mode in this region." not in error_message:
+        return None
+    updated = copy.deepcopy(definition)
+    configs = [updated]
+    handoff = updated.get("handoff")
+    if isinstance(handoff, dict):
+        configs.extend(
+            node["config"]
+            for node in handoff.get("nodes") or []
+            if isinstance(node, dict) and isinstance(node.get("config"), dict)
+        )
+    subagent_config = updated.get("subagent_config")
+    if isinstance(subagent_config, dict):
+        configs.extend(
+            subagent
+            for subagent in subagent_config.get("subagents") or []
+            if isinstance(subagent, dict)
+        )
+    changed = False
+    for config in configs:
+        if (
+            config.get("model") == regional_model
+            and config.get("model_type", definition.get("model_type", "managed")) == "managed"
+        ):
+            config["model"] = fallback_model
+            changed = True
+    if not changed:
+        return None
+    logging.getLogger("voice_agent_portal").warning(
+        "Publication rejected managed model %s in this region; preparing one retry with %s.",
+        regional_model, fallback_model,
+    )
+    return updated
 
 
 @dataclass

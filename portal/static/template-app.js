@@ -550,7 +550,7 @@ async function selectTemplate(templateId, version = ".") {
     "tpl-result",
     state.projectConfigured
       ? "Ready to publish a new independent Agent."
-      : "Choose a Foundry project on AgentRuntime, then return to Templates.",
+      : "Choose a Foundry project on Runtime, then return to Templates.",
     state.projectConfigured ? "" : "warn",
   );
   if (detail.requires_mcp) await testTemplateMcp();
@@ -560,7 +560,7 @@ async function selectTemplate(templateId, version = ".") {
 
 function openAgentInDemo(agent) {
   if (!agent) return;
-  window.location.assign(`/?agent=${encodeURIComponent(agent)}`);
+  window.location.assign(`/runtime/?agent=${encodeURIComponent(agent)}`);
 }
 
 function startVoiceChat() {
@@ -795,7 +795,7 @@ async function publishMyAgent(autoOpen = false) {
     setBuildProgress(
       100,
       "Your agent is ready",
-      `${published.agent_name}${version} is ready to open in AgentRuntime.`,
+      `${published.agent_name}${version} is ready to open in Runtime.`,
     );
     state.publishedAgent = published.agent_name;
     toast(`built ${published.agent_name}`);

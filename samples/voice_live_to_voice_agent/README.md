@@ -139,7 +139,7 @@ string inputs in the agent's `structured_inputs`. Reference them with Handlebars
 placeholders in `instructions`, then supply the user's values when connecting:
 
 ```python
-async with client.beta.voice_agents.realtime.connect(
+async with client.voice_agents.realtime.connect(
     agent_name=agent_name,
     structured_inputs={
         "user_profile": user_profile_json,
@@ -239,7 +239,7 @@ Voice Live version; review any proposed changes to the existing reference file.
 The device code, audio frames, event handling, and cascade components stay the
 same. Replace direct `connect(model=MODEL)` plus `session.update(...)` with
 `agents.create_version(definition=...)` once, then
-`client.beta.voice_agents.realtime.connect(agent_name=...)` on subsequent runs.
+`client.voice_agents.realtime.connect(agent_name=...)` on subsequent runs.
 The migrated script reads the saved definition back before connecting and sends
 **no session overrides**.
 

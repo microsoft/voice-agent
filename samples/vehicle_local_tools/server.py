@@ -186,7 +186,7 @@ async def cloud_session(request, socket, incoming):
     async with AsyncExitStack() as stack:
         async with asyncio.timeout(45):
             connection = await stack.enter_async_context(
-                settings.client.beta.voice_agents.realtime.connect(agent_name=name),
+                settings.client.voice_agents.realtime.connect(agent_name=name),
             )
             while True:
                 event = await receive(connection)

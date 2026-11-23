@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from aiohttp import WSMessage, WSMsgType
 from azure.ai.projects.aio import AIProjectClient
-from azure.ai.projects.aio.operations import AsyncBetaRealtimeConnection
+from azure.ai.projects.aio.operations import AsyncRealtimeConnection
 from azure.core.credentials import AccessToken
 from azure.core.exceptions import HttpResponseError
 from azure.core.pipeline.transport import AsyncHttpResponse, AsyncHttpTransport
@@ -236,7 +236,8 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(path=relative_path):
                 extra = "[voice]" if relative_path in voice_requirements else ""
                 self.assertEqual(
-                    project_requirements, [f"azure-ai-projects{extra}>=2.7.0"]
+                    project_requirements,
+                    [f"azure-ai-projects{extra}>=2.11.0" if extra else "azure-ai-projects>=2.7.0"],
                 )
 
     def test_supporting_scripts_import(self):
@@ -344,7 +345,7 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIs(raised.exception, capture_error)
                     result = None
         processor.assert_called_once()
-        self.assertIsInstance(processor.call_args.args[0], AsyncBetaRealtimeConnection)
+        self.assertIsInstance(processor.call_args.args[0], AsyncRealtimeConnection)
         processor.return_value.start_capture.assert_called_once()
         processor.return_value.start_playback.assert_called_once()
         processor.return_value.shutdown.assert_called_once()
@@ -393,7 +394,7 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(sample=sample.__name__):
                 websocket = MagicMock()
                 websocket.send_str = AsyncMock()
-                connection = AsyncBetaRealtimeConnection(websocket, MagicMock())
+                connection = AsyncRealtimeConnection(websocket, MagicMock())
                 pyaudio = MagicMock()
                 scheduled = []
 
@@ -799,9 +800,7 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
 
         def respond(request):
             self.assertEqual(request.method, "GET")
-            self.assertEqual(
-                request.headers.get("Foundry-Features"), "VoiceAgents=V1Preview"
-            )
+            self.assertIsNone(request.headers.get("Foundry-Features"))
             suffix, status, payload = pending.popleft()
             parsed = urlparse(request.url)
             self.assertEqual(
@@ -923,7 +922,7 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
         ) as client:
             with self.assertRaises(HttpResponseError) as raised:
                 await artifacts._wait_for_completed_conversation(
-                    client.beta.voice_agents.conversations,
+                    client.voice_agents.conversations,
                     AGENT_NAME,
                     CONVERSATION_ID,
                     timeout_seconds=1,

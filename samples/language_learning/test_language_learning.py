@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import numpy as np
 from aiohttp import web
-from azure.ai.projects.aio.operations import AsyncBetaRealtimeConnection
+from azure.ai.projects.aio.operations import AsyncRealtimeConnection
 
 from assessment import (
     AssessmentError,
@@ -336,7 +336,7 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
 
         try:
             async with self.session.ws_connect(url) as socket:
-                sdk = AsyncBetaRealtimeConnection(socket, self.session)
+                sdk = AsyncRealtimeConnection(socket, self.session)
                 with patch("conversation.LiveAudio", OfflineAudio), patch("builtins.print"):
                     await asyncio.wait_for(
                         run_conversation(sdk, self.assessor, sample.parse_args(["--sentence", SENTENCE, "--no-playback"])),
@@ -639,7 +639,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_sdk_serializes_forced_tool_and_result(self):
         socket = MagicMock(send_str=AsyncMock())
-        sdk = AsyncBetaRealtimeConnection(socket, MagicMock())
+        sdk = AsyncRealtimeConnection(socket, MagicMock())
         self.controller.connection = sdk
         await self.prepare()
         await self.spoken_turn()

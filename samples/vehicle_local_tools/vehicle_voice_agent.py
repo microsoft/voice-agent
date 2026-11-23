@@ -403,7 +403,7 @@ async def run(args: argparse.Namespace) -> None:
         print(f"Created cloud agent: {agent_name} (retained after exit; store=False)")
         await client.agents.enable(agent_name)
         dispatcher = Dispatcher(discovery=True)
-        async with client.beta.voice_agents.realtime.connect(agent_name=agent_name) as connection:
+        async with client.voice_agents.realtime.connect(agent_name=agent_name) as connection:
             async with asyncio.timeout(30):
                 while (await receive(connection)).get("type") != "session.updated":
                     pass

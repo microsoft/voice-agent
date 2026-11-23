@@ -1,50 +1,28 @@
 // Copyright (c) Microsoft. All rights reserved.
-// Settings here are per-session overrides, never edits to the stored definition.
+// Runtime connects with the published Agent configuration, without session overrides.
 
-import { useEffect, useRef, useState } from "react";
-import { voiceGroups } from "../config.js";
+import { useEffect, useState } from "react";
 import { withSelectedAgent, withSessionTransport } from "../lib/agentUrl.mjs";
-import { Field, GroupedSelect, Icon } from "./ConfigControls.jsx";
+import { Field, Icon } from "./ConfigControls.jsx";
 import { SessionAgentPicker } from "./SessionAgentPicker.jsx";
 
 export function SessionControls({
   cfg, session, agent, agents, agentListState, onSelectAgent, onRefreshAgents,
-  onLoadMoreAgents, onEditAgent, transport, transportError, transportNotice, onTransportChange,
+  onLoadMoreAgents, onExportAgent, transport, transportError, transportNotice,
 }) {
-  const [voiceOverride, setVoiceOverride] = useState("");
-  const [storeOverride, setStoreOverride] = useState("");
-  const [structuredInput, setStructuredInput] = useState("");
-  const [referenceAudioMode, setReferenceAudioMode] = useState("assistant");
   const [copyUrlState, setCopyUrlState] = useState({ text: "", kind: "", url: "" });
   const [agentQuery, setAgentQuery] = useState(agent?.name || "");
   const [agentSearchState, setAgentSearchState] = useState({
     searching: false,
     error: "",
   });
-  const settingsRef = useRef(null);
-  const { isConnected, sessionReady, micMuted, status } = session;
+  const { isConnected, sessionReady, toolsLoading, micMuted, status } = session;
   const agentListBusy = agentListState.loading || agentListState.loadingMore;
   const agentQueryMatchesSelection = agentQuery.trim() === (agent?.name || "");
 
   useEffect(() => {
-    const closeOutside = (event) => {
-      if (!settingsRef.current?.contains(event.target)) settingsRef.current?.removeAttribute("open");
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
-  }, []);
-
-  useEffect(() => {
-    // Do not carry an override from one model family (or edited version) into another.
-    setVoiceOverride("");
-    setStoreOverride(typeof agent?.sessionStoreDefault === "boolean" ? String(agent.sessionStoreDefault) : "");
-    setStructuredInput("");
     setCopyUrlState({ text: "", kind: "", url: "" });
-  }, [agent?.name, agent?.version, agent?.sessionStoreDefault]);
-
-  useEffect(() => {
-    setCopyUrlState({ text: "", kind: "", url: "" });
-  }, [transport]);
+  }, [agent?.name, agent?.version, transport]);
 
   useEffect(() => {
     setAgentQuery(agent?.name || "");
@@ -69,8 +47,7 @@ export function SessionControls({
   };
 
   const connect = () => session.connect(
-    agent.name, voiceOverride, storeOverride, cfg.apiVersion, transport,
-    Boolean(agent.clientReferenceEc), referenceAudioMode, structuredInput,
+    agent.name, "", "", cfg.apiVersion, transport, Boolean(agent.clientReferenceEc),
   );
   const copyAgentUrl = async () => {
     if (!agent?.name) return;
@@ -92,6 +69,13 @@ export function SessionControls({
   const modelSource = agent?.inferenceMode === "hosted_agent"
     ? "Hosted agent"
     : agent?.inferenceMode === "deployment" ? "BYOM" : "Managed";
+  const definition = agent?.definition;
+  const input = definition?.audio?.input;
+  const output = definition?.audio?.output;
+  const inputLanguage = input?.transcription?.language || "Automatic (not set)";
+  const echoCancellation = input?.echo_cancellation;
+  const tools = definition?.tools || [];
+  const structuredInputs = Object.keys(definition?.structured_inputs || {});
 
   return (
     <section className="session-controls" aria-label="Playground connection">
@@ -126,11 +110,11 @@ export function SessionControls({
           disabled={isConnected || agentListBusy} onClick={onRefreshAgents}>
           <Icon name="refresh" className={agentListBusy ? "spin" : ""} />
         </button>
-        <button className="definition-button" type="button" title="Edit definition as YAML; save as a new version"
-          aria-label="Edit definition"
+        <button className="definition-button" type="button" title="Export the complete definition as YAML or JSON"
+          aria-label="Export"
           disabled={isConnected || agentListState.loading || !agent || !agentQueryMatchesSelection}
-          onClick={onEditAgent}>
-          <Icon name="code" /><span>YAML</span>
+          onClick={onExportAgent}>
+          <Icon name="code" /><span>Export</span>
         </button>
         <button className="definition-button" type="button" title="Copy URL to this agent"
           aria-label="Copy URL to this agent"
@@ -159,12 +143,6 @@ export function SessionControls({
         <div className="form-feedback err" role="alert" id="session-transport-error">{transportError}</div>
       ) : null}
       {transportNotice ? <p className="field-hint" role="status">{transportNotice}</p> : null}
-      {typeof agent?.sessionStoreDefault === "boolean" ? (
-        <p className="field-hint" role="status">
-          Generated-session storage: {storeOverride === "" ? "use stored agent policy" : storeOverride === "true" ? "save transcript and audio" : "do not save"}.
-          {" "}Change it in Session settings. The agent's stored definition is unchanged.
-        </p>
-      ) : null}
       {copyUrlState.text ? (
         <div className={`copy-agent-url-status ${copyUrlState.kind}`} role="status">
           <strong>{copyUrlState.text}</strong>
@@ -181,84 +159,12 @@ export function SessionControls({
               <span>v{agent.version || "latest"}</span>
             </div>
           ) : <p className="field-hint picker-hint">{agents.length} voice agent{agents.length === 1 ? "" : "s"} loaded. Creation is optional.</p>}
-          <details className="session-settings" ref={settingsRef} onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            settingsRef.current?.removeAttribute("open");
-            settingsRef.current?.querySelector("summary")?.focus();
-          }
-        }}>
-          <summary><Icon name="settings" />Session settings<Icon name="chevron" /></summary>
-          <div className="session-settings-body">
-            <div className="field-hint">Overrides apply to this connection only. The stored agent is unchanged.</div>
-            <div className="field-grid">
-              <Field label="Voice override">
-                <GroupedSelect value={voiceOverride} disabled={isConnected || !agent}
-                  placeholder="Use agent default" groups={voiceGroups(cfg, agent?.cascaded)}
-                  onChange={(event) => setVoiceOverride(event.target.value)} />
-              </Field>
-              <Field label="Conversation storage override">
-                <select value={storeOverride} disabled={isConnected || !agent}
-                  onChange={(event) => setStoreOverride(event.target.value)}>
-                  <option value="">Use agent default{agent ? ` (${agent.store ? "on" : "off"})` : ""}</option>
-                  <option value="true">Save transcript & audio</option>
-                  <option value="false">Do not save</option>
-                </select>
-              </Field>
-              <Field label="Transport">
-                <select value={transport} disabled={isConnected}
-                  aria-invalid={Boolean(transportError)}
-                  aria-describedby={transportError ? "session-transport-error" : undefined}
-                  onChange={(event) => onTransportChange(event.target.value)}>
-                  {transportError ? <option value={transport} disabled>Select a supported transport</option> : null}
-                  <option value="websocket">WebSocket · PCM audio</option>
-                  <option value="webrtc" disabled={Boolean(agent?.clientReferenceEc)}>WebRTC · media</option>
-                </select>
-              </Field>
-              {agent?.clientReferenceEc ? (
-                <Field label="Client reference audio">
-                  <select value={referenceAudioMode} disabled={isConnected}
-                    onChange={(event) => setReferenceAudioMode(event.target.value)}>
-                    <option value="assistant">Agent playback only</option>
-                    <option value="shared-additive">Agent + shared tab/app audio</option>
-                    <option value="shared-system">Shared system mix (includes agent)</option>
-                  </select>
-                </Field>
-              ) : null}
-            </div>
-            <Field label="Structured input JSON" optional
-              hint={`Values apply to this session only. Use a JSON object; do not include secrets.${
-                agent?.definition?.structured_inputs
-                  ? ` Declared keys: ${Object.keys(agent.definition.structured_inputs).join(", ") || "(none)"}.`
-                  : ""
-              }`}>
-              <textarea value={structuredInput} disabled={isConnected || !agent} rows={3}
-                placeholder='{"customer_name":"Grace"}'
-                onChange={(event) => setStructuredInput(event.target.value)} />
-            </Field>
-            {agent?.clientReferenceEc ? <p className="field-hint">
-              Live-reference echo cancellation requires WebSocket. Shared audio opens the browser’s share picker;
-              enable audio sharing. The system mix replaces the direct agent tap to avoid duplication.
-            </p> : transport === "webrtc" ? <p className="field-hint">
-              WebRTC carries microphone and agent audio over a peer connection. Avatar is not used in this mode.
-              Use localhost or HTTPS.
-            </p> : null}
-            {agent ? (
-              <dl className="agent-facts">
-                <div><dt>Greeting</dt><dd>{agent.greeting?.type || "None"}</dd></div>
-                <div><dt>Echo cancellation</dt><dd>{agent.clientReferenceEc ? "Live reference" : "Server loopback"}</dd></div>
-                <div><dt>Avatar</dt><dd>{agent.avatar ? [agent.avatar.character, agent.avatar.style].filter(Boolean).join(" / ") : "Off"}</dd></div>
-                {agent.targetAgent ? <div><dt>Hosted target</dt><dd>{agent.targetAgent.name} · {agent.targetAgent.version || "latest"}</dd></div> : null}
-              </dl>
-            ) : null}
-            <p className="field-hint">Tools and avatar belong to the stored version. Use Edit definition to change them.</p>
-          </div>
-          </details>
         </div>
         <div className="connection-buttons">
           {isConnected ? (
             <>
               <button type="button" className="icon-button" onClick={session.toggleMute}
-                disabled={!sessionReady} title={micMuted ? "Unmute mic" : "Mute mic"}
+                disabled={!sessionReady || toolsLoading} title={toolsLoading ? "Loading tools…" : micMuted ? "Unmute mic" : "Mute mic"}
                 aria-label={micMuted ? "Unmute mic" : "Mute mic"}>
                 <Icon name={micMuted ? "muted" : "voice"} />
               </button>
@@ -267,10 +173,67 @@ export function SessionControls({
           ) : (
             <button type="button" className="primary connect-button"
               disabled={!agent || agentListState.loading || !agentQueryMatchesSelection || Boolean(transportError)}
-              onClick={connect}><Icon name="voice" />Connect &amp; start session</button>
+              onClick={connect}><Icon name="voice" />Connect & start session</button>
           )}
         </div>
       </div>
+      {agent ? (
+        <details className="agent-configuration" onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.currentTarget.removeAttribute("open");
+            event.currentTarget.querySelector("summary")?.focus();
+          }
+        }}>
+          <summary>
+            <Icon name="code" /><strong>Agent configuration</strong>
+            <span className="agent-configuration-preview">
+              Input: {inputLanguage} · Storage: {agent.store ? "On" : "Off"}
+            </span>
+            <Icon name="chevron" />
+          </summary>
+          <div className="agent-configuration-body" role="region" aria-label="Agent configuration">
+            <p className="field-hint">
+              Read-only published configuration. Connections use these Agent settings without session overrides.
+              {" "}Use Editor to change and publish them, or Export to view the complete definition.
+              {" "}Workflow nodes may override shared settings; Export includes each node's configuration.
+            </p>
+            <dl className="agent-facts">
+              <div><dt>Model source</dt><dd>{modelSource}</dd></div>
+              <div><dt>Model</dt><dd>{agent.model || (agent.targetAgent ? "Owned by hosted target" : "Not set (service default)")}</dd></div>
+              <div><dt>Version</dt><dd>{agent.version || "Latest"}</dd></div>
+              <div><dt>Voice</dt><dd>{agent.voice || "Not set (service default)"}</dd></div>
+              <div><dt>Voice type</dt><dd>{output?.voice_type || output?.voice?.type || "Not set (service default)"}</dd></div>
+              <div><dt>Input language</dt><dd>{inputLanguage}</dd></div>
+              <div><dt>User transcript model</dt><dd>{input?.transcription?.model || "Not set (service default)"}</dd></div>
+              <div><dt>Conversation storage</dt><dd>{agent.store ? "Save transcript & audio" : "Do not save"}</dd></div>
+              <div><dt>Greeting</dt><dd>{agent.greeting?.type || "None"}</dd></div>
+              <div><dt>Turn detection</dt><dd>{input?.turn_detection?.type || "Not set (service default)"}</dd></div>
+              <div><dt>Echo cancellation</dt><dd>{echoCancellation
+                ? agent.clientReferenceEc ? "Live reference (agent playback)" : echoCancellation.type
+                : "Not set (service default)"}</dd></div>
+              <div><dt>Avatar</dt><dd>{agent.avatar ? [agent.avatar.character, agent.avatar.style].filter(Boolean).join(" / ") || agent.avatar.type : "Off"}</dd></div>
+              <div><dt>Root tools</dt><dd>{tools.length
+                ? tools.map((tool) => tool.name || tool.server_label || tool.type).join(", ")
+                : "None"}</dd></div>
+              <div><dt>Workflow</dt><dd>{agent.handoff
+                ? `${agent.handoff.nodes?.length || 0} nodes, ${agent.handoff.edges?.length || 0} routes`
+                : "None"}</dd></div>
+              <div><dt>Structured inputs</dt><dd>{structuredInputs.join(", ") || "None"}</dd></div>
+              {agent.targetAgent ? <div><dt>Hosted target</dt><dd>{agent.targetAgent.name} · {agent.targetAgent.version || "latest"}</dd></div> : null}
+              <div><dt>Connection transport</dt><dd>{transportError ? transport || "(empty)" : transport === "webrtc" ? "WebRTC" : "WebSocket"}</dd></div>
+            </dl>
+            {definition?.instructions ? (
+              <div className="agent-configuration-instructions">
+                <h3>Instructions</h3>
+                <pre>{definition.instructions}</pre>
+              </div>
+            ) : null}
+            {transport === "webrtc" && agent.avatar ? <p className="field-hint">
+              The published avatar is not used with the WebRTC media transport.
+            </p> : null}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }

@@ -9,24 +9,79 @@
 </head>
 <body>
   <canvas id="weather-scene" aria-hidden="true"></canvas>
-  <header><a class="brand" href="/">◉ <span>Voice Agent In Foundry Agent Service</span></a><span class="tag">AZURE FOUNDRY <span> / </span> LIVE VOICE</span><a class="repository-link" href="https://github.com/microsoft/voice-agent" target="_blank" rel="noopener noreferrer">microsoft/voice-agent on GitHub</a></header>
-  <main>
-    <section class="intro"><p class="eyebrow">YOUR FIRST VOICE AGENT</p><h1>A conversation.<br>Just a little more human.</h1><p>Speak naturally or type a message. Pause to hear a reply. Interrupt when you need to.</p><div class="weather-controls"><span id="weather-status" role="status">Loading Seattle weather...</span><button id="weather-motion" type="button" aria-pressed="false">Pause scenery</button><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather: Open-Meteo</a></div></section>
+  <div class="scenery-toolbar" role="group" aria-label="Scenery controls">
+    <p id="scenery-call-note" class="scenery-call-note">Active calls continue. Show panels to access call controls.</p>
+    <div class="scene-picker">
+      <label for="scene-city">City scene</label>
+      <select id="scene-city" aria-describedby="scene-landmark scenery-weather">
+        <option value="seattle">Seattle</option>
+        <option value="mumbai">Mumbai</option>
+        <option value="tokyo">Tokyo</option>
+        <option value="paris">Paris</option>
+        <option value="beijing">Beijing</option>
+        <option value="new-york">New York</option>
+      </select>
+    </div>
+    <p id="scene-landmark" class="scene-landmark">Space Needle &amp; Mount Rainier · United States</p>
+    <div class="scenery-actions">
+      <button id="weather-motion" type="button" aria-pressed="false" aria-label="Pause scenery" title="Pause scenery">Pause scenery</button>
+      <button id="scenery-toggle" type="button" aria-pressed="false" aria-label="Scenery only" aria-controls="app-header app-content app-footer" aria-describedby="scenery-call-note" title="Scenery only. Active calls continue.">Scenery only</button>
+    </div>
+    <div class="scenery-meta">
+      <p id="scenery-weather" class="scenery-weather">Loading Seattle weather...</p>
+      <a class="scenery-attribution" href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>
+    </div>
+  </div>
+  <header id="app-header"><a class="brand" href="/">◉ <span>Voice Agent In Foundry Agent Service</span></a><span class="tag">AZURE FOUNDRY <span> / </span> LIVE VOICE</span><a class="repository-link" href="https://github.com/microsoft/voice-agent" target="_blank" rel="noopener noreferrer">microsoft/voice-agent on GitHub</a></header>
+  <main id="app-content">
+    <section class="intro">
+      <div class="intro-copy">
+        <p class="eyebrow">YOUR FIRST VOICE AGENT</p><h1>A little more human.</h1><p>Speak or type. Hear a reply. Interrupt naturally.</p><div class="weather-controls"><span id="weather-status" role="status">Loading Seattle weather...</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather: Open-Meteo</a></div>
+      </div>
+      <section class="scenario-picker" aria-labelledby="scenario-label">
+        <label id="scenario-label" for="scenario-choice">Choose a conversation</label>
+        <select id="scenario-choice" aria-describedby="scenario-description scenario-switch-note" disabled>
+          <option value="">General assistant</option>
+          <option value="health">Health coverage</option>
+          <option value="banking">Everyday banking</option>
+          <option value="home">Connected home</option>
+          <option value="loan">Personal loans</option>
+          <option value="property">Home buying</option>
+          <option value="interview">Electrician interview</option>
+        </select>
+        <p id="scenario-description">Six fictional demos. No real transactions, bookings, hiring decisions or device changes.</p>
+        <p id="scenario-switch-note" role="status">Choose a scenario before starting a call.</p>
+      </section>
+    </section>
     <div class="workspace">
       <section class="call-panel" aria-labelledby="call-title">
         <div class="panel-top"><h2 id="call-title">Voice session</h2><span id="connection" class="badge">Offline</span></div>
-        <div class="transport-control"><h2>Your Agent</h2><p id="agent-preparation" role="status">Checking for your saved Agent...</p><p>Model: <strong id="agent-model">Unavailable</strong> · Version: <strong id="agent-version">Not created</strong></p><p id="weather-tool-hint" hidden>Weather lookup is included through Foundry Toolbox.</p>
+        <div class="agent-summary"><p id="agent-preparation" role="status">Checking for your saved Agent...</p><p>Model: <strong id="agent-model">Unavailable</strong> · Version: <strong id="agent-version">Not created</strong></p>
           <p>Transcription: <strong id="agent-transcription">Unavailable</strong></p>
-          <label for="agent-model-choice">Change model</label><select id="agent-model-choice" disabled><option value="gpt-realtime-2.1">gpt-realtime-2.1</option><option value="azure-realtime">azure-realtime</option><option value="gpt-5.4">gpt-5.4</option></select>
-          <label for="agent-transcription-choice">Transcription model</label>
-          <select id="agent-transcription-choice" disabled>
+        </div>
+        <div id="orb" class="orb" aria-hidden="true"><span>◉</span></div>
+        <h3 id="status" role="status">Ready when you are</h3><p id="hint">Start a session to enable your microphone.</p>
+        <p id="recording-notice" class="recording-notice"><strong>Audio is saved by default.</strong> Your microphone audio and messages are sent to Azure and stored there. After the call, download the log and audio. Clearing this page does not delete Azure recordings.</p>
+        <p id="live-webrtc-notice" class="recording-notice" hidden><strong>GPT Live WebRTC calls are not recorded.</strong> Audio and messages are sent to Azure; a conversation download is unavailable.</p>
+        <div class="controls"><button id="start" class="primary" disabled>Start conversation <span>↗</span></button><button id="mute" disabled aria-pressed="false">Mute mic</button><button id="stop" class="end" disabled>End</button></div>
+        <button id="play" class="play" hidden>Enable speaker audio</button>
+        <p id="error" class="error" role="alert" hidden></p>
+        <p id="session-reference" role="status" hidden></p>
+        <details id="agent-audio-settings" class="settings-panel">
+          <summary>Agent &amp; audio settings</summary>
+        <div class="transport-control"><h2>Saved Agent</h2><p id="weather-tool-hint" hidden>General web search, including weather, is included through Foundry Toolbox.</p>
+          <label for="agent-model-choice">Change model</label><select id="agent-model-choice" disabled><option value="gpt-realtime-2.1">gpt-realtime-2.1</option><option value="gpt-realtime-2.1-mini">gpt-realtime-2.1-mini</option><option value="azure-realtime">azure-realtime</option><option value="microsoft-realtime-flash-1">microsoft-realtime-flash-1</option><option value="mai-realtime">mai-realtime</option><option value="gpt-5.4">gpt-5.4</option><option value="gpt-live-1">gpt-live-1</option></select>
+          <p id="live-model-hint" hidden>GPT Live uses a separate Agent, its saved voice, built-in transcription and web search. Switching back selects the original Agent. WebRTC calls aren't recorded or downloadable.</p>
+          <p id="mai-model-hint" hidden>MAI Realtime uses a separate Agent, built-in transcription and its native voice. Speak or send a message first; it does not open with a saved greeting. Web search and external actions are unavailable.</p>
+          <label for="agent-transcription-choice">Transcription</label>
+          <select id="agent-transcription-choice" disabled aria-describedby="transcription-language-help">
             <option value="" disabled>Choose a transcription model</option>
             <option value="azure-speech">azure-speech</option>
             <option value="azure-speech-streaming">azure-speech-streaming</option>
             <option value="azure-llm-speech">azure-llm-speech</option>
             <option value="mai-transcribe">mai-transcribe</option>
-            <option value="mai-transcribe-2" selected>mai-transcribe-2</option>
-            <option value="mai-transcribe-2-streaming">mai-transcribe-2-streaming</option>
+            <option value="mai-transcribe-2">mai-transcribe-2</option>
+            <option value="mai-transcribe-2-streaming" selected>mai-transcribe-2-streaming</option>
             <option value="gpt-live-transcribe">gpt-live-transcribe</option>
             <option value="gpt-realtime-whisper">gpt-realtime-whisper</option>
             <option value="gpt-transcribe">gpt-transcribe</option>
@@ -35,11 +90,7 @@
             <option value="gpt-4o-transcribe-diarize">gpt-4o-transcribe-diarize</option>
             <option value="whisper-1">whisper-1</option>
           </select>
-          <p>Save model or transcription changes as a new version without deleting previous versions. New Agents default to mai-transcribe-2. Azure Realtime uses native Ava; switching back uses Tyler HD if the saved voice is native. Model availability depends on your project.</p>
-          <div class="agent-actions"><button id="save-model" disabled>Save new version</button><button id="show-settings" disabled>Show Agent settings</button></div>
-        </div>
-        <div class="transport-control"><label for="transport">Connection</label><select id="transport"><option value="websocket">WebSocket — audio over HTTPS</option><option value="webrtc">WebRTC — direct audio</option></select><p>WebSocket avoids STUN/TURN. Both modes need server access to Azure.</p></div>
-        <div class="transport-control">
+          <p id="transcription-language-help">Auto-detect except azure-speech and azure-speech-streaming (saved language; English by default).</p>
           <label id="voice-label" for="voice">Output voice</label>
           <select id="voice">
             <option value="">Saved Agent voice</option>
@@ -52,6 +103,8 @@
             <option value="en-IN-Diya:DragonHDLatestNeural">en-IN-Diya:DragonHDLatestNeural</option>
             <option value="zh-CN-Xiaoqi:DragonHDFlashLatestNeural">zh-CN-Xiaoqi:DragonHDFlashLatestNeural</option>
             <option value="zh-CN-Xiaoke:DragonHDFlashLatestNeural">zh-CN-Xiaoke:DragonHDFlashLatestNeural</option>
+            <option value="en-US-Harper:MAI-Voice-2.1-Flash">en-US-Harper:MAI-Voice-2.1-Flash</option>
+            <option value="en-GB-Harry:MAI-Voice-2.1-Flash">en-GB-Harry:MAI-Voice-2.1-Flash</option>
           </select>
           <select id="native-voice" hidden disabled>
             <option value="">Saved Agent voice</option>
@@ -66,8 +119,21 @@
             <option value="dalia">dalia</option>
             <option value="jorge">jorge</option>
           </select>
-          <p>Availability depends on the project and voice catalog. Unsupported selections fail without substituting a voice. A voice preview for a different model applies after you save that model.</p>
+          <select id="live-voice" hidden disabled>
+            <option value="" selected>Saved Agent voice (configured in Foundry)</option>
+          </select>
+          <select id="mai-voice" hidden disabled>
+            <option value="" selected>Native MAI voice (Harper in the tested project)</option>
+          </select>
+          <p>Availability depends on the project and voice catalog. Unsupported selections fail without substituting a voice. GPT Live uses its saved Agent voice; MAI Realtime uses its native voice. A voice preview for a different model applies after you save that model.</p>
+          <p>Apply between calls. Changes create a shared version; older versions stay. New Agents use mai-transcribe-2-streaming. Switching models may change the voice.</p>
+          <label class="checkbox" for="enhanced-turn-detection"><input id="enhanced-turn-detection" type="checkbox" checked disabled aria-describedby="turn-detection-help"> GPT Live 1-quality turn detection</label>
+          <p id="turn-detection-help">Better turn-taking with streaming transcription. On by default for supported new Agents; turn off to restore previous settings.</p>
+          <p id="turn-detection-status" role="status"></p>
+          <div class="agent-actions"><button id="save-model" disabled>Apply settings</button><button id="show-settings" disabled>Show Agent settings</button></div>
         </div>
+        <div class="transport-control"><label for="transport">Connection</label><select id="transport"><option value="websocket">WebSocket — audio over HTTPS</option><option id="webrtc-transport" value="webrtc">WebRTC — direct audio</option></select><p>WebSocket avoids STUN/TURN. Both modes need server access to Azure.</p><p id="mai-transport-note" hidden>MAI Realtime uses WebSocket in this demo; WebRTC was rejected by the tested Sweden Central project.</p></div>
+        <div class="transport-control audio-processing"><h2>Audio processing</h2><p>The browser requests microphone noise suppression and echo cancellation with mono input. Support depends on your browser and device.</p><p>Azure denoising is configured separately in the saved Agent. Use <strong>Show Agent settings</strong> above to inspect <code>audio.input.noise_reduction</code>. The bundled example uses headset noise suppression; an existing Agent may differ.</p></div>
         <details class="transport-control">
           <summary>Session personalization</summary>
           <fieldset id="personalization">
@@ -79,12 +145,6 @@
           </fieldset>
           <p>Multilingual replies are enabled by default: the Agent follows the language you speak or request. Client language sets the initial greeting preference, not a language restriction. Context is unverified personalization, not identity. It is sent to Azure and may be persisted. Language instructions do not configure speech recognition.</p>
         </details>
-        <div id="orb" class="orb" aria-hidden="true"><span>◉</span></div>
-        <h3 id="status" role="status">Ready when you are</h3><p id="hint">Start a session to enable your microphone.</p>
-        <p id="recording-notice" class="recording-notice"><strong>Audio is saved by default.</strong> Starting a conversation sends microphone audio and messages to Azure, where the conversation and audio are stored. After ending the call, download the log and audio below. Clearing this page does not delete Azure recordings.</p>
-        <div class="controls"><button id="start" class="primary" disabled>Start conversation <span>↗</span></button><button id="mute" disabled aria-pressed="false">Mute mic</button><button id="stop" class="end" disabled>End</button></div>
-        <button id="play" class="play" hidden>Enable speaker audio</button>
-        <p id="error" class="error" role="alert" hidden></p>
         <div class="session-details"><div><span>AGENT</span><strong id="agent">Not configured</strong></div><div><span>MEDIA</span><strong id="media">WebSocket · PCM16 / 24 kHz</strong></div></div>
         <p class="privacy">Microphone audio and submitted text are sent to Azure during a call. Azure conversation/audio storage is enabled. Clearing this page does not delete Azure-stored data. This app does not save transcripts locally.</p>
         <details id="advanced-agent" class="transport-control" hidden>
@@ -92,10 +152,27 @@
           <p>Reset permanently deletes this demo Agent and its saved versions, then saves a fresh Agent under the same name. Other clients using it may be affected. You must confirm the Agent name.</p>
           <button id="recreate-agent" class="end" disabled>Reset Agent</button>
         </details>
+        </details>
       </section>
       <section class="transcript-panel" aria-labelledby="transcript-title">
         <div class="panel-top"><h2 id="transcript-title">The conversation</h2><div class="transcript-actions"><button id="download-conversation" class="text-button" disabled>Download log + audio</button><button id="clear" class="text-button">Clear</button></div></div>
-        <p class="history-help">Replies stream here as live drafts. After an interruption, only the service's retained text remains; unheard text is removed.</p>
+        <section id="scenario-card" class="scenario-card" aria-labelledby="scenario-title" hidden>
+          <div class="scenario-hero">
+            <svg id="scenario-art-health" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><rect x="18" y="14" width="84" height="72" rx="16" fill="currentColor" opacity=".12"/><path d="M60 25v28M46 39h28M28 69h19l7-10 11 18 8-8h19" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg id="scenario-art-banking" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><rect x="10" y="24" width="90" height="59" rx="12" fill="currentColor" opacity=".12"/><path d="M22 43h65M26 66h15m10 0h10" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><circle cx="93" cy="27" r="17" fill="currentColor"/><path d="m85 27 6 6 10-12" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg id="scenario-art-home" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><path d="M20 47 60 13l40 34v38H20Z" fill="currentColor" opacity=".12"/><path d="m14 47 46-36 46 36M27 49v34h66V49M50 83V57h20v26" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M84 12q12 0 18 10M83 22q6 0 9 5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+            <svg id="scenario-art-loan" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><rect x="14" y="20" width="90" height="65" rx="14" fill="currentColor" opacity=".12"/><path d="M27 39h43M27 53h29M27 68h16m12 0h13M78 62l7-8 7 4 10-14" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="91" cy="25" r="16" fill="currentColor"/><path d="M85 20h12m-12 5h12m-12-5c8 0 8 10 0 10l9 9" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg id="scenario-art-property" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><rect x="19" y="12" width="64" height="76" rx="9" fill="currentColor" opacity=".12"/><path d="M26 86V20h50v66M16 86h70M37 33h9m11 0h9M37 47h9m11 0h9M37 61h9m11 0h9M44 86V72h14v14" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="92" cy="35" r="16" fill="currentColor"/><circle cx="88" cy="31" r="3" stroke="white" stroke-width="2.5"/><path d="m90 33 8 8m-3-3-2 2m4 0-2 2" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+            <svg id="scenario-art-interview" class="scenario-art" viewBox="0 0 120 100" fill="none" aria-hidden="true" hidden><circle cx="39" cy="35" r="17" fill="currentColor" opacity=".12"/><path d="M39 22a13 13 0 1 0 0 26 13 13 0 0 0 0-26ZM16 81c0-15 9-25 23-25s23 10 23 25" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M66 20h34a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8H82l-11 9v-9h-5a8 8 0 0 1-8-8V28a8 8 0 0 1 8-8Z" fill="currentColor" opacity=".12"/><path d="M72 33h22M72 43h16" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+            <div><span class="scenario-kicker">INTERACTIVE DEMO</span><h3 id="scenario-title"></h3><p id="scenario-subtitle"></p></div>
+          </div>
+          <dl id="scenario-facts" class="scenario-facts"></dl>
+          <p class="scenario-disclaimer">Fictional starting state, not live data. Actions are simulated in conversation; these cards do not track changes.</p>
+          <p id="scenario-greeting" class="scenario-greeting"></p>
+          <div id="scenario-prompts" class="scenario-prompts" role="group" aria-label="Things to try"></div>
+          <p class="scenario-disclaimer">Tap an idea, then say it aloud. On non-GPT Live models, you can also send it as text after connecting.</p>
+        </section>
+        <p id="history-help" class="history-help">Replies stream here as live drafts. After an interruption, only the service's retained text remains; unheard text is removed.</p>
         <div id="transcript" role="log" aria-live="polite" aria-relevant="additions text"><div id="empty"><span>“</span><h3>Good conversations start with hello.</h3><p>Your words and the agent’s replies will appear here.</p></div></div>
         <form id="text-form" class="text-composer">
           <label for="text-input">Message your agent</label>
@@ -103,13 +180,19 @@
           <p id="text-help">Start a conversation to send text. Press Enter or Send for a text-only reply; wait for the agent's response before sending another message. Mute the mic to use text only.</p>
           <p id="download-status" role="status">End a conversation to download its stored JSON log and WAV audio.</p>
         </form>
+        <section id="call-cost" class="transport-control" aria-labelledby="call-cost-title" aria-live="polite" hidden>
+          <h2 id="call-cost-title">Last call · API-returned cost</h2>
+          <dl><dt id="call-cost-total-label">API-estimated call total</dt><dd id="call-cost-total"></dd><dt>Average cost per minute</dt><dd id="call-cost-minute"></dd></dl>
+          <p id="call-cost-note"></p>
+          <details><summary>API pricing details and completeness</summary><p id="call-cost-details"></p></details>
+        </section>
         <div class="transcript-footer"><span class="dot"></span> Live conversation <span id="elapsed">00:00</span></div>
       </section>
     </div>
     <details id="setup"><summary>Quick setup & connection notes</summary><ol><li>Configure your Foundry project endpoint in <code>.env</code>. No existing Agent or Agent name is required: the demo uses <code>webrtc-personalized-hd-demo</code> by default. Set <code>AZURE_VOICE_AGENT_NAME</code> only to choose a different saved Agent.</li><li>Install Azure CLI, open a normal PowerShell window, and run <code>az login</code>. Use the tenant/subscription containing your project. Agent Service requires <strong>Microsoft Entra ID, not a resource API key</strong>; no client secret is needed. Your account needs permission to read, create, enable, and use Agents.</li><li>If no Agent exists, select <strong>Create Agent & start</strong>. The demo creates and saves the Agent before requesting microphone access. Later visits reuse it automatically. Choose a connection and allow the microphone. WebSocket needs no STUN/TURN; WebRTC needs ICE connectivity.</li></ol><p>Credentials stay on the backend. Run the server as the same Windows user who ran <code>az login</code>, with outbound network access. After Agent setup, check authentication and session startup with <code>python check_websocket.py</code>.</p></details>
     <p class="privacy">First visit: create and save an Agent, then talk. Future visits: reuse the saved Agent. Existing definitions are preserved; missing Agents use the bundled personalized example. Azure creation requires appropriate permissions and may incur usage charges.</p>
   </main>
-  <footer>Built for the first hello.<span>Foundry voice agents · WebSocket / WebRTC</span></footer>
+  <footer id="app-footer">Built for the first hello.<span>Foundry voice agents · WebSocket / WebRTC</span></footer>
   <audio id="remote-audio" autoplay></audio>
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="panel-top"><h2 id="settings-title">Saved Agent settings · YAML</h2><button id="close-settings">Close</button></div><p id="settings-version"></p><pre id="settings-yaml"></pre><p>Read-only. Credential fields are redacted.</p></dialog>
 </body>

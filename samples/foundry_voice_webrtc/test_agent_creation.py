@@ -1,4 +1,4 @@
-"""Agent preparation only publishes after a verified missing-Agent lookup."""
+"""Agent preparation creates missing Agents and repairs missing Toolbox versions."""
 
 import asyncio
 import json
@@ -9,9 +9,12 @@ from unittest.mock import AsyncMock, patch
 
 from aiohttp.test_utils import TestClient, TestServer
 
-from server import (ACTIVE, DEFAULT_AGENT_NAME, AgentPreparationError, Settings, create_app,
+from server import (ACTIVE, DEFAULT_AGENT_NAME, ENHANCED_TURN_DETECTION, FLASH_MODEL, TURN_DETECTION_BEFORE_SETTINGS,
+                    AgentPreparationError, Settings, configure_turn_detection, create_app,
                     inspect_configured_agent, load_settings, prepare_configured_agent, prepare_weather_toolbox,
                     recreate_configured_agent)
+from server import prepare_scenario_agent, scenario_settings
+from scenarios import scenario_definition
 
 
 _UNSET = object()
@@ -66,6 +69,43 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         definition = json.loads(Path(__file__).with_name("personalized-agent.json").read_text())
         return {"versions": {"latest": {"version": "1", "definition": definition}}}
 
+    async def test_scenario_creation_readback_reuse_and_collision_protection(self):
+        cfg = self.config()
+        source = self.agent()["versions"]["latest"]
+        definition = scenario_definition(source["definition"], "health")
+        metadata = {"sample": "foundry_voice_webrtc", "scenario": "health", "scenario_source": cfg.agent}
+        saved = {"version": "1", "definition": definition, "metadata": metadata}
+        client = Client([], [Response(201, {"version": "1"}), Response(204)])
+        with patch("server.lookup_configured_agent", AsyncMock(side_effect=[None, None, saved])):
+            target, latest = await prepare_scenario_agent(client, cfg, {}, source, "health")
+        self.assertEqual(target, scenario_settings(cfg, "health"))
+        self.assertEqual(latest, saved)
+        self.assertEqual(client.writes[0][1]["json"], {"definition": definition, "metadata": metadata})
+        self.assertNotIn(cfg.agent + "/versions", client.writes[0][0])
+        reused = Client([], [Response(204)])
+        with patch("server.lookup_configured_agent", AsyncMock(return_value=saved)):
+            await prepare_scenario_agent(reused, cfg, {}, source, "health")
+        self.assertEqual(len(reused.writes), 1)
+        self.assertIn(":enable", reused.writes[0][0])
+        for existing in ({**saved, "metadata": {}}, {**saved, "metadata": {"scenario_source": "someone-else"}}):
+            rejected = Client([])
+            with patch("server.lookup_configured_agent", AsyncMock(return_value=existing)):
+                with self.assertRaisesRegex(AgentPreparationError, "belongs to another"):
+                    await prepare_scenario_agent(rejected, cfg, {}, source, "health")
+            self.assertEqual(rejected.writes, [])
+
+    async def test_scenario_concurrent_edit_and_bad_readback_fail_without_starting(self):
+        cfg = self.config()
+        source = self.agent()["versions"]["latest"]
+        for reads, posts, message in (
+                ([None, {"version": "2"}], [], "changed during"),
+                ([None, None, {"version": "1", "definition": {}}], [Response(201)], "could not be verified")):
+            client = Client([], posts)
+            with patch("server.lookup_configured_agent", AsyncMock(side_effect=reads)):
+                with self.assertRaisesRegex(AgentPreparationError, message):
+                    await prepare_scenario_agent(client, cfg, {}, source, "home")
+            self.assertFalse(any(":enable" in url for url, _ in client.writes))
+
     async def test_agent_name_is_optional_and_stable_across_settings_loads(self):
         endpoint = self.config().endpoint
         for environment in ({}, {"AZURE_VOICE_AGENT_NAME": ""}, {"AZURE_VOICE_AGENT_NAME": "  "}):
@@ -88,7 +128,8 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["exists"], exists)
             self.assertEqual(result["model"], "gpt-realtime-2.1")
             self.assertEqual(result["version"], "1" if exists else None)
-            self.assertEqual(result["transcriptionModel"], "mai-transcribe-2")
+            self.assertEqual(result["transcriptionModel"], "mai-transcribe-2-streaming")
+            self.assertEqual(result["enhancedTurnDetection"], not exists)
             self.assertEqual(client.writes, [])
             self.assertEqual(client.removals, [])
         self.weather.assert_not_awaited()
@@ -96,7 +137,7 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
     async def test_saved_model_is_reported_instead_of_the_template_default(self):
         agent = self.agent()
         agent["versions"]["latest"]["definition"]["model"] = "saved-custom-model"
-        client = Client([Response(200, agent), Response(200, agent)], [Response(204)])
+        client = Client([Response(200, agent), Response(200, agent), Response(200)], [Response(204)])
         self.assertEqual((await inspect_configured_agent(client, self.config(), {}))["model"], "saved-custom-model")
         self.assertEqual((await prepare_configured_agent(client, self.config(), {}))["model"], "saved-custom-model")
 
@@ -120,6 +161,22 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["agent"], first.agent)
         self.assertEqual(sum("/versions?" in url for url, _ in client.writes), 1)
 
+    async def test_new_agent_defaults_on_with_streaming_and_can_restore_its_original_settings(self):
+        client = Client([Response(404), Response(200)], [Response(201), Response(204)])
+        result = await prepare_configured_agent(client, self.config(), {})
+        self.assertTrue(result["enhancedTurnDetection"])
+        self.assertEqual(result["transcriptionModel"], "mai-transcribe-2-streaming")
+        saved = client.writes[0][1]["json"]
+        metadata = dict(saved["metadata"])
+        self.assertLessEqual(len(metadata[TURN_DETECTION_BEFORE_SETTINGS]), 512)
+        vad = saved["definition"]["audio"]["input"]["turn_detection"]
+        self.assertEqual({key: vad[key] for key in ENHANCED_TURN_DETECTION}, ENHANCED_TURN_DETECTION)
+        restored = await configure_turn_detection(client, self.config(), {}, saved["definition"], metadata, "1", False)
+        original = self.agent()["versions"]["latest"]["definition"]
+        self.assertEqual(restored, original)
+        self.assertNotIn(TURN_DETECTION_BEFORE_SETTINGS, metadata)
+        self.assertEqual(metadata, {"sample": "foundry_voice_webrtc"})
+
     async def test_status_api_works_before_creation_and_during_calls_without_mutation(self):
         for active in (False, True):
             tokens = AsyncMock()
@@ -140,15 +197,147 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
                     prepare.assert_not_awaited()
 
     async def test_existing_agent_only_enables_without_publishing(self):
-        client = Client([Response(200, self.agent())], [Response(204)])
+        agent = self.agent()
+        definition = agent["versions"]["latest"]["definition"]
+        definition["instructions"] = "Keep this saved custom prompt without a search policy."
+        before = json.loads(json.dumps(agent))
+        client = Client([Response(200, agent), Response(200)], [Response(204)])
         result = await prepare_configured_agent(client, self.config(), {})
         self.assertFalse(result["created"])
+        self.assertFalse(result["toolboxReferenceUpdated"])
         self.weather.assert_not_awaited()
         self.assertTrue(result["personalizationRequired"])
         self.assertEqual(len(client.writes), 1)
         self.assertIn(":enable?", client.writes[0][0])
+        self.assertEqual(agent, before)
+
+    async def test_preparation_repairs_legacy_unsupported_agents_once_and_preserves_current_transcription(self):
+        for model in (FLASH_MODEL, "gpt-5.4"):
+            source = self.agent()["versions"]["latest"]
+            definition = source["definition"]
+            definition["model"] = model
+            definition.pop("tools")
+            baseline = json.loads(json.dumps(definition["audio"]["input"]))
+            baseline["transcription"]["model"] = "azure-speech-streaming"
+            source["metadata"] = {"custom": "keep", TURN_DETECTION_BEFORE_SETTINGS: json.dumps(
+                {key: baseline[key] for key in ("turn_detection", "transcription")})}
+            definition["audio"]["input"]["turn_detection"].update(ENHANCED_TURN_DETECTION)
+            saved = json.loads(json.dumps(source))
+            saved["version"] = "2"
+            saved["metadata"].pop(TURN_DETECTION_BEFORE_SETTINGS)
+            saved["definition"]["audio"]["input"]["turn_detection"] = baseline["turn_detection"]
+            client = Client([], [Response(201, {"version": "2"}), Response(204), Response(204)])
+            with patch("server.lookup_configured_agent", AsyncMock(side_effect=[source, source, saved, saved])):
+                repaired = await prepare_configured_agent(client, self.config(), {})
+                reused = await prepare_configured_agent(client, self.config(), {})
+            self.assertTrue(repaired["turnDetectionUpdated"])
+            self.assertFalse(repaired["enhancedTurnDetection"])
+            self.assertEqual(repaired["transcriptionModel"], "mai-transcribe-2-streaming")
+            self.assertFalse(reused["turnDetectionUpdated"])
+            self.assertEqual(client.writes[0][1]["json"],
+                             {key: saved[key] for key in ("definition", "metadata")})
+            self.assertEqual(sum("/versions?" in url for url, _ in client.writes), 1)
+            self.assertIn("speech_start_detection", definition["audio"]["input"]["turn_detection"])
+
+    async def test_compatibility_preparation_stops_on_concurrent_edits_or_invalid_readback(self):
+        source = self.agent()["versions"]["latest"]
+        source["definition"]["model"] = "gpt-5.4"
+        source["definition"].pop("tools")
+        source["definition"]["audio"]["input"]["turn_detection"]["speech_start_detection"] = {"num_words": 3}
+        changed = {**source, "version": "2"}
+        for reads, posts in (([source, changed], []),
+                             ([source, source, changed], [Response(201, {"version": "2"})])):
+            client = Client([], posts)
+            with patch("server.lookup_configured_agent", AsyncMock(side_effect=reads)):
+                with self.assertRaises(AgentPreparationError):
+                    await prepare_configured_agent(client, self.config(), {})
+            self.assertFalse(any(":enable" in url for url, _ in client.writes))
+
+    async def test_scenario_creation_removes_unsupported_settings_from_unrepaired_source(self):
+        source = self.agent()["versions"]["latest"]
+        source["definition"]["model"] = "gpt-5.4"
+        source["definition"]["audio"]["input"]["turn_detection"].update(ENHANCED_TURN_DETECTION)
+        expected = scenario_definition(source["definition"], "banking")
+        vad = expected["audio"]["input"]["turn_detection"]
+        vad.pop("speech_start_detection")
+        vad.pop("end_of_utterance_detection")
+        metadata = {"sample": "foundry_voice_webrtc", "scenario": "banking", "scenario_source": self.config().agent}
+        saved = {"version": "1", "definition": expected, "metadata": metadata}
+        client = Client([], [Response(201, {"version": "1"}), Response(204)])
+        with patch("server.lookup_configured_agent", AsyncMock(side_effect=[None, None, saved])):
+            await prepare_scenario_agent(client, self.config(), {}, source, "banking")
+        self.assertEqual(client.writes[0][1]["json"], {"definition": expected, "metadata": metadata})
+        self.assertIn("speech_start_detection", source["definition"]["audio"]["input"]["turn_detection"])
+
+    async def test_missing_weather_version_is_repaired_without_replacing_agent_settings(self):
+        agent = self.agent()
+        latest = agent["versions"]["latest"]
+        latest["metadata"] = {"sample": "foundry_voice_webrtc", "custom": "keep"}
+        tool = latest["definition"]["tools"][0]
+        tool.update(toolbox_version="2", response_scheduling="when_idle")
+        latest["definition"]["tools"].append({"type": "function", "name": "other"})
+        expected = json.loads(json.dumps(latest["definition"]))
+        expected["tools"][0]["toolbox_version"] = "1"
+        client = Client([Response(200, agent), Response(404), Response(200, agent)],
+                        [Response(201, {"version": "6"}), Response(204)])
+        result = await prepare_configured_agent(client, self.config(), {})
+        self.assertFalse(result["created"])
+        self.assertTrue(result["toolboxReferenceUpdated"])
+        self.assertEqual(result["version"], "6")
+        self.assertEqual(client.writes[0][1]["json"],
+                         {"definition": expected, "metadata": latest["metadata"]})
+        self.assertEqual(tool["toolbox_version"], "2")
+        self.assertEqual(client.removals, [])
+        self.assertIn(":enable?", client.writes[1][0])
+
+    async def test_weather_version_lookup_errors_never_publish_or_enable(self):
+        for status in (401, 403, 429, 500):
+            client = Client([Response(200, self.agent()), Response(status)])
+            with self.subTest(status=status), self.assertRaisesRegex(
+                    AgentPreparationError, "Weather Toolbox version lookup failed"):
+                await prepare_configured_agent(client, self.config(), {})
+            self.weather.assert_not_awaited()
+            self.assertEqual(client.writes, [])
+
+    async def test_invalid_weather_version_is_rejected_without_writes(self):
+            for number in (None, "", "../2", 2):
+                agent = self.agent()
+                agent["versions"]["latest"]["definition"]["tools"][0]["toolbox_version"] = number
+                client = Client([Response(200, agent)])
+                with self.subTest(version=number), self.assertRaisesRegex(
+                        AgentPreparationError, "invalid version"):
+                    await prepare_configured_agent(client, self.config(), {})
+                self.assertEqual(client.writes, [])
+            self.weather.assert_not_awaited()
+
+    async def test_weather_repair_does_not_overwrite_concurrent_agent_changes(self):
+        agent = self.agent()
+        agent["versions"]["latest"]["definition"]["tools"][0]["toolbox_version"] = "2"
+        changed = json.loads(json.dumps(agent))
+        changed["versions"]["latest"]["version"] = "2"
+        client = Client([Response(200, agent), Response(404), Response(200, changed)])
+        with self.assertRaisesRegex(AgentPreparationError, "Agent changed"):
+            await prepare_configured_agent(client, self.config(), {})
+        self.assertEqual(client.writes, [])
+
+    async def test_weather_repair_failure_never_publishes_or_enables(self):
+        self.weather.side_effect = AgentPreparationError("Weather Toolbox unavailable")
+        client = Client([Response(200, self.agent()), Response(404)])
+        with self.assertRaisesRegex(AgentPreparationError, "Weather Toolbox unavailable"):
+            await prepare_configured_agent(client, self.config(), {})
+        self.assertEqual(client.writes, [])
+
+    async def test_agent_without_weather_is_not_given_new_tools(self):
+        agent = self.agent()
+        agent["versions"]["latest"]["definition"].pop("tools")
+        client = Client([Response(200, agent)], [Response(204)])
+        result = await prepare_configured_agent(client, self.config(), {})
+        self.assertFalse(result["weatherEnabled"])
+        self.assertEqual(len(client.writes), 1)
+        self.weather.assert_not_awaited()
 
     async def test_missing_agent_is_created_with_demo_definition_then_enabled(self):
+        self.weather.return_value["toolbox_version"] = "project-version-17"
         client = Client([Response(404), Response(200)], [Response(201), Response(204)])
         result = await prepare_configured_agent(client, self.config(), {})
         self.assertTrue(result["created"])
@@ -159,16 +348,34 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
         self.weather.assert_awaited_once()
         self.assertIn("/versions?", client.writes[0][0])
         definition = client.writes[0][1]["json"]["definition"]
-        self.assertEqual(client.writes[0][1]["json"]["metadata"], {"sample": "foundry_voice_webrtc"})
+        metadata = client.writes[0][1]["json"]["metadata"]
+        self.assertEqual(metadata["sample"], "foundry_voice_webrtc")
+        self.assertIn(TURN_DETECTION_BEFORE_SETTINGS, metadata)
         self.assertEqual(definition["audio"]["output"]["voice"], "en-US-Tyler:DragonHDLatestNeural")
         self.assertEqual(definition["audio"]["input"]["noise_reduction"]["type"],
                          "azure_deep_noise_suppression_headset")
         self.assertEqual(definition["tools"], [self.weather.return_value])
-        self.assertIn("WEATHER LOOKUP", definition["instructions"])
-        self.assertIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
-        self.assertIn("You are Foundry Voice Agent.", definition["instructions"])
-        self.assertIn("identify yourself as Foundry Voice Agent, not ChatGPT", definition["instructions"])
-        self.assertIn("Do not repeat your identity in ordinary replies", definition["instructions"])
+        self.assertEqual(definition["tool_choice"], "auto")
+        instructions = definition["instructions"]
+        self.assertEqual(instructions.count("\n\nWEB SEARCH\n"), 1)
+        for policy in (
+                "The attached weather toolbox provides general web search, not only weather.",
+                "Search when the caller requests a lookup or facts need verification.",
+                "For current or changing facts--including the current time in a city--use the toolbox before answering.",
+                "Give concise answers grounded in the results.",
+                "Do not claim you lack real-time access without attempting the lookup.",
+                "If the lookup fails, explain that honestly.",
+                "Never invent results or claim a lookup succeeded without a successful tool result.",
+                "Use search when needed, not for greetings, casual conversation, or simple arithmetic."):
+            self.assertIn(policy, instructions)
+        self.assertNotIn("WEATHER LOOKUP", definition["instructions"])
+        self.assertNotIn("TOOL ACKNOWLEDGEMENT", definition["instructions"])
+        self.assertIn("You are Riley, a general-purpose voice assistant.", definition["instructions"])
+        self.assertIn("{{language_policy}}", definition["instructions"])
+        self.assertIn("The configured greeting opens the conversation. Do not repeat it.", definition["instructions"])
+        template = self.agent()["versions"]["latest"]["definition"]
+        template["audio"]["input"]["turn_detection"].update(ENHANCED_TURN_DETECTION)
+        self.assertEqual(definition, {**template, "tools": [self.weather.return_value]})
         self.assertIn(":enable?", client.writes[1][0])
 
     async def test_failed_weather_setup_never_publishes_an_agent(self):
@@ -268,6 +475,7 @@ class CreationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.removals[0][0], self.config().agent_url())
             self.assertIn("/agents/demo-agent/versions?", client.writes[0][0])
             client.gets.append(Response(200, self.agent()))
+            client.gets.append(Response(200))
             client.posts.append(Response(204))
             reused = await prepare_configured_agent(client, self.config(), {})
             self.assertFalse(reused["created"])

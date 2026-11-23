@@ -17,6 +17,7 @@ TOOL_PREFIX = "mock_tool_call_"
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+DINING_TIME = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?\s?m\.?)?$", re.IGNORECASE)
 DURATION = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?$", re.IGNORECASE)
 WINDOWS_TIME_ZONES = {
     "dateline standard time": "Etc/GMT+12",
@@ -50,6 +51,7 @@ WINDOWS_TIME_ZONES = {
     "aus eastern standard time": "Australia/Sydney",
     "new zealand standard time": "Pacific/Auckland",
 }
+PRODUCT_CURRENCY = "USD"
 GENERATED_EVENT_ID = re.compile(r"^mock-evt-[0-9a-f]{8}$")
 # Ticket IDs that create_ticket hands out; anything in this range is treated as created earlier in the call.
 GENERATED_TICKET_IDS = range(1000, 10000)
@@ -614,7 +616,17 @@ class MockToolCallService:
         ]
         if not matches:
             return self._fail(tool, "ORDER_NOT_FOUND", "No order matches those details.", order=None)
+        if len(matches) > 1:
+            # An email alone can match several orders; never pick one silently.
+            return self._fail(
+                tool, "MULTIPLE_ORDERS", "More than one order uses that email. Ask for the order number.", order=None,
+            )
         order = matches[0]
+        # With both values, the email verifies the caller before any order detail is returned.
+        if wanted and email.strip() and order["email"].lower() != email.strip().lower():
+            return self._fail(
+                tool, "VERIFICATION_FAILED", "The email does not match the email on that order.", order=None,
+            )
         today = self._today()
         view: dict[str, Any] = {
             "order_number": order["order_number"],
@@ -637,6 +649,115 @@ class MockToolCallService:
         if order.get("delivered_days_ago") is not None:
             view["delivered_on"] = (today - timedelta(days=order["delivered_days_ago"])).isoformat()
         return self._ok(tool, order=view)
+
+    # -------------------------------------------------------------- products
+
+    @staticmethod
+    def _stems(text: str) -> set[str]:
+        # Singular and plural forms match ("jackets" finds "jacket").
+        return {token[:-1] if len(token) > 3 and token.endswith("s") else token for token in MockToolCallService._tokens(text)}
+
+    @staticmethod
+    def _product_view(product: dict[str, Any]) -> dict[str, Any]:
+        sizes = list(product.get("sizes") or [])
+        in_stock_sizes = list(product.get("sizes_in_stock") or [])
+        in_stock = bool(product.get("in_stock", True)) and (not sizes or bool(in_stock_sizes))
+        return {
+            "product_id": product["product_id"],
+            "name": product["name"],
+            "category": product["category"],
+            "price": product["price"],
+            "currency": PRODUCT_CURRENCY,
+            "rating": product["rating"],
+            "review_count": product["review_count"],
+            "in_stock": in_stock,
+            "sizes": sizes,
+            "sizes_in_stock": in_stock_sizes if in_stock else [],
+            "colors": list(product.get("colors") or []),
+            "features": list(product.get("features") or []),
+            "final_sale": bool(product.get("final_sale", False)),
+        }
+
+    def _product(self, product_id: str) -> dict[str, Any] | None:
+        wanted = product_id.strip().upper()
+        return next((product for product in self._fixtures["products"] if product["product_id"] == wanted), None)
+
+    def product_search(
+        self,
+        query: str,
+        category: str,
+        max_price: float,
+        in_stock_only: bool,
+        limit: int,
+    ) -> dict[str, Any]:
+        tool = "product_search"
+        if not query.strip() and not category.strip():
+            return self._fail(tool, "INVALID_QUERY", "Give search words or a category.", count=0, results=[])
+        wanted_category = category.strip().lower()
+
+        def passes_filters(product: dict[str, Any], view: dict[str, Any]) -> bool:
+            if wanted_category and wanted_category not in product["category"].lower():
+                return False
+            if max_price > 0 and view["price"] > max_price:
+                return False
+            return not (in_stock_only and not view["in_stock"])
+
+        exact = self._product(query) if query.strip() else None
+        if exact is not None:
+            # An exact product ID still honours category, max_price, and in_stock_only.
+            view = self._product_view(exact)
+            results = [view] if passes_filters(exact, view) else []
+            return self._ok(tool, source="catalog", count=len(results), total_matches=len(results), results=results)
+        wanted = self._stems(query)
+        scored = []
+        for product in self._fixtures["products"]:
+            if wanted_category and wanted_category not in product["category"].lower():
+                continue
+            haystack = self._stems(
+                f"{product['name']} {product['category']} {' '.join(product.get('features', []))} "
+                f"{' '.join(product.get('tags', []))}"
+            )
+            score = len(wanted & haystack)
+            # A query whose words are all too short or stop words (such as "TV") matches nothing.
+            if query.strip() and not score:
+                continue
+            view = self._product_view(product)
+            if not passes_filters(product, view):
+                continue
+            scored.append((score, view))
+        scored.sort(key=lambda item: (-item[0], -item[1]["rating"], item[1]["product_id"]))
+        results = [view for _, view in scored[:limit]]
+        return self._ok(tool, source="catalog", count=len(results), total_matches=len(scored), results=results)
+
+    def cart_add_item(self, product_id: str, quantity: int, size: str) -> dict[str, Any]:
+        tool = "cart_add_item"
+        product = self._product(product_id)
+        if product is None:
+            return self._fail(tool, "PRODUCT_NOT_FOUND", f"No product has the ID {product_id}.", cart_id=None)
+        view = self._product_view(product)
+        if not view["in_stock"]:
+            return self._fail(tool, "OUT_OF_STOCK", f"{view['name']} is out of stock.", cart_id=None)
+        chosen = size.strip().upper()
+        if view["sizes"] and not chosen:
+            return self._fail(
+                tool, "SIZE_REQUIRED", f"Choose a size: {', '.join(view['sizes_in_stock'])}.", cart_id=None,
+            )
+        if view["sizes"] and chosen not in view["sizes_in_stock"]:
+            return self._fail(
+                tool, "SIZE_UNAVAILABLE", f"Size {size} is not in stock; in stock: {', '.join(view['sizes_in_stock'])}.",
+                cart_id=None,
+            )
+        cart_id = f"CART-{_base36(self._rng.randrange(36**6)).rjust(6, '0')}"
+        line = {
+            "product_id": view["product_id"],
+            "name": view["name"],
+            "size": chosen if view["sizes"] else None,
+            "quantity": quantity,
+            "unit_price": view["price"],
+            "line_total": round(view["price"] * quantity, 2),
+            "currency": PRODUCT_CURRENCY,
+        }
+        return self._ok(tool, source="cart", cart_id=cart_id, status="added", line=line)
 
     # ----------------------------------------------------------------- hotel
 
@@ -765,6 +886,197 @@ class MockToolCallService:
             cancellation_fee=reservation["nightly_rate"] if fee_applies else 0,
         )
 
+    # ------------------------------------------------------------ restaurant
+
+    def _dining_today(self) -> dict[str, str]:
+        """Today's local date, returned with every availability and booking result so a relative day can be checked."""
+        today = self._today()
+        return {"today": today.isoformat(), "today_weekday": WEEKDAYS[today.weekday()]}
+
+    def _dining_date(self, value: str) -> date:
+        """A bookable local date; raises ValueError with the reason otherwise."""
+        restaurant = self._fixtures["restaurant"]
+        day = date.fromisoformat(value.strip())
+        today = self._today()
+        if day < today:
+            raise ValueError("date is in the past.")
+        if day > today + timedelta(days=restaurant["booking_window_days"]):
+            raise ValueError(f"Reservations open {restaurant['booking_window_days']} days ahead.")
+        return day
+
+    @staticmethod
+    def _clock_time(value: str) -> str:
+        """Normalizes 19:00, 7:00 PM, or 7 pm to HH:MM; raises ValueError otherwise."""
+        match = DINING_TIME.fullmatch(value.strip())
+        if not match:
+            raise ValueError(f"time must look like 19:00 or 7:00 PM, not {value!r}.")
+        hour, minute, meridiem = int(match.group(1)), int(match.group(2) or 0), (match.group(3) or "").lower()
+        if meridiem:
+            if not 1 <= hour <= 12:
+                raise ValueError(f"Not a valid time: {value}")
+            hour = hour % 12 + (12 if meridiem.startswith("p") else 0)
+        if hour > 23 or minute > 59:
+            raise ValueError(f"Not a valid time: {value}")
+        return f"{hour:02d}:{minute:02d}"
+
+    def _seating_area(self, seating: str, party_size: int) -> str:
+        """The matching seating area name; raises ValueError when it can't seat the party."""
+        restaurant = self._fixtures["restaurant"]
+        if party_size > restaurant["max_party_size"]:
+            raise LargeParty(
+                f"Parties larger than {restaurant['max_party_size']} are booked by the events team, not online."
+            )
+        wanted = seating.strip().lower()
+        if not wanted:
+            return restaurant["seating"][0]["area"]
+        area = next((a for a in restaurant["seating"] if wanted in a["area"] or a["area"] in wanted), None)
+        if area is None:
+            names = ", ".join(a["area"] for a in restaurant["seating"])
+            raise ValueError(f"Unknown seating area {seating!r}; choose one of: {names}.")
+        if party_size > area["max_party_size"]:
+            raise ValueError(f"The {area['area']} seats parties of up to {area['max_party_size']}.")
+        return area["area"]
+
+    def _open_times(self, day: date) -> list[str]:
+        """Seating times still bookable on a day, every slot_minutes from first to last seating."""
+        restaurant = self._fixtures["restaurant"]
+        weekday = WEEKDAYS[day.weekday()]
+        hours = restaurant["service_hours"].get(weekday)
+        if not hours:
+            return []
+        full = {t for rule in restaurant["fully_booked"] if rule["weekday"] == weekday for t in rule["times"]}
+        current = datetime.combine(day, time.fromisoformat(hours[0]))
+        last = datetime.combine(day, time.fromisoformat(hours[1]))
+        now = self._clock().astimezone(self._zone(self._user_zone_name)).replace(tzinfo=None)
+        times = []
+        while current <= last:
+            label = current.strftime("%H:%M")
+            if label not in full and current > now:
+                times.append(label)
+            current += timedelta(minutes=restaurant["slot_minutes"])
+        return times
+
+    @staticmethod
+    def _nearest(times: list[str], wanted: str, count: int = 4) -> list[str]:
+        minutes = int(wanted[:2]) * 60 + int(wanted[3:])
+        ranked = sorted(times, key=lambda t: (abs(int(t[:2]) * 60 + int(t[3:]) - minutes), t))
+        return sorted(ranked[:count])
+
+    def restaurant_check_availability(self, day: str, at: str, party_size: int, seating: str) -> dict[str, Any]:
+        tool = "restaurant_check_availability"
+        today = self._dining_today()
+        try:
+            booking_day = self._dining_date(day)
+            wanted = self._clock_time(at)
+            area = self._seating_area(seating, party_size)
+        except LargeParty as error:
+            return self._fail(tool, "LARGE_PARTY", str(error), **today, available_times=[])
+        except ValueError as error:
+            return self._fail(tool, "INVALID_REQUEST", str(error), **today, available_times=[])
+        weekday = WEEKDAYS[booking_day.weekday()]
+        hours = self._fixtures["restaurant"]["service_hours"].get(weekday)
+        if not hours:
+            return self._fail(tool, "CLOSED", f"The restaurant is closed on {weekday}s.", **today, available_times=[])
+        times = self._open_times(booking_day)
+        return self._ok(
+            tool,
+            **today,
+            date=booking_day.isoformat(),
+            weekday=weekday,
+            party_size=party_size,
+            seating=area,
+            first_seating=hours[0],
+            last_seating=hours[1],
+            requested_time=wanted,
+            requested_time_available=wanted in times,
+            available_times=self._nearest(times, wanted),
+        )
+
+    def restaurant_create_reservation(
+        self,
+        first_name: str,
+        last_name: str,
+        phone: str,
+        day: str,
+        at: str,
+        party_size: int,
+        seating: str,
+        occasion: str,
+        special_requests: str,
+    ) -> dict[str, Any]:
+        tool = "restaurant_create_reservation"
+        today = self._dining_today()
+        number = re.sub(r"[\s().-]", "", phone)
+        if not E164.fullmatch(number):
+            return self._fail(tool, "INVALID_PHONE", f"Phone must be in E.164 format, such as +14255550142, not {phone}.", **today, confirmation_number=None)
+        try:
+            booking_day = self._dining_date(day)
+            wanted = self._clock_time(at)
+            area = self._seating_area(seating, party_size)
+        except LargeParty as error:
+            return self._fail(tool, "LARGE_PARTY", str(error), **today, confirmation_number=None)
+        except ValueError as error:
+            return self._fail(tool, "INVALID_REQUEST", str(error), **today, confirmation_number=None)
+        times = self._open_times(booking_day)
+        if wanted not in times:
+            return self._fail(
+                tool, "TIME_UNAVAILABLE", f"{wanted} on {booking_day.isoformat()} is not available.", **today,
+                confirmation_number=None, available_times=self._nearest(times, wanted),
+            )
+        code = "R" + _base36(self._rng.randrange(36**5)).rjust(5, "0")
+        return self._ok(
+            tool,
+            confirmation_number=code,
+            status="confirmed",
+            **today,
+            first_name=first_name.strip(),
+            last_name=last_name.strip(),
+            phone=number,
+            date=booking_day.isoformat(),
+            weekday=WEEKDAYS[booking_day.weekday()],
+            time=wanted,
+            party_size=party_size,
+            seating=area,
+            occasion=occasion.strip(),
+            special_requests=special_requests.strip(),
+        )
+
+    def _dining_reservation(self, confirmation_number: str, last_name: str) -> dict[str, Any] | None:
+        """A fixture reservation matching both values; reservations created by callers are never stored."""
+        key = confirmation_number.strip().upper()
+        for seed in self._fixtures["restaurant"]["reservations"]:
+            if seed["confirmation_number"] == key and seed["last_name"].lower() == last_name.strip().lower():
+                day = self._today() + timedelta(days=seed["days_from_today"])
+                return {
+                    "confirmation_number": key,
+                    "first_name": seed["first_name"],
+                    "last_name": seed["last_name"],
+                    "phone": seed["phone"],
+                    "date": day.isoformat(),
+                    "weekday": WEEKDAYS[day.weekday()],
+                    "time": seed["time"],
+                    "party_size": seed["party_size"],
+                    "seating": seed["seating"],
+                    "occasion": seed["occasion"],
+                    "special_requests": seed["special_requests"],
+                    "status": "confirmed",
+                }
+        return None
+
+    def restaurant_get_reservation(self, confirmation_number: str, last_name: str) -> dict[str, Any]:
+        tool = "restaurant_get_reservation"
+        reservation = self._dining_reservation(confirmation_number, last_name)
+        if reservation is None:
+            return self._fail(tool, "RESERVATION_NOT_FOUND", "No reservation matches that confirmation number and last name.", reservation=None)
+        return self._ok(tool, reservation=reservation)
+
+    def restaurant_cancel_reservation(self, confirmation_number: str, last_name: str) -> dict[str, Any]:
+        tool = "restaurant_cancel_reservation"
+        reservation = self._dining_reservation(confirmation_number, last_name)
+        if reservation is None:
+            return self._fail(tool, "RESERVATION_NOT_FOUND", "No reservation matches that confirmation number and last name.")
+        return self._ok(tool, confirmation_number=reservation["confirmation_number"], status="cancelled")
+
     # ------------------------------------------------- coaching and research
 
     def _record(self, tool: str, prefix: str) -> dict[str, Any]:
@@ -809,6 +1121,10 @@ class MockToolCallService:
 
 
 class UnknownTimeZone(ValueError):
+    pass
+
+
+class LargeParty(ValueError):
     pass
 
 

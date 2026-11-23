@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 
-from server import (SessionConfiguration, SessionConfigurationError, TRUNCATED_ITEM_INCLUDE,
+from server import (FLASH_MODEL, SessionConfiguration, SessionConfigurationError, TRUNCATED_ITEM_INCLUDE,
                     forward_browser, forward_upstream, truncation_update, validate_client_frame)
 
 
@@ -31,6 +31,56 @@ async def frames(events):
 
 
 class ConfigurationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_flash_preserves_saved_settings_without_a_second_update_for_both_shapes(self):
+        for stable in (True, False):
+            with self.subTest(stable=stable):
+                original = saved_session(stable)
+                original["model"] = FLASH_MODEL
+                original["include"] += [TRUNCATED_ITEM_INCLUDE, TRUNCATED_ITEM_INCLUDE]
+                original_vad = original["audio"]["input"]["turn_detection"] if stable else original["turn_detection"]
+                original_vad["auto_truncate"] = True
+                untouched = copy.deepcopy(original)
+                config, upstream = SessionConfiguration(), AsyncMock()
+                self.assertFalse(await config.observe({"type": "session.created", "session": original}, upstream))
+                self.assertFalse(config.ready)
+                self.assertTrue(await config.observe({"type": "session.updated", "session": original}, upstream))
+                self.assertTrue(config.ready)
+                self.assertFalse(await config.observe({"type": "session.updated", "session": original}, upstream))
+                upstream.send_json.assert_not_awaited()
+                self.assertEqual(original, untouched)
+
+    async def test_flash_ready_after_first_saved_update_for_both_transports(self):
+        for model in ("microsoft-realtime-flash-1", "azure-realtime-flash-2026-10-14",
+                      "azure-realtime-flash-1"):
+            for transport in ("websocket", "webrtc"):
+                with self.subTest(model=model, transport=transport):
+                    original = saved_session(transport == "websocket")
+                    original["model"] = model
+                    config, upstream, browser = SessionConfiguration(), AsyncMock(), AsyncMock()
+                    upstream.__aiter__.side_effect = lambda: frames([
+                        {"type": "session.updated", "session": original},
+                    ])
+                    await forward_upstream(upstream, browser, transport, config)
+                    self.assertTrue(config.ready)
+                    browser.send_json.assert_awaited_once_with({"type": "bridge.ready"})
+                    upstream.send_json.assert_not_awaited()
+                    self.assertNotIn(TRUNCATED_ITEM_INCLUDE, truncation_update(original)["session"]["include"])
+
+    async def test_flash_invalid_vad_fails_without_sending_update(self):
+        for stable in (True, False):
+            for vad in (None, {}, {"type": "server_vad", "create_response": False}):
+                original = saved_session(stable)
+                original["model"] = FLASH_MODEL
+                if stable:
+                    original["audio"]["input"]["turn_detection"] = vad
+                else:
+                    original["turn_detection"] = vad
+                config, upstream = SessionConfiguration(), AsyncMock()
+                with self.subTest(stable=stable, vad=vad), self.assertRaises(SessionConfigurationError):
+                    await config.observe({"type": "session.updated", "session": original}, upstream)
+                self.assertFalse(config.ready)
+                upstream.send_json.assert_not_awaited()
+
     async def test_saved_settings_preserved_and_ack_required_for_both_shapes(self):
         for stable in (True, False):
             with self.subTest(stable=stable):

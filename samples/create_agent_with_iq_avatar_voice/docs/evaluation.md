@@ -51,7 +51,7 @@ The [Portal visibility troubleshooting step](../README.md#python-created-agent-m
 
 ## Python creator checks
 
-Recorded on September 16, 2026, using bundled Azure AI Projects 2.7.0b1 and OpenAI 3.14.1; see the [SDK build record](../../../dist/README.md).
+Recorded on September 16, 2026, using bundled Azure AI Projects 2.7.0b1 and OpenAI 3.14.1.
 
 | Check | Result | Coverage |
 | --- | --- | --- |

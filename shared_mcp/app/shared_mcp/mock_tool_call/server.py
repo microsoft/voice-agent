@@ -61,6 +61,12 @@ TimeZone = Annotated[
 ]
 IsoDate = Annotated[str, Field(min_length=10, max_length=10, description="Date as YYYY-MM-DD.")]
 Rating = Annotated[int, Field(ge=1, le=5)]
+DiningTime = Annotated[
+    str,
+    Field(min_length=1, max_length=10, description="Local seating time, 24-hour HH:MM such as 19:30."),
+]
+PartySize = Annotated[int, Field(ge=1, le=50, description="Number of guests, including children.")]
+SeatingArea = Annotated[str, Field(max_length=30, description="Optional: dining room, patio, or bar.")]
 
 
 def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
@@ -296,7 +302,9 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
     @mcp.tool(
         name="mock_tool_call_order_lookup",
         description=(
-            "Look up a mock online store order by order number, or by the account email. Returns status, items, "
+            "Look up a mock online store order by order number, or by the account email. With both, the email must "
+            "match the order (VERIFICATION_FAILED otherwise) before any detail is returned. An email that matches "
+            "more than one order returns MULTIPLE_ORDERS; ask for the order number. Returns status, items, "
             "carrier, tracking number, and the estimated delivery window." + MOCK_NOTE
         ),
     )
@@ -305,6 +313,39 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         email: Email = "",
     ) -> MockResult:
         return _result(service.order_lookup(order_number, email))
+
+    # -------------------------------------------------------------- products
+
+    @mcp.tool(
+        name="mock_tool_call_product_search",
+        description=(
+            "Search the mock online store catalog by keywords, a category, or an exact product ID such as "
+            "SKU-1001. Returns up to `limit` products with price, rating, stock, sizes in stock, colors, and key "
+            "features. Categories: Outerwear, Accessories, Kitchen, Home office, Audio, Footwear." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_product_search(
+        query: Annotated[str, Field(max_length=200, description="Search words or a product ID.")] = "",
+        category: Annotated[str, Field(max_length=60)] = "",
+        max_price: Annotated[float, Field(ge=0, le=100000, description="Highest price in USD; 0 means no limit.")] = 0,
+        in_stock_only: bool = False,
+        limit: Annotated[int, Field(ge=1, le=10)] = 5,
+    ) -> MockResult:
+        return _result(service.product_search(query, category, max_price, in_stock_only, limit))
+
+    @mcp.tool(
+        name="mock_tool_call_cart_add_item",
+        description=(
+            "Add a catalog product to the shopper's mock cart and return the cart line. Products with sizes "
+            "need an in-stock size. Nothing is reserved, ordered, or charged." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_cart_add_item(
+        product_id: Annotated[str, Field(min_length=1, max_length=20)],
+        quantity: Annotated[int, Field(ge=1, le=10)] = 1,
+        size: Annotated[str, Field(max_length=10)] = "",
+    ) -> MockResult:
+        return _result(service.cart_add_item(product_id, quantity, size))
 
     # ----------------------------------------------------------------- hotel
 
@@ -357,6 +398,68 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         last_name: Annotated[str, Field(min_length=1, max_length=60)],
     ) -> MockResult:
         return _result(service.hotel_cancel_reservation(confirmation_number, last_name))
+
+    # ------------------------------------------------------------ restaurant
+
+    @mcp.tool(
+        name="mock_tool_call_restaurant_check_availability",
+        description=(
+            "Check mock restaurant table availability for a date, time, and party size. Returns whether the "
+            "requested time is free, up to four nearby open seating times, and the first and last seating that day. "
+            "Every result, including failures, carries today and today_weekday (restaurant local time), so a "
+            "relative day such as this Friday can be checked. Parties larger than 8 return LARGE_PARTY; closed days "
+            "return CLOSED." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_restaurant_check_availability(
+        date: IsoDate,
+        time: DiningTime,
+        party_size: PartySize,
+        seating: SeatingArea = "",
+    ) -> MockResult:
+        return _result(service.restaurant_check_availability(date, time, party_size, seating))
+
+    @mcp.tool(
+        name="mock_tool_call_restaurant_create_reservation",
+        description=(
+            "Book a mock restaurant table and return its confirmation number. The time must be open; otherwise "
+            "TIME_UNAVAILABLE lists nearby open times." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_restaurant_create_reservation(
+        first_name: Annotated[str, Field(min_length=1, max_length=60)],
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+        phone: Annotated[str, Field(min_length=1, max_length=32, description="Guest mobile number in E.164 format, for example +14255550142.")],
+        date: IsoDate,
+        time: DiningTime,
+        party_size: PartySize,
+        seating: SeatingArea = "",
+        occasion: Annotated[str, Field(max_length=100, description="Optional, for example birthday or anniversary.")] = "",
+        special_requests: Annotated[str, Field(max_length=500, description="Optional notes such as allergies, a high chair, or accessibility needs.")] = "",
+    ) -> MockResult:
+        return _result(service.restaurant_create_reservation(
+            first_name, last_name, phone, date, time, party_size, seating, occasion, special_requests,
+        ))
+
+    @mcp.tool(
+        name="mock_tool_call_restaurant_get_reservation",
+        description="Find a mock restaurant reservation by confirmation number and last name." + MOCK_NOTE,
+    )
+    def mock_tool_call_restaurant_get_reservation(
+        confirmation_number: Annotated[str, Field(min_length=1, max_length=12)],
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+    ) -> MockResult:
+        return _result(service.restaurant_get_reservation(confirmation_number, last_name))
+
+    @mcp.tool(
+        name="mock_tool_call_restaurant_cancel_reservation",
+        description="Cancel a mock restaurant reservation by confirmation number and last name." + MOCK_NOTE,
+    )
+    def mock_tool_call_restaurant_cancel_reservation(
+        confirmation_number: Annotated[str, Field(min_length=1, max_length=12)],
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+    ) -> MockResult:
+        return _result(service.restaurant_cancel_reservation(confirmation_number, last_name))
 
     # ------------------------------------------------- coaching and research
 

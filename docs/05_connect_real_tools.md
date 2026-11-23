@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-The ElevenLabs-converted Templates (Examples 5 to 34) call **mock tools** by
+The reference workflow Templates (Examples 5 to 34) call **mock tools** by
 default: the `mock-tool-call` MCP server on the shared no-auth MCP service. The
 mocks take the same arguments and return the same fields as real Salesforce,
 Zendesk, Twilio, and Microsoft 365 tools, but they use fictional data and never
@@ -11,6 +11,12 @@ book, send, or store anything real. The fixed test data is listed in the
 
 You can switch any system of a Template, for example only Salesforce, to your own
 MCP server and keep mock data for the others.
+
+**This integration is optional.** To try the default Templates, use the shared
+public no-auth MCP; do not install or start a local MCP, Dev Tunnel, or Logic
+Apps workflow. Reuse an existing public HTTPS MCP when connecting real tools.
+Dev Tunnel is only a development option for exposing a server on your machine,
+not a requirement for connecting an already deployed service.
 
 | I want to | Read |
 | --- | --- |
@@ -69,6 +75,10 @@ Requirements in the hosted Playground:
 - The server must speak MCP Streamable HTTP (`initialize`, `tools/list`,
   `tools/call`). Discovery has a short timeout.
 
+**Connection behavior:** the first **Connect real tool** request discovers the server's tools, matches their names, and applies a complete mapping in one backend request and one fresh MCP handshake. There is no separate discovery round trip on this path. If names need manual mapping, the system remains on mock tools; choosing the mappings and selecting Connect again rechecks the server's current tool list before applying them. The legacy discovery endpoint remains available. No tool-list cache or automatic background probe is introduced.
+
+Connection changes are applied one at a time so one system's response cannot overwrite another system's working copy. **Done** is disabled while a connection change is pending. Closing the dialog or changing the working copy invalidates a late connection response instead of applying it to a different template. This reduces redundant requests, not server cold starts or network latency.
+
 ## 2. Match the tool contract
 
 The Template's instructions expect each tool's arguments and result fields. Your
@@ -91,7 +101,7 @@ fields, with `ok` and `error` on every result so the Agent can report failures.
 | `zendesk_add_comment` | Zendesk tickets | `ticket_id`, `comment`, `public` | `ticket_id`, `status` |
 | `zendesk_create_ticket` | Zendesk tickets | `subject`, `description`, `requester_name`, `requester_email`, `priority` | `ticket_id`, `status`, `priority` |
 | `twilio_send_message` | Twilio SMS | `to` (E.164), `body` (300 characters or fewer) | `message_sid`, `status` |
-| `order_lookup`, `hotel_*`, `quiz_record_result`, `training_record_session`, `research_save_interview_notes` | Your order, reservation, learning, or research system | See the mock schemas | See the mock schemas |
+| `order_lookup`, `product_search`, `hotel_*`, `restaurant_*`, `quiz_record_result`, `training_record_session`, `research_save_interview_notes` | Your order, product catalog, reservation, learning, or research system | See the mock schemas | See the mock schemas |
 
 The exact JSON Schemas are the mock server's `tools/list` response at
 `https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/mock-tool-call`.

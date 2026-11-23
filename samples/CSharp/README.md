@@ -1,9 +1,9 @@
 # Foundry voice agent C# sample
 
 This standalone console application uses the published
-[`Azure.AI.Projects`](https://www.nuget.org/packages/Azure.AI.Projects/3.0.0-beta.3)
-and [`Azure.AI.Projects.Agents`](https://www.nuget.org/packages/Azure.AI.Projects.Agents/3.0.0-beta.3)
-**3.0.0-beta.3** preview SDK packages. It is adapted
+[`Azure.AI.Projects`](https://www.nuget.org/packages/Azure.AI.Projects/3.0.0)
+and [`Azure.AI.Projects.Agents`](https://www.nuget.org/packages/Azure.AI.Projects.Agents/3.0.0)
+**3.0.0** SDK packages. It is adapted
 from the SDK's `Sample_VoiceAgent.cs` test fixture; no Azure SDK source checkout,
 NUnit, or internal test framework is required.
 
@@ -105,14 +105,13 @@ without connecting to Azure.
 
 [`VoiceAgentSamples.csproj`](VoiceAgentSamples.csproj) pins both
 `Azure.AI.Projects` and `Azure.AI.Projects.Agents` to the published
-**3.0.0-beta.3** preview release. `AIProjectClient.ProjectsRealtimeClient`
+**3.0.0** release. `AIProjectClient.ProjectsRealtimeClient`
 opens the voice session using OpenAI's `RealtimeSessionClient` command and
 event APIs. `AgentAdministrationClient` manages agents, and
 `BetaVoiceAgentsConversations` retrieves persisted conversations and recordings.
 
 The project also pins the published `Azure.AI.Extensions.OpenAI`
-**3.0.0-beta.1** dependency rather than relying on the alpha minimum declared
-by the Projects packages. `Azure.Identity` provides authentication.
+**3.0.0** dependency that the Projects packages require. `Azure.Identity` provides authentication.
 
 [`NuGet.Config`](NuGet.Config) restores all dependencies from NuGet.org.
 Its sample-local `.packages/nuget.org` cache keeps the published SDK separate

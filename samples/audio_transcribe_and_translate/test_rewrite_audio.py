@@ -281,7 +281,7 @@ def test_run_saves_unicode_translation_and_mode_metadata(tmp_path: Path) -> None
     project_context = AsyncMock()
     project_context.__aenter__.return_value = client
     connection_context = AsyncMock()
-    client.beta.voice_agents.realtime.connect.return_value = connection_context
+    client.voice_agents.realtime.connect.return_value = connection_context
     with (
         patch("rewrite_audio._read_audio", return_value=bytes(4800)),
         patch.dict(

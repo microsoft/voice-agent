@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from aiohttp import WSMsgType, web
 from aiohttp.test_utils import TestServer
@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import demo_server as portal
 import template_portal
+import voice_catalog
 
 ENDPOINT = "https://sample.services.ai.azure.com/api/projects/sample-project"
 TOKEN = "integration-fixture-token"
@@ -85,6 +86,12 @@ class FoundryFixture:
         if segments[2:] == ["versions"] and request.method == "POST":
             body = await request.json()
             assert "name" not in body
+            handoff = body["definition"].get("handoff")
+            if handoff is not None and not 1 <= len(handoff.get("edges", [])) <= 128:
+                return web.json_response({"error": {
+                    "code": "invalid_payload",
+                    "message": "A handoff graph must contain between 1 and 128 edges.",
+                }}, status=400)
             return web.json_response(self.save(name, body["definition"], body.get("description", "")))
         agent = self.agents.get(name)
         if agent is None:
@@ -134,7 +141,7 @@ class FoundryFixture:
         return ws
 
 
-async def create_test_app():
+async def create_test_app() -> web.Application:
     fixture = FoundryFixture()
     upstream_app = web.Application()
     upstream_app.router.add_route("*", "/api/projects/sample-project/{tail:.*}", fixture.handle)
@@ -157,6 +164,19 @@ async def create_test_app():
         patch.object(portal, "_forward_to_service", http_boundary),
         patch.object(portal, "ProjectWebSocketConnect", ws_boundary),
         patch.object(template_portal, "create_mcp_connection"),
+        patch.object(portal, "load_voice_catalog", return_value=voice_catalog.build_voice_catalog(
+            {"voices": {
+                "openai": portal.OPENAI_VOICES,
+                "azure-realtime-native": [
+                    {"name": "emma", "locale": "en-US"},
+                    {"name": "diya", "locale": "hi-IN / en-IN"},
+                    {"name": "aarti", "locale": "en-IN"},
+                    {"name": "xiaoxiao", "locale": "zh-CN"},
+                ],
+            }},
+            json.loads(voice_catalog.REFERENCE_PATH.read_text(encoding="utf-8")),
+            portal.AZURE_VOICES,
+        )),
     )
     for item in patches:
         item.start()
@@ -164,16 +184,44 @@ async def create_test_app():
         "--project-endpoint", ENDPOINT, "--no-record-sessions",
     ]))
     app[portal.DEFAULT_CONFIG_KEY]._credential = FixtureCredential()
+    voice_policy = app[portal.VOICE_POLICY_KEY]
+    voice_policy.discover_projects = Mock(
+        return_value=[{"endpoint": ENDPOINT, "region": "centralindia"}],
+    )
+    voice_policy.catalog = Mock(return_value=[
+        {"ShortName": name, "Locale": locale, "Gender": gender, "Status": "GA"}
+        for locale, genders in portal.VOICE_PRESETS.items()
+        for gender, names in genders.items()
+        for name in names
+    ] + [
+        {"ShortName": voice["id"], "Locale": voice["locale"], "Status": "GA"}
+        for voice in json.loads(voice_catalog.REFERENCE_PATH.read_text(encoding="utf-8"))["voices"]
+    ])
     mcp_files = tempfile.TemporaryDirectory(prefix="voice-portal-browser-mcp-")
     token_file = Path(mcp_files.name) / "token"
     token_file.write_text("synthetic-browser-mcp-token\n", encoding="utf-8")
     catalog = app[template_portal.CATALOG_KEY]
+    catalog_names = set()
+    for card in catalog.cards():
+        document = catalog.document(card["id"])
+        if document is None:
+            continue
+        for tool in template_portal.iter_mcp_tools(document["definition"]):
+            catalog_names.update(tool.get("allowed_tools") or [])
+    catalog_names.update(name.removeprefix("mock_tool_call_") for name in list(catalog_names))
+    handshake_patch = patch.object(template_portal, "mcp_handshake", return_value={
+        "reached": True, "http_status": 200, "server_name": "fixture-mcp", "server_version": "1",
+        "latency_ms": 1, "initialize_ms": 1, "tools_ms": 0, "tools": sorted(catalog_names),
+    })
+    handshake_patch.start()
     original_source = catalog.source
 
     def template_source(template_id, version="."):
         source = original_source(template_id, version)
         if source is None:
             return None
+        if source.connection_mode == "public":
+            return replace(source, mcp_server_url=f"https://example.com/mcp/{template_id}")
         return replace(
             source,
             mcp_server_url=f"https://example.com/mcp/{template_id}",
@@ -188,6 +236,7 @@ async def create_test_app():
     source_patch.start()
 
     async def cleanup(_app):
+        handshake_patch.stop()
         source_patch.stop()
         for item in patches:
             item.stop()

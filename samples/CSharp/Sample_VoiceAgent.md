@@ -1,6 +1,6 @@
 # Use a Foundry voice agent with REST and realtime APIs
 
-This sample uses the published `Azure.AI.Projects` and `Azure.AI.Projects.Agents` 3.0.0-beta.3 packages to configure and manage a voice agent over REST, exchange OpenAI Realtime GA events over its Foundry WebSocket endpoint, use an Azure neural voice with a runtime pitch update, stream PCM audio, and read persisted conversations and recordings.
+This sample uses the published `Azure.AI.Projects` and `Azure.AI.Projects.Agents` 3.0.0 packages to configure and manage a voice agent over REST, exchange OpenAI Realtime GA events over its Foundry WebSocket endpoint, use an Azure neural voice with a runtime pitch update, stream PCM audio, and read persisted conversations and recordings.
 
 See [README.md](README.md) for prerequisites, the NuGet SDK packages, environment
 variables, and commands to build and run the standalone console application.
@@ -23,21 +23,21 @@ VoiceAgentDefinition definition = new()
     ModelType = voiceModelType,
     Model = modelDeploymentName,
     Instructions = "Respond briefly and helpfully.",
-    Audio = new VoiceAgentAudioConfig
+    Audio = new VoiceAgentAudioConfiguration
     {
-        Input = new VoiceAgentAudioInputConfig
+        Input = new VoiceAgentAudioInputConfiguration
         {
             Format = CreatePcmAudioFormat(24000),
             NoiseReduction = new VoiceAgentNoiseReduction(VoiceAgentNoiseReductionType.NearField),
             TurnDetection = new VoiceAgentServerVadTurnDetection
             {
                 Threshold = 0.5,
-                PrefixPaddingMs = 300,
-                SilenceDurationMs = 500
+                PrefixPadding = TimeSpan.FromMilliseconds(300),
+                SilenceDuration = TimeSpan.FromMilliseconds(500)
             },
             Transcription = new VoiceAgentInputTranscription(VoiceAgentInputTranscriptionModel.Whisper1)
         },
-        Output = new VoiceAgentAudioOutputConfig
+        Output = new VoiceAgentAudioOutputConfiguration
         {
             Format = CreatePcmAudioFormat(24000),
             Voice = "en-US-AvaNeural",
@@ -355,18 +355,18 @@ private static async Task<string> ReadPersistedConversationAsync(
     VoiceConversation conversation = conversationResult;
     Console.WriteLine($"Created at {conversation.CreatedOn}; status: {conversation.Status} (GetAgentConversation status: {(int)conversationResult.GetRawResponse().Status})");
 
-    await foreach (VoiceResponse response in conversationsClient.GetAgentConversationResponsesAsync(
+    await foreach (VoiceResult response in conversationsClient.GetAgentConversationResponsesAsync(
         agentName,
         conversationId,
         cancellationToken: cancellationToken))
     {
         string responseId = response.Id;
-        ClientResult<VoiceResponse> detailResult = await conversationsClient.GetAgentConversationResponseAsync(
+        ClientResult<VoiceResult> detailResult = await conversationsClient.GetAgentConversationResponseAsync(
             agentName,
             conversationId,
             responseId,
             cancellationToken);
-        VoiceResponse detail = detailResult;
+        VoiceResult detail = detailResult;
         Console.WriteLine($"Response {responseId}: {detail.Status} (GetAgentConversationResponse status: {(int)detailResult.GetRawResponse().Status})");
 
         await foreach (RealtimeItem conversationItem in conversationsClient.GetAgentConversationResponseItemsAsync(
@@ -473,7 +473,7 @@ private static async Task DownloadConversationItemAudioAsync(
         itemId,
         cancellationToken);
     VoiceAudioItem audio = audioResult;
-    Console.WriteLine($"{audio.Role}: {audio.DurationMs} (GetAgentConversationAudioItem status: {(int)audioResult.GetRawResponse().Status})");
+    Console.WriteLine($"{audio.Role}: {audio.Duration} (GetAgentConversationAudioItem status: {(int)audioResult.GetRawResponse().Status})");
 
     if (audio.BlobUri is not null)
     {

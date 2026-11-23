@@ -1,5 +1,11 @@
 # Create Salesforce, Zendesk, and Work IQ MCP servers with Azure Logic Apps
 
+**Optional integration guide, not Portal setup.** Default Templates already use
+the shared public no-auth MCP and need no local MCP, Dev Tunnel, Logic Apps
+deployment, or customer-owned facade. Follow this guide only when deliberately
+connecting your own systems. Reusing an already deployed server needs no tunnel;
+Dev Tunnel is an option only for the local facade development path below.
+
 ## Use these servers from the Voice Agent Playground
 
 This guide builds Salesforce and Zendesk MCP servers with Azure Logic Apps
@@ -440,7 +446,7 @@ python -m venv portal/.venv
 & portal/.venv/Scripts/python.exe -m pip install -r portal/requirements.txt 'azure-ai-projects[voice]>=2.7.0,<3'
 ```
 
-**Dependency note:** The public Projects SDK requirement follows `samples/requirements.txt`. At the reviewed repository state, `portal/requirements-voice.txt` still referenced a bundled preview wheel absent from `dist/`; do not use that missing-wheel path for a fresh checkout. The commands above were checked against source declarations, not validated by a new installation for this guide. If the approved package source cannot provide the required SDK/features, stop and report the dependency blocker. Do not fetch an unapproved wheel or modify a working environment to hide the problem.
+**Dependency note:** The public Projects SDK requirement follows `samples/requirements.txt`. The commands above were checked against source declarations, not validated by a new installation for this guide. If the approved package source cannot provide the required SDK/features, stop and report the dependency blocker. Do not fetch an unapproved wheel or modify a working environment to hide the problem.
 
 Keep the Portal environment separate from the sample CLI environment because of their WebSocket requirements. This Windows path loads only the Customer Support pack; do not start all shared packs, which can have Linux/WSL dependencies.
 

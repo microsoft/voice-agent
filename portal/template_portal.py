@@ -7,6 +7,7 @@ import asyncio
 import copy
 import ipaddress
 import json
+import logging
 import re
 import socket
 import sys
@@ -20,13 +21,15 @@ from urllib.parse import quote, urlparse
 import requests
 from aiohttp import web
 from azure.ai.projects import AIProjectClient
+from azure.core.exceptions import HttpResponseError
 from dotenv import dotenv_values
 
+
 try:
-    from .common import AgentsConfig, FOUNDRY_FEATURES
+    from .common import AgentsConfig, FOUNDRY_FEATURES, regional_model_publish_fallback
     from .guide_render import render_page
 except ImportError:
-    from common import AgentsConfig, FOUNDRY_FEATURES
+    from common import AgentsConfig, FOUNDRY_FEATURES, regional_model_publish_fallback
     from guide_render import render_page
 
 
@@ -37,7 +40,13 @@ SAMPLES_DIR = VOICE_AGENT_ROOT / "samples"
 SHARED_MCP_DIR = VOICE_AGENT_ROOT / "shared_mcp"
 DOCS_DIR = VOICE_AGENT_ROOT / "docs"
 sys.path.insert(0, str(SAMPLES_DIR))
-from voice_agent_definition import materialize_handoff_instruction_inheritance
+from voice_agent_definition import (
+    materialize_handoff_instruction_inheritance,
+    project_inline_subagents,
+    uses_inline_subagents,
+)
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TEMPLATE_CONFIG = ROOT / "templates.config.json"
 ARM_TOKEN_SCOPE = "https://management.azure.com/.default"
@@ -154,12 +163,30 @@ class McpProbeError(RuntimeError):
         self.http_status = http_status
 
 
-def validate_mcp_probe_url(url: str) -> None:
+def validate_mcp_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         raise McpProbeError("MCP probes require an absolute HTTPS URL")
     if parsed.username or parsed.password or parsed.fragment:
         raise McpProbeError("MCP probe URLs cannot contain credentials or fragments")
+    try:
+        parsed.port
+    except ValueError as error:
+        raise McpProbeError("MCP server port is invalid") from error
+    hostname = parsed.hostname.lower().rstrip(".")
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        raise McpProbeError("MCP URLs cannot target localhost")
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return
+    if not address.is_global:
+        raise McpProbeError("MCP URLs cannot target private, loopback, link-local, or reserved addresses")
+
+
+def validate_mcp_probe_url(url: str) -> None:
+    validate_mcp_url(url)
+    parsed = urlparse(url)
     try:
         addresses = {
             ipaddress.ip_address(record[4][0])
@@ -321,8 +348,9 @@ TOOL_GROUPS = (
         connectable=False,
         note=WORK_IQ_NOTE,
     ),
+    ToolGroup("catalog", "Product catalog", re.compile(r"^mock_tool_call_(product|cart)_")),
     ToolGroup("orders", "Order system", re.compile(r"^mock_tool_call_order_")),
-    ToolGroup("reservations", "Reservation system", re.compile(r"^mock_tool_call_hotel_")),
+    ToolGroup("reservations", "Reservation system", re.compile(r"^mock_tool_call_(hotel|restaurant)_")),
     ToolGroup("records", "Learning and research records", re.compile(r"^mock_tool_call_(quiz|training|research)_")),
 )
 OTHER_TOOL_GROUP = ToolGroup("other", "Other tools", re.compile(""))
@@ -596,8 +624,15 @@ def materialize_template(
                 tool["project_connection_id"] = connection_id
             tool.pop("authorization", None)
             tool.pop("headers", None)
-    materialize_handoff_instruction_inheritance(definition)
+    materialize_handoff_instruction_inheritance(definition, project_inline=False)
     return definition
+
+
+def legacy_graph_definition(definition: dict[str, Any]) -> dict[str, Any]:
+    """A read-only view of the definition as a handoff graph, for summaries and previews."""
+    if not uses_inline_subagents(definition):
+        return definition
+    return project_inline_subagents(copy.deepcopy(definition))
 
 
 def graph_summary(definition: dict[str, Any]) -> dict[str, Any]:
@@ -752,6 +787,7 @@ class TemplateSource:
     mcp_config_path: Path | None
     mcp_token_file: Path | None
     lock_runtime: bool
+    target_locale: str = ""
 
 
 class TemplateCatalog:
@@ -806,6 +842,14 @@ class TemplateCatalog:
                 lock_runtime = entry.get("lock_runtime", False)
                 if not isinstance(lock_runtime, bool):
                     raise ValueError("lock_runtime must be a boolean")
+                target_locale = entry.get("target_locale", "")
+                if not isinstance(target_locale, str) or (
+                    target_locale and not re.fullmatch(
+                        r"[a-z]{2,3}(?:-[A-Z][a-z]{3})?-(?:[A-Z]{2}|[0-9]{3})",
+                        target_locale,
+                    )
+                ):
+                    raise ValueError("target_locale must be a locale such as hi-IN or en-US")
                 folder_value = str(entry.get("folder") or "").strip()
                 if not folder_value:
                     raise ValueError("folder is required")
@@ -890,6 +934,7 @@ class TemplateCatalog:
                     mcp_config_path=mcp_config_path,
                     mcp_token_file=mcp_token_file,
                     lock_runtime=lock_runtime,
+                    target_locale=target_locale,
                 )
                 self._validate_source(source)
             except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
@@ -961,7 +1006,7 @@ class TemplateCatalog:
     def _card(self, source: TemplateSource) -> dict[str, Any]:
         document = self._load(source)
         definition = document["definition"]
-        graph = graph_summary(definition)
+        graph = graph_summary(legacy_graph_definition(definition))
         mcp_tools = list(iter_mcp_tools(definition))
         systems = [
             {"id": group["id"], "label": group["label"], "connectable": group["connectable"]}
@@ -971,6 +1016,7 @@ class TemplateCatalog:
             "id": source.id,
             "name": source.name or str(document.get("name") or source.id),
             "category": source.category,
+            "target_locale": source.target_locale,
             "summary": source.summary or str(document.get("description") or "Voice Agent template."),
             "accent": source.accent,
             "accent_color": source.accent,
@@ -1001,7 +1047,7 @@ class TemplateCatalog:
             return None
         document = self._load(source)
         definition = document["definition"]
-        graph = template_graph_view(definition)
+        graph = template_graph_view(legacy_graph_definition(definition))
         mcp_tools = list(iter_mcp_tools(definition))
         connection_configured = bool(
             source.mcp_server_url
@@ -1055,6 +1101,7 @@ class TemplateCatalog:
                 {
                     "title": "Voice Agent",
                     "items": [
+                        {"label": "Target locale", "value": source.target_locale or "Not specified"},
                         {"label": "Model", "value": definition.get("model") or "—"},
                         {"label": "Voice", "value": voice_name(definition) or "—"},
                         {
@@ -1132,7 +1179,12 @@ def discover_projects(
         "resources "
         "| where type =~ 'microsoft.cognitiveservices/accounts/projects' "
         "| extend proj=tostring(split(name, '/')[-1]), acct=tostring(split(name, '/')[0]) "
-        "| project proj, acct, resourceGroup, subscriptionId"
+        "| project proj, acct, resourceGroup, subscriptionId "
+        "| join kind=leftouter (resources "
+        "| where type =~ 'microsoft.cognitiveservices/accounts' "
+        "| project acct=name, subscriptionId, resourceGroup, location) "
+        "on acct, subscriptionId, resourceGroup "
+        "| project proj, acct, resourceGroup, subscriptionId, location"
     )
     rows = []
     for index in range(0, len(subscription_ids), 1000):
@@ -1156,6 +1208,7 @@ def discover_projects(
             ),
             "subscription_id": str(row.get("subscriptionId") or ""),
             "resource_group": str(row.get("resourceGroup") or ""),
+            "region": str(row.get("location") or ""),
         }
         for row in rows
         if row.get("proj") and row.get("acct")
@@ -1246,11 +1299,18 @@ def publish_agent(
         credential=cfg.credential(),
         allow_preview=True,
     ) as client:
-        created = client.agents.create_version(
-            name,
-            body,
-            headers=preview_headers,
-        )
+        try:
+            created = client.agents.create_version(name, body, headers=preview_headers)
+        except HttpResponseError as error:
+            retry_definition = regional_model_publish_fallback(
+                definition, error.status_code, str(error),
+            )
+            if retry_definition is None:
+                raise
+            definition = retry_definition
+            created = client.agents.create_version(
+                name, {**body, "definition": definition}, headers=preview_headers,
+            )
         client.agents.enable(name, headers=preview_headers)
         version = str(getattr(created, "version", "") or "")
         readback = client.agents.get_version(name, version, headers=preview_headers)
@@ -1337,15 +1397,40 @@ def try_it_turns(readme: Path) -> list[str]:
     return [turn.replace("mock_tool_call_", "") for turn in turns]
 
 
+def try_it_note(readme: Path) -> str:
+    """The paragraph between the "Try these turns" heading and its first bullet, if the README has one.
+
+    A Template whose tools serve live data uses it to replace the default test-data notice.
+    """
+    try:
+        lines = readme.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    note: list[str] = []
+    inside = False
+    for line in lines:
+        if line.strip() == TRY_TURNS_HEADING:
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.startswith(("## ", "- ")):
+            break
+        if line.strip():
+            note.append(line.strip())
+    return " ".join(note)
+
+
 async def template_try_it(request: web.Request) -> web.Response:
     """Sample turns and test data for a Template's mock tools, for the conversation page."""
     source = _catalog(request).source(request.match_info["template_id"])
     if source is None:
         raise web.HTTPNotFound(text="Unknown template.")
-    turns = try_it_turns(source.path.parent / "README.md")
+    readme = source.path.parent / "README.md"
+    turns = try_it_turns(readme)
     if not turns:
         raise web.HTTPNotFound(text="This template has no sample turns.")
-    return web.json_response({"id": source.id, "name": source.name, "turns": turns})
+    return web.json_response({"id": source.id, "name": source.name, "turns": turns, "note": try_it_note(readme)})
 
 
 async def logic_apps_mcp_guide(_: web.Request) -> web.Response:
@@ -1425,7 +1510,7 @@ async def get_template(request: web.Request) -> web.Response:
             tool.pop("project_connection_id", None)
         tool.pop("authorization", None)
         tool.pop("headers", None)
-    materialize_handoff_instruction_inheritance(definition)
+    materialize_handoff_instruction_inheritance(definition, project_inline=False)
     detail["definition"] = definition
     detail["yaml"] = json.dumps({**document, "definition": definition}, indent=2)
     detail["suggested_agent_name"] = template_agent_name("", template_id)
@@ -1665,7 +1750,7 @@ async def ensure_template_mcp_connection(
     if not list(iter_mcp_tools(definition)):
         return ""
     if source.connection_mode == "public":
-        validate_mcp_probe_url(source.mcp_server_url)
+        validate_mcp_url(source.mcp_server_url)
         return ""
     if (
         not source.mcp_server_url
@@ -1758,6 +1843,36 @@ async def custom_server_tools(server_url: str) -> tuple[str, list[str]]:
     return url, list(result["tools"])
 
 
+@dataclass(frozen=True)
+class _SystemToolDiscovery:
+    """Request-scoped discovery, shared by legacy discovery and one-step connection."""
+
+    group: str
+    server_url: str
+    tools: list[str]
+    required: list[str]
+    mapping: dict[str, str]
+
+    def _payload(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "group": self.group,
+            "server_url": self.server_url,
+            "tools": self.tools,
+            "required": self.required,
+            "mapping": self.mapping,
+            "unmapped": [name for name in self.required if not self.mapping[name]],
+        }
+
+
+async def _discover_system_tools(group: dict[str, Any], server_url: str) -> _SystemToolDiscovery:
+    logger.info("Discovering MCP tools for system=%s", group["id"])
+    url, tools = await custom_server_tools(server_url)
+    mapping = suggest_tool_map(group["tools"], tools)
+    logger.info("Discovered MCP tools for system=%s count=%s", group["id"], len(tools))
+    return _SystemToolDiscovery(group["id"], url, tools, group["tools"], mapping)
+
+
 def catalog_mock_url(catalog: TemplateCatalog) -> str:
     """The mock-tool-call server URL that the catalog's mock-tool Templates use."""
     for card in catalog.cards():
@@ -1794,36 +1909,68 @@ async def list_definition_tool_groups(request: web.Request) -> web.Response:
 
 
 async def discover_definition_tools(request: web.Request) -> web.Response:
+    """Keep the legacy discovery-only API without applying a connection.
+
+    Parameters
+    ----------
+    request : web.Request
+        Working definition, system id, and MCP URL.
+
+    Returns
+    -------
+    web.Response
+        The existing discovery payload or an explicit discovery error.
+    """
     body, _, group = await _tool_request(request)
     if not group["connectable"] or not group["tools"]:
+        logger.error("MCP discovery is unavailable for system=%s", group["id"])
         return web.json_response({"ok": False, "error": f"{group['label']} cannot be connected here."})
     try:
-        url, tools = await custom_server_tools(str(body.get("server_url") or ""))
+        discovery = await _discover_system_tools(group, str(body.get("server_url") or ""))
     except ValueError as error:
+        logger.error("MCP discovery failed for system=%s error=%s", group["id"], type(error).__name__)
         return web.json_response({"ok": False, "error": str(error)})
-    mapping = suggest_tool_map(group["tools"], tools)
-    return web.json_response({
-        "ok": True,
-        "group": group["id"],
-        "server_url": url,
-        "tools": tools,
-        "required": group["tools"],
-        "mapping": mapping,
-        "unmapped": [name for name in group["tools"] if not mapping[name]],
-    })
+    return web.json_response(discovery._payload())
 
 
 async def connect_definition_tools(request: web.Request) -> web.Response:
+    """Discover and connect one system using exactly one fresh MCP handshake.
+
+    Parameters
+    ----------
+    request : web.Request
+        Working definition, system, URL, and optional explicit tool mapping.
+
+    Returns
+    -------
+    web.Response
+        Connected definition, or discovery with connected=false when mapping is needed.
+
+    Raises
+    ------
+    web.HTTPBadRequest
+        If the system, server, or explicit mapping is invalid.
+    """
     body, definition, group = await _tool_request(request)
     if not group["connectable"] or not group["tools"]:
+        logger.error("MCP connection is unavailable for system=%s", group["id"])
         raise web.HTTPBadRequest(text=f"{group['label']} cannot be connected here.")
     try:
-        url, tools = await custom_server_tools(str(body.get("server_url") or ""))
-        tool_map = validate_tool_map(group["tools"], tools, body.get("tool_map"))
+        discovery = await _discover_system_tools(group, str(body.get("server_url") or ""))
+        payload = discovery._payload()
+        if "tool_map" not in body and payload["unmapped"]:
+            logger.info("MCP connection requires manual mapping for system=%s", group["id"])
+            return web.json_response({**payload, "connected": False})
+        proposed = body["tool_map"] if "tool_map" in body else discovery.mapping
+        tool_map = validate_tool_map(group["tools"], discovery.tools, proposed)
     except ValueError as error:
+        logger.error("MCP connection failed for system=%s error=%s", group["id"], type(error).__name__)
         raise web.HTTPBadRequest(text=str(error)) from error
-    updated = apply_tool_servers(definition, {group["id"]: (url, tool_map)})
+    updated = apply_tool_servers(definition, {group["id"]: (discovery.server_url, tool_map)})
+    logger.info("Connected MCP tools for system=%s", group["id"])
     return web.json_response({
+        **payload,
+        "connected": True,
         "definition": updated,
         "tool_map": tool_map,
         "groups": definition_tool_groups(updated),

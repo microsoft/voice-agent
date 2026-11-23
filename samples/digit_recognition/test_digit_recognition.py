@@ -282,7 +282,7 @@ class AudioSessionTests(unittest.IsolatedAsyncioTestCase):
             },
         ]
         client = MagicMock()
-        client.beta.voice_agents.realtime.connect.return_value = _context(connection)
+        client.voice_agents.realtime.connect.return_value = _context(connection)
         with (
             patch.object(sample, "pyaudio", object()),
             patch.object(sample, "AudioProcessor", return_value=audio),
@@ -316,7 +316,7 @@ class AudioSessionTests(unittest.IsolatedAsyncioTestCase):
                     "error": {"message": "Unsupported digit recognition configuration"},
                 }
             client = MagicMock()
-            client.beta.voice_agents.realtime.connect.return_value = _context(
+            client.voice_agents.realtime.connect.return_value = _context(
                 connection
             )
             with (
@@ -336,7 +336,7 @@ class AudioSessionTests(unittest.IsolatedAsyncioTestCase):
             {"type": "error", "error": {"message": "Connection failed"}}
         ]
         client = MagicMock()
-        client.beta.voice_agents.realtime.connect.return_value = _context(connection)
+        client.voice_agents.realtime.connect.return_value = _context(connection)
         audio = MagicMock()
         with (
             patch.object(sample, "pyaudio", object()),

@@ -12,6 +12,12 @@ developing the MCP implementation itself.
 If you only use the Portal and its Templates, you can skip this guide:
 `shared_mcp` does not need to be started or deployed.
 
+**All local server, Dev Tunnel, setup, E2E, and deployment commands in this
+guide belong to an optional customer-owned MCP workflow.** They are not steps
+in the default Portal quickstart. Reuse an existing public MCP when appropriate;
+Dev Tunnel is only needed when exposing a developer-machine server to Foundry.
+The Finance CLIs still need their documented managed MCP configuration.
+
 The [`VoiceAgent/shared_mcp/`](../shared_mcp/) directory contains the
 customer-owned reference implementation for the three Finance and Elevator
 business packs. It also contains the source of the `mock_tool_call` pack used by
@@ -42,9 +48,9 @@ only liveness status.
 
 | Goal | Command | Port / reachability | What remains running |
 | --- | --- | --- | --- |
-| Run the complete local Foundry path | `./scripts/e2e-local.sh` | Local `18003` plus a public named Dev Tunnel | Native Python server and tunnel host |
+| Optionally develop/run a customer-owned MCP locally | `./scripts/e2e-local.sh` | Local `18003` plus a public named Dev Tunnel | Native Python server and tunnel host |
 | Optionally build the image and run container tests | `./scripts/package.sh` | No listener | Nothing |
-| Deploy customer-owned Azure hosting | `AZURE_AI_PROJECT_ENDPOINT=... ./scripts/deploy.sh` | Azure Container App HTTPS URL | Azure resources |
+| Optionally deploy customer-owned Azure hosting instead of a local tunnel | `AZURE_AI_PROJECT_ENDPOINT=... ./scripts/deploy.sh` | Azure Container App HTTPS URL | Azure resources |
 
 ## Important sample limitation
 
@@ -118,14 +124,16 @@ Prerequisites:
 - Python 3.10 or later
 - OpenSSL and `curl`
 - Dev Tunnel CLI authenticated with GitHub for this local workflow
-- Permission to create connections in the target Foundry Project
+- Foundry Account Owner or Foundry Project Manager on the Foundry resource, to
+  create connections in the target Foundry Project (see
+  [guide 01, section 8](./01_setup_subscription.md#8-assign-the-required-roles))
 
 The local workflow uses Azure CLI for Project discovery and connection
 creation. It does not require Azure Developer CLI or `azd auth login`.
 
 ### Install Dev Tunnel CLI on Linux or WSL
 
-The recommended full setup installs a repository-local CLI automatically when
+For this optional local MCP path, the setup command installs a repository-local CLI automatically when
 `devtunnel` is not already available:
 
 ```bash
@@ -320,9 +328,15 @@ Prerequisites:
 
 - Azure CLI authenticated with `az login`
 - Azure Developer CLI authenticated with `azd auth login`
-- Permission to create a resource group, Container Registry, Log Analytics,
-  Container Apps resources, and an `AcrPull` role assignment
-- Permission to create connections in the target Foundry Project
+- Owner, or Contributor plus Role Based Access Control Administrator, on the
+  subscription or target resource group: the deployment creates a resource
+  group, Container Registry, Log Analytics, and Container Apps resources, and
+  writes an `AcrPull` role assignment
+- Foundry Account Owner or Foundry Project Manager on the Foundry resource, to
+  create connections in the target Foundry Project
+
+See [guide 01, section 8.5](./01_setup_subscription.md#85-customer-hosted-mcp-on-azure-container-apps)
+for these roles and for updating an MCP that someone else deployed.
 
 ```bash
 export AZURE_AI_PROJECT_ENDPOINT="https://<account>.services.ai.azure.com/api/projects/<project>"
@@ -410,8 +424,10 @@ cd shared_mcp
 ./scripts/e2e-local.sh
 ```
 
-For a running local service, the UI's **Test MCP** performs an authenticated
-handshake and verifies the template's required tool inventory.
+For a deliberately selected managed local MCP, an explicit probe performs an
+authenticated handshake and checks the required tool inventory. Default Portal
+Templates instead use the public no-auth service; these local checks are not
+startup or publication prerequisites.
 
 ## Select shared MCP from an Agent
 

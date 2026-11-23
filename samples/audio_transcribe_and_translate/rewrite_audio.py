@@ -225,7 +225,7 @@ async def _run(args: argparse.Namespace) -> None:
             target_language=args.target_language,
         )
         async with asyncio.timeout(args.timeout):
-            async with client.beta.voice_agents.realtime.connect(
+            async with client.voice_agents.realtime.connect(
                 agent_name=agent_name
             ) as connection:
                 result = await _process(connection, pcm, mode=args.mode)

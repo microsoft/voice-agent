@@ -3,6 +3,7 @@
   "description": "Collect and confirm synthetic spoken identifiers using a server-managed transcription tool.",
   "definition": {
     "kind": "voice",
+    "sub_protocol": "realtime",
     "model_type": "managed",
     "model": "gpt-realtime-2.1",
     "store": false,

@@ -590,11 +590,11 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                 )
                 project = SimpleNamespace(
                     agents=agents,
-                    beta=SimpleNamespace(voice_agents=SimpleNamespace(
+                    voice_agents=SimpleNamespace(
                         realtime=SimpleNamespace(connect=MagicMock(
                             return_value=context(connection()),
                         )),
-                    )),
+                    ),
                 )
                 if failing_phase == "enable":
                     agents.enable.side_effect = RuntimeError("enable failed")
@@ -637,11 +637,11 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     cases = evaluation.await_args.args[1]
                     self.assertEqual(len(cases), 4)
                     self.assertEqual({case["agent_name"] for case in cases}, {name})
-                    connections = project.beta.voice_agents.realtime.connect.call_args_list
+                    connections = project.voice_agents.realtime.connect.call_args_list
                     self.assertEqual(len(connections), 4)
                     self.assertTrue(all(call.kwargs == {"agent_name": name} for call in connections))
                     self.assertEqual(
-                        project.beta.voice_agents.realtime.connect.return_value.__aexit__.await_count, 4,
+                        project.voice_agents.realtime.connect.return_value.__aexit__.await_count, 4,
                     )
                     self.assertEqual(
                         [case["expected_pass"] for case in cases], [True, True, False, False],
@@ -661,9 +661,9 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         )
         project = SimpleNamespace(
             agents=agents,
-            beta=SimpleNamespace(voice_agents=SimpleNamespace(
+            voice_agents=SimpleNamespace(
                 realtime=SimpleNamespace(connect=MagicMock(return_value=context(connection()))),
-            )),
+            ),
         )
         summary = {
             "counts": {"passed": 3, "failed": 1, "errored": 0, "total": 4},
@@ -709,21 +709,19 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
                     get=AsyncMock(return_value=SimpleNamespace(status="completed")),
                     get_audio=AsyncMock(return_value=SimpleNamespace(duration_ms=duration)),
                 )
-                project = SimpleNamespace(beta=SimpleNamespace(
-                    voice_agents=SimpleNamespace(conversations=conversations),
-                ))
+                project = SimpleNamespace(voice_agents=SimpleNamespace(conversations=conversations))
                 with redirect_stdout(io.StringIO()):
                     await sample.verify_persistence(project, "agent", "conversation")
                 conversations.get.assert_awaited_once_with("agent", "conversation")
                 conversations.get_audio.assert_awaited_once_with("agent", "conversation")
 
     async def test_empty_recording_is_rejected(self):
-        project = SimpleNamespace(beta=SimpleNamespace(voice_agents=SimpleNamespace(
+        project = SimpleNamespace(voice_agents=SimpleNamespace(
             conversations=SimpleNamespace(
                 get=AsyncMock(return_value=SimpleNamespace(status="completed")),
                 get_audio=AsyncMock(return_value=SimpleNamespace(duration_ms=timedelta())),
             ),
-        )))
+        ))
         with self.assertRaisesRegex(RuntimeError, "no recorded audio"):
             await sample.verify_persistence(project, "agent", "conversation")
 

@@ -6,7 +6,7 @@ audio and shares capture/playback code with `basic_voice_agent.py`.
 
 **All model options use Voice Agents, not direct Voice Live connections.** The
 script creates a `kind: voice`, `model_type: managed` Agent, enables it, and
-connects through `client.beta.voice_agents.realtime.connect(agent_name=...)`.
+connects through `client.voice_agents.realtime.connect(agent_name=...)`.
 
 ## 1. Choose a region and model
 

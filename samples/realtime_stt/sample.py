@@ -21,7 +21,7 @@ from azure.core.exceptions import AzureError
 from azure.identity.aio import DefaultAzureCredential
 from dotenv import load_dotenv
 
-from samples.gpt_live.audio_common import FRAME_BYTES, FRAMES, RATE, Audio, AudioError
+from samples.gpt_live.python.audio_common import FRAME_BYTES, FRAMES, RATE, Audio, AudioError
 
 logger = logging.getLogger(__name__)
 transcript_logger = logging.getLogger(f"{__name__}.transcripts")
@@ -316,7 +316,7 @@ async def _session(connection: Any, audio: Audio, options: Options, identity: tu
 async def _connect(client: Any, audio: Audio, options: Options, identity: tuple[str, str]) -> STTResult:
     """Keep the session deadline outside the SDK connection lifetime."""
     async with asyncio.timeout(SESSION_TIMEOUT_SECONDS):
-        async with client.beta.voice_agents.realtime.connect(agent_name=identity[0]) as connection:
+        async with client.voice_agents.realtime.connect(agent_name=identity[0]) as connection:
             return await _session(connection, audio, options, identity)
 
 

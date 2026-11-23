@@ -339,9 +339,9 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
                         )),
                         enable=AsyncMock(),
                     ),
-                    beta=SimpleNamespace(voice_agents=SimpleNamespace(
+                    voice_agents=SimpleNamespace(
                         realtime=SimpleNamespace(connect=MagicMock(return_value=manager(connection))),
-                    )),
+                    ),
                 )
                 with (
                     patch.object(agent, "DefaultAzureCredential", return_value=manager(object())),
@@ -362,7 +362,7 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
                 if create_only:
                     client.agents.enable.assert_not_awaited()
                     talk.assert_not_awaited()
-                    client.beta.voice_agents.realtime.connect.assert_not_called()
+                    client.voice_agents.realtime.connect.assert_not_called()
                 else:
                     client.agents.enable.assert_awaited_once()
                     talk.assert_awaited_once_with(connection)
@@ -385,7 +385,7 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
                 "https://example.services.ai.azure.com/api/projects/demo", "existing", False,
             )
         client.agents.enable.assert_not_awaited()
-        client.beta.voice_agents.realtime.connect.assert_not_called()
+        client.voice_agents.realtime.connect.assert_not_called()
 
     def test_audio_events_and_barge_in(self):
         audio = MagicMock()

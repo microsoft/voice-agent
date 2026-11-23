@@ -22,6 +22,8 @@ Open **http://127.0.0.1:8095**. To change the port, set `$env:PORT = "8096"`
 before running the command. The server listens only on the loopback interface.
 Stop it with Ctrl+C. Opening `index.html` as `file://` will not work because
 the page loads modules and the local price snapshot.
+Request targets that cannot be parsed as URLs receive HTTP 400 without stopping
+the local server; later valid requests are still served.
 
 Choose hosting, pipeline, and model; change call assumptions or deployment
 rates. The tool shows per-call, per-minute, call-volume list prices, component costs, and
@@ -82,6 +84,18 @@ The GPT Live meter is hourly and is divided by 60 for USD-per-minute pricing.
   meter references**, not
   direct OpenAI model API prices. GPT Realtime 2.1 uses the Pro text-output-2
   meter; `gpt-realtime` uses the original output meter.
+- **Azure Realtime** uses the documented Voice Live **Pro** tier.
+  **Azure Realtime Fast** uses a **user-specified Lite-tier reference**,
+  not a verified published Fast tariff. Both use **native speech-to-speech
+  billing**: tier-specific text and native audio input/output meters, including
+  replayed audio history, with no separate STT or Azure HD charge. Both use the
+  existing Central India tier meters and appear in managed native
+  speech-to-speech selection, comparison, and CSV export.
+  Neither adds a GPT Live session charge; no BYOM or alternate-pipeline prices are
+  inferred from GPT models. Fast's assumption is labeled in the UI and CSV.
+  The editable audio tokens/second remain planning assumptions, not verified
+  Azure Realtime-family tokenization. No price-snapshot refresh is required
+  for these existing tier meters.
 - When no managed tier is published, use the exact model's **AOAI Global
   inference prices + Central India BYO speech** as an economic reference.
   This fills GPT-5.4 mini/nano, GPT OSS 120B, and GPT-6 Sol reference scenarios.
@@ -95,6 +109,24 @@ The GPT Live meter is hourly and is divided by 60 for USD-per-minute pricing.
   GPT Realtime 2.1 mini, GPT OSS 120B, and GPT-6 Sol are prefilled from the
   published South India meters. Global describes processing scope, not a
   promise of India-only inference.
+- **GPT-5.6 Luna BYOM** uses South India Global short-context Standard
+  inference prices: **$0.20 input / $0.02 cached input / $1.20 output per
+  1M tokens**, verified on 2026-10-26. These three meters record their own
+  retrieval date; the remaining snapshot retains its original date.
+  Luna is available for the text-LLM cascade and GPT Live backend scenarios,
+  with Central India BYO speech rates for the cascade. Managed-mode rows
+  use the existing explicitly labeled Global-model/BYO-speech reference,
+  not a verified managed Luna tariff. Long-context, Flex, and Priority rates
+  are not substituted.
+- **Prompt-cache writes (GPT-5.6 Luna, GPT-6 Sol):** GPT-5.6 and later models
+  [bill cache writes separately](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/prompt-caching).
+  Fresh and cache-miss text input for these models uses the South India Global
+  short-context cache-write meter: **$0.25 per 1M for Luna** (`5.6 luna ShortCo
+  Cd Wr Std Gl`, meter `48e2705f-b13a-59cb-90ba-d4ae84312507`) and **$2.50 per
+  1M for GPT-6 Sol** (`6-sol ShortCo Cd Wr Std Gl`, meter
+  `b074fdec-2209-5976-9b15-30dca9e4048c`), retrieved 2026-11-17. A 0% cache hit
+  models prompt caching disabled and uses the regular input rate. Earlier
+  models have no cache-write charge.
 - **GPT-6 reasoning is explicitly GPT-6 Sol**, using South India Global
   short-context Standard prices: **$2 input / $0.20 cached input / $10 output
   per 1M tokens**. The generic, unspecified GPT-6 placeholder is replaced
@@ -145,11 +177,11 @@ Audio defaults follow
 **450 input** and **900 output** audio tokens before the silence adjustment. Both rates
 remain editable for other model families or measured usage.
 
-**Both-parties-silent ratio defaults to 20%** and is editable from 0 to 100%.
-The suggested 10-30% range is a planning assumption, not a universal average.
+**Both-parties-silent ratio defaults to 5%** and is editable from 0 to 100%.
+This default is a planning assumption, not a universal average.
 Multiply each side's entered speech seconds by `1 - silencePercent / 100`
-before calculating audio tokens. The default therefore models **36 seconds
-per side**, **360 input tokens**, and **720 output tokens**, with 18 seconds
+before calculating audio tokens. The default therefore models **42.75 seconds
+per side**, **427.5 input tokens**, and **855 output tokens**, with 4.5 seconds
 of both-parties silence in the 90-second call.
 This scales fresh and replayed native audio, STT, and TTS usage only, not
 unit prices. Text, prompt, reasoning, turn count, GPT Live session minutes,
@@ -165,7 +197,7 @@ Each call starts cold; the system prompt costs `P * input_rate` on its
 first turn. Its `P * (turns - 1)` reused tokens are charged at the selected
 cache hit rate. With equal turn lengths, each side's total conversation
 tokens are replayed `(turns - 1) / 2` times across later turns. Cache misses
-use the full input rate. Native mode reuses caller and assistant audio.
+use the full input rate, or the cache-write rate for GPT-5.6 and later. Native mode reuses caller and assistant audio.
 Realtime-to-HD mode reuses caller audio and assistant text. Cascade and
 GPT Live's reasoning backend reuse user/assistant text. Hidden reasoning is
 billed as output but not replayed as visible transcript history.
@@ -189,5 +221,8 @@ captured.
 ## Checks
 
 ```powershell
-node --test tools\cost_calculator\calculator.test.mjs
+node --test tools\cost_calculator\calculator.test.mjs tools\cost_calculator\server.test.mjs
 ```
+
+The server regression test starts the actual local Node process, checks malformed
+request rejection and subsequent asset requests, then stops the process.

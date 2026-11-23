@@ -73,7 +73,7 @@ async def run(endpoint: str, agent_name: str | None, create_only: bool) -> None:
         if create_only:
             return
         # No session.update: the agent supplies the saved settings.
-        async with client.beta.voice_agents.realtime.connect(agent_name=agent_name) as connection:
+        async with client.voice_agents.realtime.connect(agent_name=agent_name) as connection:
             await talk(connection)
 
 

@@ -18,7 +18,7 @@ try:
     from azure.ai.projects import models
     from azure.ai.projects.aio import AIProjectClient
     from azure.ai.projects.aio.operations import (
-        AsyncBetaRealtimeConnection,
+        AsyncRealtimeConnection,
         ServerEvent,
     )
     from azure.core.exceptions import AzureError
@@ -49,7 +49,7 @@ def handle_event(event: ServerEvent, audio: AudioIO) -> str:
 
 
 async def wait_until_ready(
-    connection: AsyncBetaRealtimeConnection, audio: AudioIO
+    connection: AsyncRealtimeConnection, audio: AudioIO
 ) -> None:
     ready: set[str] = set()
     while ready != {"session.created", "session.updated"}:
@@ -59,21 +59,21 @@ async def wait_until_ready(
 
 
 async def send_microphone(
-    connection: AsyncBetaRealtimeConnection, audio: AudioIO
+    connection: AsyncRealtimeConnection, audio: AudioIO
 ) -> None:
     while True:
         await connection.input_audio_buffer.append(audio=await audio.next_input())
 
 
 async def receive_events(
-    connection: AsyncBetaRealtimeConnection, audio: AudioIO
+    connection: AsyncRealtimeConnection, audio: AudioIO
 ) -> None:
     async for event in connection:
         handle_event(event, audio)
 
 
 async def stream_audio(
-    connection: AsyncBetaRealtimeConnection, audio: AudioIO
+    connection: AsyncRealtimeConnection, audio: AudioIO
 ) -> None:
     tasks = [
         asyncio.create_task(send_microphone(connection, audio)),
@@ -102,7 +102,7 @@ async def run_client(project_endpoint: str, agent_name: str) -> None:
             credential=credential,
             allow_preview=True,
         ) as project,
-        project.beta.voice_agents.realtime.connect(
+        project.voice_agents.realtime.connect(
             agent_name=agent_name, agent_session_id=uuid.uuid4().hex
         ) as connection,
     ):

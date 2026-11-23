@@ -324,7 +324,7 @@ async def run(args: argparse.Namespace) -> None:
         )
         print(f"Created agent: {agent_name} (retained after exit; store=False)")
         await client.agents.enable(agent_name)
-        async with client.beta.voice_agents.realtime.connect(agent_name=agent_name) as connection:
+        async with client.voice_agents.realtime.connect(agent_name=agent_name) as connection:
             assessor = PronunciationAssessor(http, settings)
             if args.audio_file:
                 await file_lesson(connection, assessor, args)

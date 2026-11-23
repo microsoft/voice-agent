@@ -2,15 +2,37 @@
 
 ## Conclusion
 
-This directory is the ordered documentation entry point for the two
-self-contained Finance Voice Agent examples:
+Start the [local Portal](../portal/README.md) to try the default Templates.
+They use the public no-auth MCP; no local MCP, Dev Tunnel, local E2E, or
+`setup-local-examples.sh` is required. Foundry project access is still required;
+[guide 01, section 8](./01_setup_subscription.md#8-assign-the-required-roles)
+lists every role, including model deployment and trace access.
 
-1. [Set up the subscription and Foundry Project](./01_setup_subscription.md).
-2. [Configure, start, deploy, or change the shared MCP for CLI samples](./02_mcp_settings.md).
+The numbered guides are references, not a mandatory installation checklist:
+
+1. [Set up the subscription and Foundry Project, and grant access](./01_setup_subscription.md).
+2. [Optional: configure, host, or develop your own MCP for CLI samples](./02_mcp_settings.md).
 3. [Start and run the CLI samples or local Portal](./03_run_samples.md).
 4. [Debug a portal session](./04_debug_session.md).
 5. [Use real tools with Templates that use mock tools](./05_connect_real_tools.md).
 6. [Create Salesforce, Zendesk, and Work IQ MCP servers with Azure Logic Apps](./06_logic_apps_mcp_servers.md).
+
+## Find a demo use case
+
+Use the [sample project catalog](../samples/README.md#choose-a-sample) to see
+**what each demo is for, what happens in the conversation, and which actions
+are simulated**. Each project links to its own setup instructions.
+
+| What you want to demonstrate | Sample projects and descriptions |
+| --- | --- |
+| A customer-facing mobile or browser experience | [AVA banking, First Voice, English teaching, vehicle controls, image input, pronunciation, avatars, and conference help](../samples/README.md#browser-mobile-and-multimodal-experiences) |
+| Banking or customer-service conversations | [Loan offers, verification, elevator faults, reception, support, collections, insurance, and order tracking](../samples/README.md#banking-support-and-reception) |
+| Sales or reservation workflows | [Lead qualification, appointment scheduling, healthcare reception, hotels, legal intake, property viewings, restaurants, salons, and travel](../samples/README.md#sales-appointments-and-travel) |
+| Employee assistance or guided learning | [IT support and access, incident triage, knowledge Q&A, onboarding, quizzes, coaching, tutoring, surveys, and interviews](../samples/README.md#employee-services-learning-and-research) |
+| How to build or integrate a voice agent | [SDK starters, migration, ADK, regional models, GPT Live, SIP, tools, knowledge, and subagents](../samples/README.md#developer-building-blocks-and-integrations) |
+| How to transcribe, evaluate, estimate cost, or debug | [Transcription, recording translation, simulated callers, audio evaluation, cost estimates, recordings, and traces](../samples/README.md#transcription-evaluation-and-operations) |
+
+## Finance workflow references
 
 The scenario-specific source of truth remains with each example:
 
@@ -19,10 +41,13 @@ The scenario-specific source of truth remains with each example:
 - [Example 2: Finance with OTP and Officer Search](../samples/example2_finance_with_OTP_and_Officer_Search/README.md)
 - [Voice Agent portal](../portal/README.md)
 
-Using only the local Portal and its Templates? Skip step 2: every Template
+Using only the local Portal and its Templates? Skip guide 02 and the local
+MCP/Dev Tunnel sections of guide 03: every Template
 calls the public no-auth MCP, so `shared_mcp` does not need to be started or
 deployed. Step 2 applies to the Finance CLI samples and to hosting the Finance
-MCP yourself.
+MCP yourself. An existing customer-hosted MCP or an Azure deployment does not
+need a local server or Dev Tunnel. The Finance CLI examples still require the
+managed MCP URL/connection configuration described in their own READMEs.
 
 This `README.md` owns only the architecture and navigation. The numbered
 documents own procedures.
@@ -39,10 +64,11 @@ documents own procedures.
 | Need or failure | Source of truth |
 | --- | --- |
 | Select a subscription, find or create a Project, or verify the exact managed realtime model and region support | [01: Subscription and Foundry Project](./01_setup_subscription.md) |
-| Build through a Python package mirror, install or authenticate Dev Tunnel, create MCP connections, or diagnose missing `*.local.env` files | [02: MCP settings and E2E](./02_mcp_settings.md) |
-| Install/check the sample virtual environments or create their `.env` files | [`setup-local-examples.sh`](../scripts/setup-local-examples.sh) and [03: Run samples](./03_run_samples.md) |
+| Grant a teammate access, or fix a permission error when deploying a model, reading quota, or opening traces | [01: Sections 8 and 9](./01_setup_subscription.md#8-assign-the-required-roles) |
+| Set up the optional customer-owned local MCP: package mirror, Dev Tunnel, Project connections, or `*.local.env` files | [02: MCP settings and E2E](./02_mcp_settings.md) |
+| Prepare Finance CLI environments for that optional local workflow (not the Portal installer) | [`setup-local-examples.sh`](../scripts/setup-local-examples.sh) and [03: Run samples](./03_run_samples.md) |
 | Install and start the local Portal UI | [Portal README](../portal/README.md) |
-| Start or inspect the local MCP + Dev Tunnel used by CLI samples | [02: MCP settings and E2E](./02_mcp_settings.md) |
+| Optionally start or inspect a customer-owned local MCP + Dev Tunnel | [02: MCP settings and E2E](./02_mcp_settings.md) |
 | Diagnose a session that reached the Voice WebSocket | [04: Debug a portal session](./04_debug_session.md) and [`skills/debug-local-session/`](../skills/debug-local-session/) |
 
 The local MCP E2E path uses the identity from `az login` for Project discovery
@@ -56,6 +82,12 @@ Container Apps deployment path.
 
 The local Portal and the Finance CLIs both publish or invoke a Voice Agent in
 Microsoft Foundry, but they use different MCP bindings:
+
+```text
+Default: local Portal -> Foundry Voice Agent -> public no-auth MCP
+```
+
+The following is the optional customer-owned CLI path, not Portal startup:
 
 ```text
                               management and publication
@@ -122,7 +154,7 @@ environment-specific URLs from leaking into the committed Agent definitions.
 
 ### 2. CLI MCP hosting and connection configuration
 
-Choose one:
+Only for customer-owned CLI hosting, choose one:
 
 - Local development: `VoiceAgent/shared_mcp/scripts/e2e-local.sh`
 - Customer-owned Azure hosting: `VoiceAgent/shared_mcp/scripts/deploy.sh`
@@ -158,7 +190,7 @@ az login
 cd /path/to/VoiceAgent/portal
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-cp .env.example .env
+[ -f .env ] || cp .env.example .env
 # Set AZURE_VOICE_AGENTS_ENDPOINT in .env.
 .venv/bin/python demo_server.py
 ```
@@ -168,8 +200,9 @@ no local MCP, Dev Tunnel, bearer token, or Project connection setup is needed.
 
 ## Finance CLI workflow
 
-Select the exact subscription and Project endpoint, then prepare and start the
-customer-owned MCP reference path:
+This is the optional, locally hosted customer-owned MCP path. Skip this section
+for default Portal use or when reusing an already deployed MCP. Select the exact
+subscription and Project endpoint, then prepare the local reference runtime:
 
 ```bash
 cd /path/to/VoiceAgent

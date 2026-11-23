@@ -82,21 +82,21 @@ public static class Sample_VoiceAgent
                     ModelType = voiceModelType,
                     Model = modelDeploymentName,
                     Instructions = "Respond briefly and helpfully.",
-                    Audio = new VoiceAgentAudioConfig
+                    Audio = new VoiceAgentAudioConfiguration
                     {
-                        Input = new VoiceAgentAudioInputConfig
+                        Input = new VoiceAgentAudioInputConfiguration
                         {
                             Format = CreatePcmAudioFormat(24000),
                             NoiseReduction = new VoiceAgentNoiseReduction(VoiceAgentNoiseReductionType.NearField),
                             TurnDetection = new VoiceAgentServerVadTurnDetection
                             {
                                 Threshold = 0.5,
-                                PrefixPaddingMs = 300,
-                                SilenceDurationMs = 500
+                                PrefixPadding = TimeSpan.FromMilliseconds(300),
+                                SilenceDuration = TimeSpan.FromMilliseconds(500)
                             },
                             Transcription = new VoiceAgentInputTranscription(VoiceAgentInputTranscriptionModel.Whisper1)
                         },
-                        Output = new VoiceAgentAudioOutputConfig
+                        Output = new VoiceAgentAudioOutputConfiguration
                         {
                             Format = CreatePcmAudioFormat(24000),
                             Voice = "en-US-AvaNeural",
@@ -612,18 +612,18 @@ public static class Sample_VoiceAgent
         VoiceConversation conversation = conversationResult;
         Console.WriteLine($"Created at {conversation.CreatedOn}; status: {conversation.Status} (GetAgentConversation status: {(int)conversationResult.GetRawResponse().Status})");
 
-        await foreach (VoiceResponse response in conversationsClient.GetAgentConversationResponsesAsync(
+        await foreach (VoiceResult response in conversationsClient.GetAgentConversationResponsesAsync(
             agentName,
             conversationId,
             cancellationToken: cancellationToken))
         {
             string responseId = response.Id;
-            ClientResult<VoiceResponse> detailResult = await conversationsClient.GetAgentConversationResponseAsync(
+            ClientResult<VoiceResult> detailResult = await conversationsClient.GetAgentConversationResponseAsync(
                 agentName,
                 conversationId,
                 responseId,
                 cancellationToken);
-            VoiceResponse detail = detailResult;
+            VoiceResult detail = detailResult;
             Console.WriteLine($"Response {responseId}: {detail.Status} (GetAgentConversationResponse status: {(int)detailResult.GetRawResponse().Status})");
 
             await foreach (RealtimeItem conversationItem in conversationsClient.GetAgentConversationResponseItemsAsync(
@@ -728,7 +728,7 @@ public static class Sample_VoiceAgent
             itemId,
             cancellationToken);
         VoiceAudioItem audio = audioResult;
-        Console.WriteLine($"{audio.Role}: {audio.DurationMs} (GetAgentConversationAudioItem status: {(int)audioResult.GetRawResponse().Status})");
+        Console.WriteLine($"{audio.Role}: {audio.Duration} (GetAgentConversationAudioItem status: {(int)audioResult.GetRawResponse().Status})");
 
         if (audio.BlobUri is not null)
         {

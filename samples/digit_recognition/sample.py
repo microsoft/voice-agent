@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from azure.ai.projects.aio import AIProjectClient
-from azure.ai.projects.aio.operations import AsyncBetaRealtimeConnection
+from azure.ai.projects.aio.operations import AsyncRealtimeConnection
 from azure.ai.projects.models import VoiceAgentDefinition
 from azure.identity.aio import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -80,7 +80,7 @@ def _check_error(event: Any) -> None:
             )
 
 
-async def _wait_ready(connection: AsyncBetaRealtimeConnection) -> None:
+async def _wait_ready(connection: AsyncRealtimeConnection) -> None:
     while True:
         event = await connection.recv()
         _check_error(event)
@@ -116,7 +116,7 @@ async def run_microphone_session(
         raise RuntimeError(
             "Install the sample requirements and PortAudio to use the microphone."
         )
-    async with client.beta.voice_agents.realtime.connect(
+    async with client.voice_agents.realtime.connect(
         agent_name=agent_name
     ) as connection:
         # The agent owns all configuration; no session.update is sent here.

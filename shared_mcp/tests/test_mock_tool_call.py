@@ -277,6 +277,90 @@ class BusinessToolTests(unittest.TestCase):
         self.assertEqual(order["order"]["status"], "in_transit")
         self.assertEqual(order["order"]["estimated_delivery"], {"earliest": "2026-10-20", "latest": "2026-10-22"})
 
+    def test_product_search_keywords_filters_and_exact_id(self) -> None:
+        jackets = call(self.mcp, "mock_tool_call_product_search", {"query": "waterproof jackets for rain"})
+        self.assertTrue(jackets["ok"])
+        self.assertEqual(jackets["results"][0]["product_id"], "SKU-1001")
+        self.assertEqual(jackets["results"][0]["sizes_in_stock"], ["S", "M", "L"])
+        self.assertEqual(jackets["results"][0]["currency"], "USD")
+        cheap = call(self.mcp, "mock_tool_call_product_search", {"query": "jacket", "max_price": 100})
+        self.assertEqual({item["product_id"] for item in cheap["results"]}, {"SKU-1001", "SKU-1003", "SKU-1005"})
+        blenders = call(self.mcp, "mock_tool_call_product_search", {"category": "kitchen", "limit": 2})
+        self.assertEqual((blenders["count"], blenders["total_matches"]), (2, 3))
+        in_stock = call(self.mcp, "mock_tool_call_product_search", {"query": "blender", "in_stock_only": True})
+        self.assertNotIn("SKU-1103", [item["product_id"] for item in in_stock["results"]])
+        sold_out = call(self.mcp, "mock_tool_call_product_search", {"query": "sku-1103"})
+        self.assertEqual(sold_out["count"], 1)
+        self.assertFalse(sold_out["results"][0]["in_stock"])
+        # Filters apply to an exact product ID too.
+        for filters in ({"in_stock_only": True}, {"max_price": 10}, {"category": "outerwear"}):
+            filtered = call(self.mcp, "mock_tool_call_product_search", {"query": "SKU-1103", **filters})
+            self.assertEqual((filtered["ok"], filtered["count"], filtered["total_matches"], filtered["results"]), (True, 0, 0, []))
+        kept = call(self.mcp, "mock_tool_call_product_search", {"query": "SKU-1001", "category": "outerwear", "in_stock_only": True})
+        self.assertEqual([item["product_id"] for item in kept["results"]], ["SKU-1001"])
+        nothing = call(self.mcp, "mock_tool_call_product_search", {"query": "garden hose"})
+        self.assertEqual((nothing["ok"], nothing["count"]), (True, 0))
+        # Only short or stop words: no searchable token, so no match instead of the whole catalog.
+        for query in ("TV", "the TV"):
+            unsearchable = call(self.mcp, "mock_tool_call_product_search", {"query": query})
+            self.assertEqual((unsearchable["ok"], unsearchable["count"], unsearchable["total_matches"]), (True, 0, 0))
+        in_category = call(self.mcp, "mock_tool_call_product_search", {"category": "audio", "in_stock_only": True})
+        self.assertEqual(in_category["total_matches"], 3)
+        empty = call(self.mcp, "mock_tool_call_product_search", {})
+        self.assertEqual(empty["error"]["code"], "INVALID_QUERY")
+        with self.assertRaises(ToolError):
+            call(self.mcp, "mock_tool_call_product_search", {"query": "jacket", "limit": 11})
+
+    def test_product_search_reports_partial_results_for_similar_names(self) -> None:
+        earbuds = call(self.mcp, "mock_tool_call_product_search", {"query": "wireless earbuds", "limit": 2})
+        # Headphones also match "wireless", so two results are only part of the five matches.
+        self.assertEqual((earbuds["count"], earbuds["total_matches"]), (2, 5))
+        self.assertEqual([item["name"] for item in earbuds["results"]], ["Wireless earbuds Pro", "Wireless earbuds"])
+        everything = call(self.mcp, "mock_tool_call_product_search", {"query": "wireless earbuds", "limit": 10})
+        names = {item["name"]: item["in_stock"] for item in everything["results"]}
+        self.assertEqual(names["Wireless earbuds Lite"], False)
+        self.assertIn("Wireless earbuds Pro", names)
+
+    def test_order_lookup_verifies_email_before_details(self) -> None:
+        verified = call(self.mcp, "mock_tool_call_order_lookup", {
+            "order_number": "10045", "email": "Dana.Test20261020@example.com",
+        })
+        self.assertEqual(verified["order"]["customer_name"], "Dana Test")
+        mismatch = call(self.mcp, "mock_tool_call_order_lookup", {"order_number": "10045", "email": "rose@edge.com"})
+        self.assertEqual((mismatch["ok"], mismatch["error"]["code"], mismatch["order"]), (False, "VERIFICATION_FAILED", None))
+        cancelled = call(self.mcp, "mock_tool_call_order_lookup", {"order_number": "10049"})
+        self.assertEqual(cancelled["order"]["status"], "cancelled")
+
+    def test_order_lookup_by_shared_email_asks_for_the_order_number(self) -> None:
+        shared = call(self.mcp, "mock_tool_call_order_lookup", {"email": "sam.quinn@example.com"})
+        self.assertEqual((shared["ok"], shared["error"]["code"], shared["order"]), (False, "MULTIPLE_ORDERS", None))
+        for email, order_number in (("jordan.lee@example.com", "10046"), ("dana.test20261020@example.com", "10045")):
+            single = call(self.mcp, "mock_tool_call_order_lookup", {"email": email})
+            self.assertEqual(single["order"]["order_number"], order_number)
+        second = call(self.mcp, "mock_tool_call_order_lookup", {"order_number": "10050", "email": "sam.quinn@example.com"})
+        self.assertEqual(second["order"]["order_number"], "10050")
+        not_dana = call(self.mcp, "mock_tool_call_order_lookup", {
+            "order_number": "10050", "email": "dana.test20261020@example.com",
+        })
+        self.assertEqual(not_dana["error"]["code"], "VERIFICATION_FAILED")
+
+    def test_cart_add_item_checks_product_stock_and_size(self) -> None:
+        added = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-1001", "quantity": 2, "size": "m"})
+        self.assertTrue(added["ok"])
+        self.assertRegex(added["cart_id"], r"^CART-[0-9A-Z]{6}$")
+        self.assertEqual(added["line"]["size"], "M")
+        self.assertEqual(added["line"]["line_total"], 178.0)
+        no_size = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-1001"})
+        self.assertEqual(no_size["error"]["code"], "SIZE_REQUIRED")
+        wrong_size = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-1001", "size": "XL"})
+        self.assertEqual(wrong_size["error"]["code"], "SIZE_UNAVAILABLE")
+        sold_out = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-1103"})
+        self.assertEqual(sold_out["error"]["code"], "OUT_OF_STOCK")
+        unknown = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-9999"})
+        self.assertEqual(unknown["error"]["code"], "PRODUCT_NOT_FOUND")
+        no_sizes = call(self.mcp, "mock_tool_call_cart_add_item", {"product_id": "SKU-1101"})
+        self.assertIsNone(no_sizes["line"]["size"])
+
     def test_hotel_flow(self) -> None:
         available = call(self.mcp, "mock_tool_call_hotel_check_availability", {
             "check_in": "2026-10-23", "check_out": "2026-10-25", "guests": 2,
@@ -301,6 +385,69 @@ class BusinessToolTests(unittest.TestCase):
         again = call(self.mcp, "mock_tool_call_hotel_get_reservation", {
             "confirmation_number": "A1B2C3", "last_name": "Test",
         })
+        self.assertEqual(again["reservation"]["status"], "confirmed")
+
+    def test_restaurant_availability_offers_nearby_times_and_rejects_bad_requests(self) -> None:
+        friday = call(self.mcp, "mock_tool_call_restaurant_check_availability", {
+            "date": "2026-10-23", "time": "19:00", "party_size": 4,
+        })
+        self.assertTrue(friday["ok"])
+        self.assertFalse(friday["requested_time_available"])
+        self.assertEqual(friday["available_times"], ["17:30", "18:00", "18:30", "20:00"])
+        self.assertEqual((friday["first_seating"], friday["last_seating"], friday["seating"]), ("17:00", "22:00", "dining room"))
+        self.assertEqual((friday["today"], friday["today_weekday"], friday["weekday"]), ("2026-10-20", "Tuesday", "Friday"))
+        thursday = call(self.mcp, "mock_tool_call_restaurant_check_availability", {
+            "date": "2026-10-22", "time": "7:30 PM", "party_size": 2, "seating": "Patio",
+        })
+        self.assertEqual((thursday["requested_time"], thursday["requested_time_available"], thursday["seating"]), ("19:30", True, "patio"))
+        failures = {
+            "CLOSED": {"date": "2026-10-26", "time": "19:00", "party_size": 2},
+            "LARGE_PARTY": {"date": "2026-10-22", "time": "19:00", "party_size": 9},
+            "INVALID_REQUEST": {"date": "2026-10-22", "time": "19:00", "party_size": 7, "seating": "patio"},
+        }
+        for code, arguments in failures.items():
+            with self.subTest(code=code):
+                result = call(self.mcp, "mock_tool_call_restaurant_check_availability", arguments)
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["error"]["code"], code)
+                self.assertEqual(result["today"], "2026-10-20")
+        past = call(self.mcp, "mock_tool_call_restaurant_check_availability", {"date": "2026-10-19", "time": "19:00", "party_size": 2})
+        self.assertEqual(past["error"]["code"], "INVALID_REQUEST")
+
+    def test_restaurant_booking_lookup_and_cancellation(self) -> None:
+        booked = call(self.mcp, "mock_tool_call_restaurant_create_reservation", {
+            "first_name": "Ana", "last_name": "Mock", "phone": "+1 425 555 0142", "date": "2026-10-22",
+            "time": "19:30", "party_size": 2, "occasion": "anniversary",
+        })
+        self.assertTrue(booked["ok"])
+        self.assertRegex(booked["confirmation_number"], r"^R[0-9A-Z]{5}$")
+        self.assertEqual((booked["phone"], booked["time"], booked["seating"]), ("+14255550142", "19:30", "dining room"))
+        full = call(self.mcp, "mock_tool_call_restaurant_create_reservation", {
+            "first_name": "Ana", "last_name": "Mock", "phone": "+14255550142", "date": "2026-10-23",
+            "time": "19:00", "party_size": 2,
+        })
+        self.assertEqual(full["error"]["code"], "TIME_UNAVAILABLE")
+        self.assertIn("18:30", full["available_times"])
+        bad_phone = call(self.mcp, "mock_tool_call_restaurant_create_reservation", {
+            "first_name": "Ana", "last_name": "Mock", "phone": "555-0142", "date": "2026-10-22",
+            "time": "19:30", "party_size": 2,
+        })
+        self.assertEqual(bad_phone["error"]["code"], "INVALID_PHONE")
+        not_kept = call(self.mcp, "mock_tool_call_restaurant_get_reservation", {
+            "confirmation_number": booked["confirmation_number"], "last_name": "Mock",
+        })
+        self.assertEqual(not_kept["error"]["code"], "RESERVATION_NOT_FOUND")
+        found = call(self.mcp, "mock_tool_call_restaurant_get_reservation", {"confirmation_number": "tr4k7q", "last_name": "test"})
+        self.assertEqual(
+            (found["reservation"]["date"], found["reservation"]["time"], found["reservation"]["party_size"]),
+            ("2026-10-23", "19:00", 4),
+        )
+        self.assertEqual(found["reservation"]["phone"], "+14255550111")
+        wrong_name = call(self.mcp, "mock_tool_call_restaurant_cancel_reservation", {"confirmation_number": "TR4K7Q", "last_name": "Lee"})
+        self.assertEqual(wrong_name["error"]["code"], "RESERVATION_NOT_FOUND")
+        cancelled = call(self.mcp, "mock_tool_call_restaurant_cancel_reservation", {"confirmation_number": "TR4K7Q", "last_name": "Test"})
+        self.assertEqual(cancelled["status"], "cancelled")
+        again = call(self.mcp, "mock_tool_call_restaurant_get_reservation", {"confirmation_number": "TR4K7Q", "last_name": "Test"})
         self.assertEqual(again["reservation"]["status"], "confirmed")
 
     def test_coaching_and_research_records(self) -> None:
@@ -352,6 +499,11 @@ class NoRetentionTests(unittest.TestCase):
             }),
             ("mock_tool_call_research_save_interview_notes", {
                 "consent_given": True, "participant_name": self.SECRET, "summary": self.SECRET,
+            }),
+            ("mock_tool_call_cart_add_item", {"product_id": "SKU-1101", "quantity": 1}),
+            ("mock_tool_call_restaurant_create_reservation", {
+                "first_name": self.SECRET, "last_name": self.SECRET, "phone": "+14255550199", "date": "2026-10-22",
+                "time": "18:00", "party_size": 2, "special_requests": self.SECRET,
             }),
         ]
         for name, arguments in writes:

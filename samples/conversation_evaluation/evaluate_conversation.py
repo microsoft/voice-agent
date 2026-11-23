@@ -17,7 +17,7 @@ from time import perf_counter
 from typing import Any, Literal, TypedDict
 
 from azure.ai.projects.aio import AIProjectClient
-from azure.ai.projects.aio.operations import AsyncBetaRealtimeConnection
+from azure.ai.projects.aio.operations import AsyncRealtimeConnection
 from azure.ai.projects.models import TestingCriterionAzureAIEvaluator, VoiceAgentDefinition
 from azure.core.exceptions import HttpResponseError
 from azure.identity.aio import DefaultAzureCredential
@@ -141,7 +141,7 @@ def definition(model: str) -> VoiceAgentDefinition:
     })
 
 
-async def receive(connection: AsyncBetaRealtimeConnection) -> dict[str, Any]:
+async def receive(connection: AsyncRealtimeConnection) -> dict[str, Any]:
     event = await connection.recv()
     payload = event.as_dict() if hasattr(event, "as_dict") else dict(event)
     if payload.get("type") in {"error", "conversation.item.input_audio_transcription.failed"}:
@@ -151,7 +151,7 @@ async def receive(connection: AsyncBetaRealtimeConnection) -> dict[str, Any]:
 
 
 async def wait_for(
-    connection: AsyncBetaRealtimeConnection, event_type: str,
+    connection: AsyncRealtimeConnection, event_type: str,
 ) -> dict[str, Any]:
     while True:
         event = await receive(connection)
@@ -197,7 +197,7 @@ async def wait_until(deadline: float) -> None:
 
 
 async def ask(
-    connection: AsyncBetaRealtimeConnection, pcm: bytes, fault: str | None = None,
+    connection: AsyncRealtimeConnection, pcm: bytes, fault: str | None = None,
 ) -> tuple[str, str, bytes]:
     for offset in range(0, len(pcm), CHUNK_BYTES):
         chunk = pcm[offset:offset + CHUNK_BYTES]
@@ -240,7 +240,7 @@ async def ask(
 
 
 async def apply_final_turn_fault(
-    connection: AsyncBetaRealtimeConnection, instructions: str, session_id: str,
+    connection: AsyncRealtimeConnection, instructions: str, session_id: str,
 ) -> None:
     await connection.session.update(session={
         "type": "realtime", "instructions": instructions,
@@ -252,7 +252,7 @@ async def apply_final_turn_fault(
 
 
 async def converse(
-    connection: AsyncBetaRealtimeConnection, scenario: Scenario = SCENARIOS[0],
+    connection: AsyncRealtimeConnection, scenario: Scenario = SCENARIOS[0],
     *, audio_dir: Path, output_dir: Path,
 ) -> Conversation:
     conversation_id: str | None = None
@@ -326,11 +326,11 @@ async def verify_persistence(
     async def wait_stored() -> None:
         while True:
             try:
-                conversation = await project.beta.voice_agents.conversations.get(
+                conversation = await project.voice_agents.conversations.get(
                     agent_name, conversation_id,
                 )
                 if conversation.status == "completed":
-                    audio = await project.beta.voice_agents.conversations.get_audio(
+                    audio = await project.voice_agents.conversations.get_audio(
                         agent_name, conversation_id,
                     )
                     duration = audio.duration_ms
@@ -537,7 +537,7 @@ async def run(
                 raise RuntimeError("The saved Voice Agent definition did not enable store=True.")
             await project.agents.enable(agent_name=agent_name)
             for scenario in SCENARIOS:
-                async with project.beta.voice_agents.realtime.connect(
+                async with project.voice_agents.realtime.connect(
                     agent_name=agent_name,
                 ) as connection:
                     conversation = await converse(

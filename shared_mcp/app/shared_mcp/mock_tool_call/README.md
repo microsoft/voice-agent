@@ -48,11 +48,17 @@ schema validation as MCP errors.
 | `mock_tool_call_zendesk_add_comment` | `zendesk_add_comment` | Tickets 1 to 3, or a four-digit number from `zendesk_create_ticket`; reports the ticket reopened. |
 | `mock_tool_call_zendesk_create_ticket` | `zendesk_create_ticket` | Returns a random four-digit ticket number; the ticket is not stored. |
 | `mock_tool_call_twilio_send_message` | `twilio_send_message` | Any valid E.164 number is `queued`; no text is delivered. |
-| `mock_tool_call_order_lookup` | ElevenLabs order lookup (custom tool) | By order number or account email. |
-| `mock_tool_call_hotel_check_availability` | ElevenLabs reservation tools (custom) | Rooms, availability, and total before taxes. |
+| `mock_tool_call_order_lookup` | Order lookup (custom tool) | By order number or account email. With both, the email must match the order (`VERIFICATION_FAILED` otherwise), so no detail is returned to an unverified caller. An email shared by several orders returns `MULTIPLE_ORDERS` instead of picking one. |
+| `mock_tool_call_product_search` | Store catalog search (custom tool) | Keywords, category, `max_price`, `in_stock_only`, or an exact product ID; `total_matches` larger than `count` means more matches. |
+| `mock_tool_call_cart_add_item` | Store cart (custom tool) | Checks product, stock, and size and returns the cart line; the cart is not stored. |
+| `mock_tool_call_hotel_check_availability` | Hotel reservation tools (custom) | Rooms, availability, and total before taxes. |
 | `mock_tool_call_hotel_create_reservation` | | Returns a random confirmation number such as `M3K9QZ`; the reservation is not stored. |
 | `mock_tool_call_hotel_get_reservation` | | By confirmation number and last name. |
 | `mock_tool_call_hotel_cancel_reservation` | | Reports a one-night `cancellation_fee` inside 48 hours of the 3 PM arrival. |
+| `mock_tool_call_restaurant_check_availability` | Restaurant reservation system (custom tool) | Date, time, and party size; returns whether the time is free, up to four nearby open times, and the first and last seating. `LARGE_PARTY` above 8 guests, `CLOSED` on Mondays. Every result, including failures, carries `today` and `today_weekday`, so an Agent can turn "this Friday" into a date. |
+| `mock_tool_call_restaurant_create_reservation` | | Guest name, E.164 phone, date, time, party size, optional seating, occasion, and special requests; returns a random confirmation number such as `R4K9QZ`; not stored. |
+| `mock_tool_call_restaurant_get_reservation` | | By confirmation number and last name; returns the date, time, party, seating, guest name and phone, and requests. |
+| `mock_tool_call_restaurant_cancel_reservation` | | By confirmation number and last name; returns `cancelled`. |
 | `mock_tool_call_quiz_record_result` | | Records a quiz score; returns `record_id` and `passed`. |
 | `mock_tool_call_training_record_session` | | Records a role-play debrief with four 1-5 scores. |
 | `mock_tool_call_research_save_interview_notes` | | Saves a recap only when `consent_given` is true. |
@@ -122,9 +128,47 @@ A number without a country code also fails.
 | 10045 | Dana Test | In transit, standard shipping, Contoso Express `CX100450001`, ordered 6 days ago, shipped 5 days ago | Rain jacket, size M; wool socks, 3 pack (final sale) |
 | 10046 | Jordan Lee | Processing, express, ordered today | Blender, 1.5 L |
 | 10047 | Jack Rogers | Delivered 15 days ago | Desk lamp ×2 |
+| 10048 | Rose Gonzalez | Delivered 40 days ago (outside a 30-day return window) | Over-ear headphones |
+| 10049 | Tim Barr | Cancelled, ordered 3 days ago | Personal blender |
+| 10050 | Sam Quinn | Processing, express, ordered yesterday | Wireless earbuds Pro |
+| 10051 | Sam Quinn | Delivered 8 days ago, standard, Contoso Express `CX100510001` | Trail running shoes, size 10 |
 
 Dates are relative to the day of the call; the estimated delivery window is 3-5
 business days after shipping for standard and 1-2 for express.
+
+Each customer has one order except Sam Quinn: a lookup by `sam.quinn@example.com` alone
+returns `MULTIPLE_ORDERS`, while `dana.test20261020@example.com` alone finds 10045.
+
+### Product catalog (Contoso Shop)
+
+Prices are in USD. Search matches singular and plural words in the name, category, features, and tags.
+Words of two letters or fewer and common words are ignored, so a query with nothing else (such as "TV") matches
+no product. A category without a query still lists that category, with any filters applied.
+Similar names (three wireless earbuds, two rain jackets, three desk lamps) and `total_matches` larger
+than `count` let a template test product mix-ups and partial results.
+
+| ID | Product | Category | Price | Stock |
+| --- | --- | --- | --- | --- |
+| SKU-1001 | Rain jacket | Outerwear | $89 | Sizes S, M, L (XL sold out) |
+| SKU-1002 | Insulated winter parka | Outerwear | $189 | Sizes M, L |
+| SKU-1003 | Lightweight windbreaker | Outerwear | $49 | Sizes S, M, L |
+| SKU-1004 | Wool socks, 3 pack (final sale) | Accessories | $18 | Sizes M, L |
+| SKU-1005 | Kids' rain jacket | Outerwear | $59 | Size S only |
+| SKU-1101 | Blender, 1.5 L | Kitchen | $79 | In stock |
+| SKU-1102 | Personal blender | Kitchen | $39 | In stock |
+| SKU-1103 | High-performance blender, 2 L | Kitchen | $199 | **Out of stock** |
+| SKU-1201 | LED desk lamp | Home office | $45 | In stock |
+| SKU-1202 | Clamp desk lamp | Home office | $29 | In stock |
+| SKU-1203 | LED desk lamp with wireless charger | Home office | $69 | In stock |
+| SKU-1301 | Wireless earbuds | Audio | $99 | In stock |
+| SKU-1302 | Over-ear headphones | Audio | $149 | In stock |
+| SKU-1303 | Wireless earbuds Pro | Audio | $179 | In stock |
+| SKU-1304 | Wireless earbuds Lite | Audio | $49 | **Out of stock** |
+| SKU-1401 | Trail running shoes | Footwear | $119 | Sizes 8 to 11 |
+
+The cart is not stored: `cart_add_item` checks the product, stock, and size and returns the line, but
+a later call cannot read the cart. Try `SKU-1103` for `OUT_OF_STOCK` and the rain jacket in XL for
+`SIZE_UNAVAILABLE`.
 
 ### Hotel (The Grand Hotel)
 
@@ -137,3 +181,18 @@ business days after shipping for standard and 1-2 for express.
 Existing reservation: **A1B2C3**, last name **Test** (Dana Test), Classic King, 2
 nights, arriving 14 days after the first lookup. Cancelling it is free; a reservation
 whose arrival is within 48 hours reports a one-night fee.
+
+### Restaurant (Contoso Trattoria)
+
+Seatings every 30 minutes, local time (Pacific): Tuesday to Thursday 5:00-9:00 PM, Friday
+5:00-10:00 PM, Saturday 12:00-10:00 PM, Sunday 12:00-8:00 PM; closed Mondays. Friday 7:00 and
+7:30 PM and Saturday 6:30 to 8:00 PM are fully booked, so a request then returns nearby open
+times. Parties up to 8 (patio up to 6, bar up to 2); larger parties return `LARGE_PARTY`.
+Bookings open 60 days ahead.
+
+| Confirmation | Last name | When | Party | Seating | Notes |
+| --- | --- | --- | --- | --- | --- |
+| **TR4K7Q** | Test (Dana) | 3 days after the call, 7:00 PM | 4 | Dining room | Birthday |
+| **TR9X2M** | Lee (Jordan) | 10 days after the call, 6:00 PM | 2 | Patio | High chair |
+
+Cancelling returns `cancelled`, but nothing is stored, so the reservation still lists for the next caller.
