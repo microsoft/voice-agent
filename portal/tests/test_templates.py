@@ -120,6 +120,17 @@ SINGLE_AGENT_TEMPLATES = [
 SINGLE_AGENT_TEMPLATE_IDS = [template_id for template_id, *_ in SINGLE_AGENT_TEMPLATES]
 EXPECTED_TEMPLATES.extend(SINGLE_AGENT_TEMPLATE_IDS)
 MCP_TEMPLATES.extend(SINGLE_AGENT_TEMPLATE_IDS)
+# Voice agent cost advisor: one node on the public no-auth cost-advisor route.
+COST_ADVISOR_TEMPLATE = "voice-agent-cost-advisor"
+COST_ADVISOR_TOOLS = [
+    "cost_recommend_setup",
+    "cost_savings_tips",
+    "cost_price_call",
+    "cost_compare_options",
+    "cost_describe_options",
+]
+EXPECTED_TEMPLATES.append(COST_ADVISOR_TEMPLATE)
+MCP_TEMPLATES.append(COST_ADVISOR_TEMPLATE)
 END_CONVERSATION_TOOL = {"type": "system", "name": "end_conversation"}
 MCP_BASE_URL = (
     "https://voice-agent-noauth-mcp"
@@ -136,6 +147,7 @@ MCP_ROUTES = {
     **{template_id: "/mcp/mock-tool-call" for template_id in SINGLE_AGENT_TEMPLATE_IDS},
     CONFERENCE_TEMPLATE: "/mcp/conference",
     OTP_SHOWCASE_TEMPLATE: "/mcp/ex35-auth-ladder",
+    COST_ADVISOR_TEMPLATE: "/mcp/cost-advisor",
 }
 MOCK_TOOL_PREFIX = "mock_tool_call_"
 
@@ -431,6 +443,50 @@ class TemplateCatalogTests(unittest.TestCase):
         for tool in template_portal.iter_mcp_tools(definition):
             self.assertEqual(server_url, tool["server_url"])
         self.assertEqual(instructions, definition["instructions"])
+
+    def test_cost_advisor_binds_the_cost_advisor_route(self) -> None:
+        catalog = TemplateCatalog()
+        card = next(card for card in catalog.cards() if card["id"] == COST_ADVISOR_TEMPLATE)
+        detail = catalog.detail(COST_ADVISOR_TEMPLATE)
+        source = catalog.source(COST_ADVISOR_TEMPLATE)
+        assert detail is not None and source is not None
+        self.assertTrue(detail["requires_mcp"])
+        self.assertEqual(0, detail["edge_count"])
+        self.assertEqual("public", source.connection_mode)
+        self.assertEqual("example45_voice_agent_cost_advisor", source.path.parent.name)
+        self.assertFalse(card["mock_tools"])
+        agent = json.loads(
+            (ROOT.parent / "samples" / "example45_voice_agent_cost_advisor" / "agent.json").read_text(encoding="utf-8")
+        )
+        authored = agent["definition"]
+        self.assertEqual(COST_ADVISOR_TEMPLATE, agent["name"])
+        self.assertLessEqual(len(agent["description"]), 512)
+        self.assertEqual(
+            ("managed", "gpt-realtime-2.1", False), (authored["model_type"], authored["model"], authored["store"])
+        )
+        self.assertNotIn("handoff", authored)
+        self.assertNotIn("subagent_config", authored)
+        mcp_tools = list(template_portal.iter_mcp_tools(authored))
+        self.assertEqual(1, len(mcp_tools))
+        tool = mcp_tools[0]
+        self.assertEqual(("cost", "", "never"), (tool["server_label"], tool["server_url"], tool["require_approval"]))
+        self.assertEqual(COST_ADVISOR_TOOLS, tool["allowed_tools"])
+        for key in ("project_connection_id", "authorization", "headers"):
+            self.assertNotIn(key, tool)
+        self.assertIn(END_CONVERSATION_TOOL, authored["tools"])
+        instructions = authored["instructions"]
+        mentioned = set(re.findall(r"\bcost_[a-z_]+", instructions))
+        self.assertTrue(mentioned <= set(COST_ADVISOR_TOOLS), mentioned - set(COST_ADVISOR_TOOLS))
+        # The Agent says only numbers from tool results and never recommends what measured calls contradicted.
+        for text in ("You never calculate", "not_recommended", "end_conversation"):
+            self.assertIn(text, instructions)
+        server_url = MCP_BASE_URL + MCP_ROUTES[COST_ADVISOR_TEMPLATE]
+        definition = materialize_template(
+            catalog.document(COST_ADVISOR_TEMPLATE), model="", voice="",
+            mcp_server_url=server_url, mcp_connection_id="", mcp_public=True,
+        )
+        for tool in template_portal.iter_mcp_tools(definition):
+            self.assertEqual(server_url, tool["server_url"])
 
     def test_tool_map_suggestion_and_per_system_rewrite(self) -> None:
         required = [

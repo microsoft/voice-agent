@@ -716,6 +716,22 @@
         "source_label": "Mock tools (shared no-auth MCP)",
         "source_reference": "voice-agent/shared_mcp mock-tool-call"
       }
+    },
+    {
+      "id": "voice-agent-cost-advisor",
+      "folder": "../samples/example45_voice_agent_cost_advisor",
+      "name": "Example 45: Voice Agent Cost Advisor",
+      "target_locale": "en-US",
+      "category": "Developer tools",
+      "summary": "Ask what voice agent calls cost and get the cheapest setup that fits: model, hosting, prompt layout and compaction, with concrete ways to pay less. Every number comes from the cost-advisor MCP route, which runs the cost calculator model and checks each tip against measured calls. Planning estimates, not a quote.",
+      "accent_color": "#6d28d9",
+      "lock_runtime": true,
+      "mcp": {
+        "connection_mode": "public",
+        "server_url": "https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/cost-advisor",
+        "source_label": "Cost advisor (shared no-auth MCP)",
+        "source_reference": "public no-auth MCP cost-advisor route"
+      }
     }
   ]
 }
