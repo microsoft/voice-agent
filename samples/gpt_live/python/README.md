@@ -45,7 +45,7 @@ delegation's final status.
 | `prompt_agent_delegation.py` | Creates a prompt agent first, creates a GPT Live voice agent pinned to it, and runs the shared voice conversation. |
 | `prompt_agent_delegation_tools.py` | Adds a server-executed MCP calculator and a client-executed current date/time function to the managed prompt agent. |
 | `client_delegation.py` | Creates a GPT Live agent with client delegation and answers its delegations in this app. |
-| `managed_model.py` | Creates a GPT Live agent on a managed GPT Live model with a managed Responses backend, noise suppression, and echo cancellation; talks through the microphone or a WAV file. |
+| `managed_model.py` | Creates a GPT Live agent on a managed GPT Live model with a managed Responses backend, a local current date/time function, noise suppression, and echo cancellation; talks through the microphone or a WAV file. |
 | `audio_common.py` | Captures microphone audio and plays the agent's response. |
 | `transcript_common.py` | Independently scrollable GPT Live, Delegation, and User terminal panes. |
 | `../../download_conversation_artifacts.py` | Existing separate downloader for conversation JSON, per-item audio, and merged audio. |
@@ -347,12 +347,26 @@ deployment, the agent names a GPT Live model that Voice Live hosts and bills:
     },
     "output": {"voice": "marin"}
   },
-  "delegation": {"type": "responses", "responses": {"model": "gpt-6.1-sol", "instructions": "..."}},
+  "delegation": {
+    "type": "responses",
+    "responses": {
+      "model": "gpt-6.1-sol",
+      "instructions": "...",
+      "tools": [{
+        "type": "function",
+        "name": "get_current_datetime",
+        "description": "Get the current date and time on the learner's computer, ...",
+        "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": false},
+        "strict": true
+      }]
+    }
+  },
   "store": true
 }
 ```
 
-The greeting and structured inputs are the same as in the other samples (omitted above).
+The greeting and its structured inputs are the same as in the other samples (omitted above; see
+[Greeting and structured inputs](#greeting-and-structured-inputs)).
 
 - `--model` picks the managed model: `gpt-live-1-datazone` (default, data zone) or `gpt-live-1`
   (global). Managed GPT Live is offered in a few regions only; both models were tested in a Central US
@@ -366,6 +380,24 @@ The greeting and structured inputs are the same as in the other samples (omitted
   choice fails with HTTP 400, and the sample prints the service's reason, for example
   `Model 'gpt-4.1' is not a Responses delegation backend of 'gpt-live-1-datazone' in this region.
   Supported: gpt-6.1-sol, gpt-6-luna.`
+
+### Local function on the Responses backend
+
+The Responses backend has one function tool, `get_current_datetime`, which this app runs. GPT Live
+delegates questions about the current date or time, and the backend calls the function. The sample
+then works as in the [prompt-agent tools sample](#managed-prompt-agent-with-mcp-and-local-function-tools):
+
+1. It collects the completed `function_call` from the backend's `response.event` stream.
+2. When the backend's response completes, it reads this computer's clock and sends the result with
+   `connection.response.item.create` (a `function_call_output` item).
+3. It sends one `connection.response.create` so the backend answers with that result, and GPT Live
+   speaks the answer.
+
+Ask **"What is the current date and time?"**. The Delegation pane shows
+`[local function] get_current_datetime() -> {...}` with the local time, timezone, and UTC time,
+followed by the backend's guidance. The function runs only while this sample is connected.
+
+### SDK support
 
 Projects SDK 2.11.0 can create and talk to these agents; two fields are not modeled yet. Its type
 hints allow only `self_deployed` for Live `model_type`, but the SDK sends `"managed"` unchanged.
@@ -381,10 +413,12 @@ To try it without a microphone, speak a 24 kHz mono PCM16 WAV file instead:
 
 The sample streams the file, then keeps sending silence for 20 seconds so the agent can delegate and
 answer. It then ends the session and prints the transcripts and the delegation. Replies are shown, not
-played. A good recording to try is "Please correct my English: I go to school yesterday. Explain why."
+played. Good recordings to try are "Please correct my English: I go to school yesterday. Explain why."
+and "What is the current date and time?"
 
 The agent is kept unless you pass `--auto-delete`. `response_delegation.py` can reconnect to it with
-`AGENT_NAME=<created-agent>`: for a managed agent it skips the deployment check.
+`AGENT_NAME=<created-agent>`, and for a managed agent it skips the deployment check. That client does not
+run `get_current_datetime`, though, so date and time questions get no answer there.
 
 ## Tests
 

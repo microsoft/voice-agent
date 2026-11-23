@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -765,7 +765,23 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             definition["delegation"],
             {
                 "type": "responses",
-                "responses": {"model": "gpt-6-luna", "instructions": direct.BACKEND_INSTRUCTIONS},
+                "responses": {
+                    "model": "gpt-6-luna",
+                    "instructions": direct.BACKEND_INSTRUCTIONS + managed_model.BACKEND_TOOL_INSTRUCTIONS,
+                    # The backend calls this local function; the sample runs it.
+                    "tools": [
+                        {
+                            "type": "function",
+                            "name": "get_current_datetime",
+                            "description": managed_model.datetime_tool().description,
+                            "parameters": {
+                                "type": "object", "properties": {}, "required": [],
+                                "additionalProperties": False,
+                            },
+                            "strict": True,
+                        }
+                    ],
+                },
             },
         )
         self.assertEqual(
@@ -777,6 +793,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertIn("always delegate to the Responses", definition["instructions"])
+        self.assertIn(managed_model.DATETIME_POLICY, definition["instructions"])
         self.assertTrue(definition["store"])
         self.assert_lesson_personalization(definition, model_type="managed")
         # Voice Live hosts the model and its backend; the project has nothing to look up.
@@ -800,6 +817,42 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent["definition"]["model"], "gpt-live-1-datazone")
         self.assertEqual(agent["definition"]["delegation"]["responses"]["model"], "gpt-6.1-sol")
         self.assertEqual(self.project.deleted, [])
+
+    async def test_managed_model_sample_runs_the_backend_function_and_resumes_it(self):
+        clock = {"local_datetime": "2026-11-23T16:52:11+08:00", "timezone": "CST",
+                 "utc_datetime": "2026-11-23T08:52:11+00:00"}
+        delegation = {"id": "delegation-1", "type": "delegation", "target": "responses"}
+        with patch.object(sample, "get_current_datetime", return_value=clock):
+            await self.run_main(
+                direct, managed_model.main,
+                session_events=live_session(
+                    "conversation-clock",
+                    envelope("session.delegation.created", delegation=delegation),
+                    backend("response.created", response={"id": "response-1", "status": "in_progress"}),
+                    backend("response.output_item.done", item=function_call()),
+                    backend("response.completed", response={"id": "response-1", "status": "completed", "output": []}),
+                ),
+                model="gpt-live-1-datazone", backend="gpt-6.1-sol", auto_delete=True,
+            )
+        commands = [command for command in self.received if command["type"] != "session.input_audio.append"]
+        # The function's output goes back to the Responses backend, then one response.create resumes it.
+        self.assertEqual(
+            [(command["type"], command.get("item")) for command in commands[:2]],
+            [
+                ("response.item.create",
+                 {"type": "function_call_output", "call_id": "call-1", "output": json.dumps(clock)}),
+                ("response.create", None),
+            ],
+        )
+        self.assertIn(
+            call(
+                "delegation-1", title="Local function",
+                status="Local function results sent; resuming the Responses backend",
+                delta=f"\n[local function] get_current_datetime() -> {json.dumps(clock)}\n",
+            ),
+            self.transcript.update_agent_activity.call_args_list,
+        )
+        self.assertIn("Conversation id: conversation-clock", self.output)
 
     async def test_managed_model_rejection_shows_the_service_message(self):
         with self.assertRaisesRegex(DemoError, r"Create agent: HTTP 400\. Test failure\."):

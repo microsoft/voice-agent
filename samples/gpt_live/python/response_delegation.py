@@ -475,11 +475,13 @@ async def main(
     reuse_agent_name: bool = True,
     client_executor=None,
     audio_options=None,
+    event_handler=None,
 ):
     """Create the agent from definition_factory, or reuse AGENT_NAME when reuse_agent_name.
 
     audio_options are Audio keyword arguments, for example input_wav to stream a file
-    instead of the microphone.
+    instead of the microphone. event_handler(connection, event, transcript) sees every
+    Live event first, for example to run the backend's local functions.
     """
     base = project_endpoint()
     existing_agent = os.getenv("AGENT_NAME", "").strip() if reuse_agent_name else ""
@@ -565,6 +567,7 @@ async def main(
                             transcript,
                             backend_model,
                             managed_delegation=managed_delegation,
+                            event_handler=event_handler,
                             client_executor=client_executor,
                             # Client delegation has no backend to answer typed messages.
                             typed_input=managed_delegation or delegation.get("type") == "responses",

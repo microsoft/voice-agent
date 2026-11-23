@@ -98,9 +98,15 @@ def execute_function(call):
 
 
 class ManagedToolHandler:
-    """Return local function outputs to Foundry, not directly to the voice model."""
+    """Return local function outputs to the delegated backend, not directly to the voice model.
 
-    def __init__(self):
+    The same protocol serves a Foundry-managed prompt agent and a Responses backend;
+    title and resumes only change what the Delegation pane says.
+    """
+
+    def __init__(self, *, title="Managed prompt-agent tools", resumes="the prompt agent"):
+        self.title = title
+        self.resumes = resumes
         self.response_ids = {}
         self.pending = {}
         self.finished = set()
@@ -156,19 +162,23 @@ class ManagedToolHandler:
             calls = self.pending.pop(key, {})
             if not calls:
                 return
+            results = []
             for call_id, call in calls.items():
                 self.answered.add(call_id)
+                output = execute_function(call)
+                results.append(f"\n[local function] {call.get('name')}() -> {output}\n")
                 await connection.response.item.create(
                     item={
                         "type": "function_call_output",
                         "call_id": call_id,
-                        "output": execute_function(call),
+                        "output": output,
                     }
                 )
             transcript.update_agent_activity(
                 delegation_id,
-                title="Managed prompt-agent tools",
-                status="Local function results sent; resuming the prompt agent",
+                title=self.title,
+                status=f"Local function results sent; resuming {self.resumes}",
+                delta="".join(results),
             )
             await connection.response.create()
 

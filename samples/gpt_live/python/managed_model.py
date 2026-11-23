@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Talk to a GPT Live agent on a managed GPT Live model that Voice Live hosts (model_type=managed)."""
+"""Talk to a GPT Live agent on a managed GPT Live model that Voice Live hosts (model_type=managed).
+
+Its Responses backend can call a local get_current_datetime function, which this app runs.
+"""
 
 from pathlib import Path
 
 from azure.ai.projects.models import (
+    LiveFunctionToolInputParam,
     LiveResponsesDelegationSettingsInputParam,
     VoiceAgentLiveDefinition,
     VoiceAgentLiveResponsesDelegation,
 )
 
 import response_delegation as sample
+from prompt_agent_delegation_tools import DATETIME_TOOL_NAME, ManagedToolHandler
 from response_delegation import (
     BACKEND_INSTRUCTIONS,
     ENGLISH_TEACHER_INSTRUCTIONS,
@@ -32,6 +37,30 @@ VOICE_LIVE_INPUT = {
 }
 # With --input-wav, keep sending silence this long after the file so the agent can answer.
 WAV_TAIL_SECONDS = 20
+# GPT Live hands date/time questions to the backend, and the backend calls the local
+# function, which this app runs on the learner's computer.
+DATETIME_POLICY = (
+    " Also always delegate questions about the current date or time to the backend; it "
+    "reads the learner's computer clock. Do not guess the date or time yourself."
+)
+BACKEND_TOOL_INSTRUCTIONS = (
+    " For the current date or time, always call get_current_datetime and answer from its "
+    "result; its local time and timezone belong to the learner's computer. Never guess "
+    "the date or time. After the result arrives, answer; do not call it again."
+)
+
+
+def datetime_tool():
+    """A no-argument function the backend calls; this app runs it and returns the result."""
+    return LiveFunctionToolInputParam(
+        name=DATETIME_TOOL_NAME,
+        description=(
+            "Get the current date and time on the learner's computer, including its local "
+            "timezone/UTC offset and the corresponding UTC time."
+        ),
+        parameters={"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+        strict=True,
+    )
 
 
 def agent_definition(model=MANAGED_MODELS[0], backend=MANAGED_BACKENDS[0]):
@@ -41,7 +70,7 @@ def agent_definition(model=MANAGED_MODELS[0], backend=MANAGED_BACKENDS[0]):
         # also accepts "managed", and the SDK sends the value unchanged.
         model_type="managed",
         model=model,
-        instructions=ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + RESPONSES_POLICY,
+        instructions=ENGLISH_TEACHER_INSTRUCTIONS + LESSON_CONTEXT + RESPONSES_POLICY + DATETIME_POLICY,
         greeting=lesson_greeting(),
         structured_inputs=lesson_inputs(),
         audio=live_audio(),
@@ -49,7 +78,9 @@ def agent_definition(model=MANAGED_MODELS[0], backend=MANAGED_BACKENDS[0]):
         # deployment in your project. Function tools work there; web search does not.
         delegation=VoiceAgentLiveResponsesDelegation(
             responses=LiveResponsesDelegationSettingsInputParam(
-                model=backend, instructions=BACKEND_INSTRUCTIONS
+                model=backend,
+                instructions=BACKEND_INSTRUCTIONS + BACKEND_TOOL_INSTRUCTIONS,
+                tools=[datetime_tool()],
             )
         ),
         # Persist in Foundry for the shared conversation downloader.
@@ -72,6 +103,8 @@ async def main(*, model, backend, input_wav=None, auto_delete=False, **lesson):
             if input_wav
             else None
         ),
+        # Runs the backend's get_current_datetime calls on this computer and resumes it.
+        event_handler=ManagedToolHandler(title="Local function", resumes="the Responses backend"),
         **lesson,
     )
 
