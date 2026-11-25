@@ -59,6 +59,17 @@ schema validation as MCP errors.
 | `mock_tool_call_restaurant_create_reservation` | | Guest name, E.164 phone, date, time, party size, optional seating, occasion, and special requests; returns a random confirmation number such as `R4K9QZ`; not stored. |
 | `mock_tool_call_restaurant_get_reservation` | | By confirmation number and last name; returns the date, time, party, seating, guest name and phone, and requests. |
 | `mock_tool_call_restaurant_cancel_reservation` | | By confirmation number and last name; returns `cancelled`. |
+| `mock_tool_call_membership_lookup` | Subscription billing (custom tool) | By member number or account email, verified with the card's last four digits (`NOT_FOUND` / `VERIFICATION_FAILED`, never says which part failed). Returns plan, price, status, next billing date, current period end, pause options, and the member's eligible retention offers. |
+| `mock_tool_call_membership_change_plan` | | From the next billing date. `SAME_PLAN`, `PLAN_NOT_AVAILABLE` (annual plans change only at renewal), `PAST_DUE`, `NOT_ACTIVE`. |
+| `mock_tool_call_membership_pause` | | 1 to 3 months from the next billing date. `ALREADY_PAUSED`, `PAUSE_NOT_ELIGIBLE` (annual plan or a pause in the last 12 months), `PAST_DUE`, `NOT_ACTIVE`. |
+| `mock_tool_call_membership_apply_retention_offer` | | Only an `offer_id` that the lookup listed for this member (`OFFER_NOT_ELIGIBLE` otherwise). |
+| `mock_tool_call_membership_cancel` | | At the end of the current period; returns `effective_date` and `access_until`. `ALREADY_CANCELLED`, `PENDING_CANCEL` (with its date). |
+| `mock_tool_call_shipment_track` | Carrier tracking (custom tool) | Status, detail, last scan, estimated date and window. With the matching delivery postal code (`POSTAL_CODE_MISMATCH` otherwise) it adds where a delivered parcel was left and whether a trace can be opened (24 hours after delivery), redelivery dates, pickup points, and the hold end date. |
+| `mock_tool_call_shipment_schedule_redelivery` | | After a missed attempt only (`NOT_ELIGIBLE` with `reason`); one of the next 5 delivery days, Monday to Saturday (`DATE_UNAVAILABLE` with `available_dates`). |
+| `mock_tool_call_shipment_update_delivery` | | `add_instructions`, `hold_at_pickup_point`, or `correct_unit`. `NOT_ALLOWED_BY_SENDER`, `ALREADY_DELIVERED`, `TOO_LATE` (out for delivery: instructions only), `PICKUP_POINT_NOT_FOUND`. |
+| `mock_tool_call_pharmacy_rx_lookup` | Pharmacy system (custom tool) | Rx number, last name, and date of birth must all match (`NOT_FOUND` / `VERIFICATION_FAILED`) before any detail. Returns the medication, refills, earliest refill date, `can_refill_now` with the blocking reason, the prescriber, and any refill in progress. |
+| `mock_tool_call_pharmacy_refill_submit` | | Returns `refill_id` and `ready_by`. `NO_REFILLS_LEFT`, `TOO_SOON`, `CONTROLLED_SUBSTANCE`, `PRESCRIPTION_EXPIRED`, `TRANSFERRED_OUT`, `ALREADY_IN_PROGRESS`. |
+| `mock_tool_call_pharmacy_renewal_request` | | Sends a renewal request to the prescriber. `RENEWAL_ALREADY_PENDING`, `REFILLS_REMAIN`, `TRANSFERRED_OUT`. |
 | `mock_tool_call_quiz_record_result` | | Records a quiz score; returns `record_id` and `passed`. |
 | `mock_tool_call_training_record_session` | | Records a role-play debrief with four 1-5 scores. |
 | `mock_tool_call_research_save_interview_notes` | | Saves a recap only when `consent_given` is true. |
@@ -196,3 +207,56 @@ Bookings open 60 days ahead.
 | **TR9X2M** | Lee (Jordan) | 10 days after the call, 6:00 PM | 2 | Patio | High chair |
 
 Cancelling returns `cancelled`, but nothing is stored, so the reservation still lists for the next caller.
+
+### Memberships (Contoso Fitness Club)
+
+Plans: Basic $29, Plus $49, Premium $79 a month; Premium annual $790. Dates are relative to the call; the
+current period ends the day before the next billing date. Verify with the member number or email plus the
+card's last four digits.
+
+| Member | Email | Card last 4 | Plan and state | Try |
+| --- | --- | --- | --- | --- |
+| **M-204518** Dana Test | `dana.test20261020@example.com` | 4417 | Plus, active, next bill in 9 days | Change, pause 1-3 months, offers `OFFER-DOWN-BASIC` and `OFFER-50OFF-2M`, cancel |
+| **M-204519** Jordan Lee | `jordan.lee@example.com` | 8823 | Premium annual, renews in 40 days | Pause `PAUSE_NOT_ELIGIBLE`, change `PLAN_NOT_AVAILABLE`, only `OFFER-DOWN-PLUS-AT-RENEWAL` |
+| **M-204520** Sam Quinn | `sam.quinn@example.com` | 1209 | Plus, paused for 20 more days | Pause `ALREADY_PAUSED` |
+| **M-204521** Rose Gonzalez | `rose@edge.com` | 3390 | Basic, past due | Change `PAST_DUE` |
+| **M-204522** Tim Barr | `barr_tim@grandhotels.com` | 7001 | Cancelled 60 days ago | Cancel `ALREADY_CANCELLED` |
+| **M-204523** Megan Bowen | `meganb@contoso.com` | 5150 | Premium, cancellation scheduled in 5 days | Cancel `PENDING_CANCEL` |
+
+### Shipments (Contoso Parcel)
+
+Deliveries Monday to Saturday. Redelivery: the next 5 delivery days, 12:00-6:00 PM. Holds last 5 days.
+Times are local (Pacific) and relative to the call.
+
+| Tracking | Postal code | State | Try |
+| --- | --- | --- | --- |
+| **CP10447201** | 98052 | Out for delivery today, 2:00-6:00 PM | Hold `TOO_LATE`; instructions ok |
+| **CP10447202** | 98101 | Delivery attempted yesterday, signature required | Redelivery (Sunday `DATE_UNAVAILABLE`); hold at `PP-1021` Pike Street |
+| **CP10447203** | 98004 | Exception: unit number missing | `correct_unit` |
+| **CP10447204** | 98052 | Delivered 2 days ago, 1:14 PM, front door, photo | Location only with the postal code; trace eligible |
+| **CP10447205** | 98033 | In transit, weather delay, new estimate in 2 days | Status |
+| **CP10447206** | 98052 | Label created, not yet handed over by the sender | Status |
+| **CP10447207** | 98101 | Held at `PP-1021` for 3 more days | Pickup point and hold date with the postal code |
+| **CP10447208** | 98004 | Returned to the sender | Redelivery `NOT_ELIGIBLE` |
+| **CP10447209** | 98052 | In transit; the sender doesn't allow changes | Update `NOT_ALLOWED_BY_SENDER` |
+| **CP10447210** | 98052 | Delivered 3 hours ago, front porch | Not yet trace eligible |
+
+### Pharmacy (Contoso Pharmacy, 120 Pine Street)
+
+Open Monday to Friday 9 AM-9 PM, Saturday 9 AM-6 PM, Sunday 10 AM-5 PM (Pacific). A refill submitted before
+5 PM is ready 4 hours later (rounded up to the half hour) if the store is still open; otherwise the next day
+at 11 AM. A refill is due once 75% of the days' supply has passed. Patients: Dana Test (born 1990-02-14),
+Jordan Lee (1985-03-14), Sam Quinn (1992-07-30).
+
+| Rx | Patient | Medication | Try |
+| --- | --- | --- | --- |
+| **6010231** | Dana Test | Atorvastatin 20 mg, 3 refills | Refill ok |
+| **6010232** | Dana Test | Lisinopril 10 mg, no refills | `NO_REFILLS_LEFT`, renewal ok (Dr. Avery Rivera) |
+| **6010233** | Dana Test | Metformin 500 mg, refill `RF-20417` in progress | `ALREADY_IN_PROGRESS` |
+| **6020418** | Jordan Lee | Sertraline 50 mg, filled 10 days ago | `TOO_SOON` (due in 13 days) |
+| **6020419** | Jordan Lee | Oxycodone 5 mg, Schedule II | `CONTROLLED_SUBSTANCE`, renewal ok |
+| **6030555** | Sam Quinn | Levothyroxine 50 mcg | `TRANSFERRED_OUT` |
+| **6030556** | Sam Quinn | Amlodipine 5 mg, expired 60 days ago | `PRESCRIPTION_EXPIRED`, renewal ok |
+| **6030557** | Sam Quinn | Omeprazole 20 mg, renewal `RN-30112` pending | Renewal `RENEWAL_ALREADY_PENDING` |
+
+Writes are not stored: a cancelled membership, a redelivery, or a refill does not change a later lookup.

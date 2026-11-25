@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import random
 import re
 from datetime import date, datetime, time, timedelta, timezone
@@ -1077,6 +1078,521 @@ class MockToolCallService:
             return self._fail(tool, "RESERVATION_NOT_FOUND", "No reservation matches that confirmation number and last name.")
         return self._ok(tool, confirmation_number=reservation["confirmation_number"], status="cancelled")
 
+    # ------------------------------------------------------------ shared ids
+
+    def _today_fields(self) -> dict[str, str]:
+        today = self._today()
+        return {"today": today.isoformat(), "today_weekday": WEEKDAYS[today.weekday()]}
+
+    def _new_id(self, prefix: str) -> str:
+        return f"{prefix}-{self._rng.randrange(10000, 100000)}"
+
+    def _day(self, offset: int | None) -> str | None:
+        return None if offset is None else (self._today() + timedelta(days=offset)).isoformat()
+
+    # ------------------------------------------------------------ membership
+
+    def _plan(self, plan_id: str) -> dict[str, Any]:
+        return next(p for p in self._fixtures["memberships"]["plans"] if p["plan_id"] == plan_id)
+
+    def _member(self, member_id: str, email: str, card_last4: str) -> tuple[dict[str, Any] | None, str | None]:
+        """The member matching the identifier AND the card's last four digits, else a failure code that never says which part failed."""
+        members = self._fixtures["memberships"]["members"]
+        wanted_id = re.sub(r"[^0-9A-Z]", "", member_id.upper())
+        if wanted_id.isdigit():
+            wanted_id = "M" + wanted_id
+        wanted_email = email.strip().lower()
+        if not wanted_id and not wanted_email:
+            raise ValueError("Give the member_id or the account email, plus card_last4.")
+        by_id = next((m for m in members if m["member_id"].replace("-", "") == wanted_id), None) if wanted_id else None
+        by_email = next((m for m in members if m["email"].lower() == wanted_email), None) if wanted_email else None
+        member = by_id or by_email
+        if member is None:
+            return None, "NOT_FOUND"
+        if wanted_id and wanted_email and by_id is not by_email:
+            return None, "VERIFICATION_FAILED"
+        if re.sub(r"\D", "", card_last4) != member["card_last4"]:
+            return None, "VERIFICATION_FAILED"
+        return member, None
+
+    def _member_failure(self, tool: str, code: str) -> dict[str, Any]:
+        message = "No membership matches those details." if code == "NOT_FOUND" else "Those details don't match a membership."
+        return self._fail(tool, code, message, **self._today_fields())
+
+    def _period_end(self, member: dict[str, Any]) -> int:
+        if member["status"] == "pending_cancel":
+            return member["cancel_effective_days"]
+        if member["status"] == "cancelled":
+            return -member["cancelled_days_ago"]
+        return member["next_billing_days"] - 1
+
+    def _pause_block(self, member: dict[str, Any]) -> tuple[str, str] | None:
+        status = member["status"]
+        if status == "paused":
+            return "ALREADY_PAUSED", f"The membership is already paused until {self._day(member['next_billing_days'])}."
+        if status in ("cancelled", "pending_cancel"):
+            return "NOT_ACTIVE", "The membership is not active."
+        if status == "past_due":
+            return "PAST_DUE", "The membership has a past-due balance; it must be paid in the app first."
+        if self._plan(member["plan_id"])["billing_cycle"] == "annual":
+            return "PAUSE_NOT_ELIGIBLE", "Annual plans can't be paused."
+        used = member.get("pause_used_days_ago")
+        if used is not None and used < 365:
+            return "PAUSE_NOT_ELIGIBLE", "A pause was already used in the last 12 months."
+        return None
+
+    def _offers(self, member: dict[str, Any]) -> list[dict[str, Any]]:
+        offers = {o["offer_id"]: o for o in self._fixtures["memberships"]["offers"]}
+        return [offers[offer_id] for offer_id in member["eligible_offer_ids"]]
+
+    def _member_view(self, member: dict[str, Any]) -> dict[str, Any]:
+        plan = self._plan(member["plan_id"])
+        status = member["status"]
+        view: dict[str, Any] = {
+            "member_id": member["member_id"],
+            "first_name": member["first_name"],
+            "plan_id": plan["plan_id"],
+            "plan_name": plan["plan_name"],
+            "billing_cycle": plan["billing_cycle"],
+            "price_usd": plan["price_usd"],
+            "status": status,
+            "next_billing_date": self._day(member["next_billing_days"]),
+            "current_period_end": self._day(self._period_end(member)),
+            "paused_until": self._day(member["next_billing_days"]) if status == "paused" else None,
+            "member_since": self._day(-member["member_since_days_ago"]),
+            "card_last4": member["card_last4"],
+            "pause_options": [] if self._pause_block(member) else [1, 2, 3],
+            "eligible_offers": [
+                {key: offer[key] for key in ("offer_id", "kind", "description", "months", "price_usd")}
+                for offer in self._offers(member)
+            ],
+        }
+        if status == "past_due":
+            view["payment_failed_on"] = self._day(-member["payment_failed_days_ago"])
+            view["amount_due_usd"] = plan["price_usd"]
+        if status == "cancelled":
+            view["cancelled_on"] = self._day(-member["cancelled_days_ago"])
+        if status == "pending_cancel":
+            view["cancellation_effective_date"] = self._day(member["cancel_effective_days"])
+        return view
+
+    def membership_lookup(self, member_id: str, email: str, card_last4: str) -> dict[str, Any]:
+        tool = "membership_lookup"
+        member, code = self._member(member_id, email, card_last4)
+        if member is None:
+            return self._member_failure(tool, code or "NOT_FOUND")
+        return self._ok(tool, **self._today_fields(), member=self._member_view(member))
+
+    def membership_change_plan(self, member_id: str, card_last4: str, new_plan_id: str) -> dict[str, Any]:
+        tool = "membership_change_plan"
+        member, code = self._member(member_id, "", card_last4)
+        if member is None:
+            return self._member_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        current, target = self._plan(member["plan_id"]), self._plan(new_plan_id)
+        if member["status"] in ("cancelled", "pending_cancel"):
+            return self._fail(tool, "NOT_ACTIVE", "The membership is not active.", **today)
+        if member["status"] == "past_due":
+            return self._fail(tool, "PAST_DUE", "The membership has a past-due balance; it must be paid in the app first.", **today)
+        if current["plan_id"] == target["plan_id"]:
+            return self._fail(tool, "SAME_PLAN", f"The member is already on {current['plan_name']}.", **today)
+        if current["billing_cycle"] == "annual":
+            return self._fail(
+                tool, "PLAN_NOT_AVAILABLE",
+                f"An annual plan can change only when it renews on {self._day(member['next_billing_days'])}.", **today,
+            )
+        return self._ok(
+            tool, **today, change_id=self._new_id("CHG"), previous_plan_name=current["plan_name"],
+            new_plan_id=target["plan_id"], new_plan_name=target["plan_name"], new_price_usd=target["price_usd"],
+            billing_cycle=target["billing_cycle"], effective_date=self._day(member["next_billing_days"]),
+        )
+
+    def membership_pause(self, member_id: str, card_last4: str, months: int) -> dict[str, Any]:
+        tool = "membership_pause"
+        member, code = self._member(member_id, "", card_last4)
+        if member is None:
+            return self._member_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        blocked = self._pause_block(member)
+        if blocked:
+            return self._fail(tool, blocked[0], blocked[1], **today)
+        start = self._today() + timedelta(days=member["next_billing_days"])
+        return self._ok(
+            tool, **today, pause_id=self._new_id("PSE"), months=months, pause_start=start.isoformat(),
+            resume_date=_add_months(start, months).isoformat(), charge_during_pause_usd=0.0,
+        )
+
+    def membership_apply_retention_offer(self, member_id: str, card_last4: str, offer_id: str) -> dict[str, Any]:
+        tool = "membership_apply_retention_offer"
+        member, code = self._member(member_id, "", card_last4)
+        if member is None:
+            return self._member_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        if member["status"] in ("cancelled", "pending_cancel"):
+            return self._fail(tool, "NOT_ACTIVE", "The membership is not active.", **today)
+        offer = next((o for o in self._offers(member) if o["offer_id"] == offer_id.strip().upper()), None)
+        if offer is None:
+            return self._fail(tool, "OFFER_NOT_ELIGIBLE", "That offer is not available for this membership.", **today)
+        effective = self._today() + timedelta(days=member["next_billing_days"])
+        ends_on = _add_months(effective, offer["months"]) - timedelta(days=1) if offer["months"] else None
+        return self._ok(
+            tool, **today, applied=True, offer_id=offer["offer_id"], kind=offer["kind"],
+            description=offer["description"], new_price_usd=offer["price_usd"], effective_date=effective.isoformat(),
+            ends_on=ends_on.isoformat() if ends_on else None,
+        )
+
+    def membership_cancel(self, member_id: str, card_last4: str, reason: str, note: str) -> dict[str, Any]:
+        tool = "membership_cancel"
+        member, code = self._member(member_id, "", card_last4)
+        if member is None:
+            return self._member_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        if member["status"] == "cancelled":
+            return self._fail(
+                tool, "ALREADY_CANCELLED", "The membership is already cancelled.", **today,
+                cancelled_on=self._day(-member["cancelled_days_ago"]),
+            )
+        if member["status"] == "pending_cancel":
+            effective = self._day(member["cancel_effective_days"])
+            return self._fail(
+                tool, "PENDING_CANCEL", f"A cancellation is already scheduled for {effective}.", **today,
+                effective_date=effective,
+            )
+        end = self._day(self._period_end(member))
+        return self._ok(
+            tool, **today, cancellation_id=self._new_id("CXL"), reason=reason, effective_date=end,
+            access_until=end, renewal_stopped=True,
+        )
+
+    # ------------------------------------------------------------- shipments
+
+    def _parcel(self, tracking_number: str) -> dict[str, Any] | None:
+        key = re.sub(r"[^0-9A-Z]", "", tracking_number.upper())
+        return next((p for p in self._fixtures["shipments"]["parcels"] if p["tracking_number"] == key), None)
+
+    @staticmethod
+    def _postal_matches(parcel: dict[str, Any], postal_code: str) -> bool:
+        return re.sub(r"\D", "", postal_code)[:5] == parcel["postal_code"]
+
+    def _now_local(self) -> datetime:
+        return self._clock().astimezone(self._zone(self._user_zone_name))
+
+    def _delivery_days(self, count: int) -> list[date]:
+        """The next `count` delivery days (Monday to Saturday) after today."""
+        days, current = [], self._today()
+        while len(days) < count:
+            current += timedelta(days=1)
+            if current.weekday() != 6:
+                days.append(current)
+        return days
+
+    def _moment(self, event: dict[str, Any]) -> datetime:
+        if "hours_ago" in event:
+            return (self._now_local() - timedelta(hours=event["hours_ago"])).replace(second=0, microsecond=0)
+        day = self._today() - timedelta(days=event["days_ago"])
+        return datetime.combine(day, time.fromisoformat(event["time"]), self._now_local().tzinfo)
+
+    def _area_points(self, parcel: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {key: point[key] for key in ("pickup_point_id", "name", "hours")}
+            for point in self._fixtures["shipments"]["pickup_points"] if point["postal_code"] == parcel["postal_code"]
+        ]
+
+    def _parcel_view(self, parcel: dict[str, Any], verified: bool) -> dict[str, Any]:
+        config = self._fixtures["shipments"]
+        last = self._moment(parcel["last_event"])
+        window = parcel["delivery_window"]
+        view: dict[str, Any] = {
+            "tracking_number": parcel["tracking_number"],
+            "carrier": config["carrier"],
+            "status": parcel["status"],
+            "status_detail": parcel["status_detail"],
+            "exception_code": parcel["exception_code"],
+            "last_event": {"date": last.date().isoformat(), "time": last.strftime("%H:%M"), "city": parcel["last_event"]["city"]},
+            "estimated_delivery_date": self._day(parcel["estimated_delivery_days"]),
+            "delivery_window": {"start": window[0], "end": window[1]} if window else None,
+            "signature_required": parcel["signature_required"],
+            "redelivery_eligible": parcel["status"] == "delivery_attempted",
+            "sender_allows_changes": parcel["changes_allowed"],
+            "address_verified": verified,
+        }
+        if not verified:
+            return view
+        if parcel.get("delivered"):
+            moment = self._moment(parcel["delivered"])
+            trace_from = moment + timedelta(hours=config["trace_after_hours"])
+            view["delivered"] = {
+                "date": moment.date().isoformat(),
+                "time": moment.strftime("%H:%M"),
+                "location": parcel["delivered"]["location"],
+                "photo_available": parcel["delivered"]["photo_available"],
+                "trace_eligible": self._now_local() >= trace_from,
+                "trace_available_from": {"date": trace_from.date().isoformat(), "time": trace_from.strftime("%H:%M")},
+            }
+        if parcel["status"] == "delivery_attempted":
+            view["redelivery_dates"] = [d.isoformat() for d in self._delivery_days(config["redelivery_days"])]
+            view["redelivery_window"] = {"start": config["redelivery_window"][0], "end": config["redelivery_window"][1]}
+        if parcel["status"] == "held_at_pickup_point":
+            view["pickup_points"] = [p for p in self._area_points(parcel) if p["pickup_point_id"] == parcel["held_at"]]
+            view["hold_until"] = self._day(parcel["hold_until_days"])
+        elif parcel["status"] not in ("delivered", "returned_to_sender"):
+            view["pickup_points"] = self._area_points(parcel)
+        return view
+
+    def _parcel_for_change(self, tool: str, tracking_number: str, postal_code: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        parcel = self._parcel(tracking_number)
+        if parcel is None:
+            return None, self._fail(tool, "NOT_FOUND", "No shipment matches that tracking number.", **self._today_fields())
+        if not self._postal_matches(parcel, postal_code):
+            return None, self._fail(
+                tool, "POSTAL_CODE_MISMATCH", "Those details don't match the shipment.", **self._today_fields(),
+            )
+        return parcel, None
+
+    def shipment_track(self, tracking_number: str, postal_code: str) -> dict[str, Any]:
+        tool = "shipment_track"
+        parcel = self._parcel(tracking_number)
+        if parcel is None:
+            return self._fail(tool, "NOT_FOUND", "No shipment matches that tracking number.", **self._today_fields(), shipment=None)
+        verified = False
+        if postal_code.strip():
+            if not self._postal_matches(parcel, postal_code):
+                return self._fail(
+                    tool, "POSTAL_CODE_MISMATCH", "Those details don't match the shipment.", **self._today_fields(),
+                    shipment=None,
+                )
+            verified = True
+        return self._ok(tool, **self._today_fields(), shipment=self._parcel_view(parcel, verified))
+
+    def shipment_schedule_redelivery(self, tracking_number: str, postal_code: str, day: str) -> dict[str, Any]:
+        tool = "shipment_schedule_redelivery"
+        parcel, failure = self._parcel_for_change(tool, tracking_number, postal_code)
+        if failure:
+            return failure
+        today = self._today_fields()
+        if parcel["status"] != "delivery_attempted":
+            reason = {
+                "delivered": "delivered", "returned_to_sender": "returned", "held_at_pickup_point": "held",
+            }.get(parcel["status"], "not_attempted")
+            return self._fail(tool, "NOT_ELIGIBLE", "Redelivery is only for a missed delivery attempt.", **today, reason=reason)
+        config = self._fixtures["shipments"]
+        dates = self._delivery_days(config["redelivery_days"])
+        available = [d.isoformat() for d in dates]
+        try:
+            wanted = date.fromisoformat(day.strip())
+        except ValueError:
+            wanted = None
+        if wanted not in dates:
+            message = "We don't deliver on Sundays." if wanted and wanted.weekday() == 6 else (
+                f"Redelivery is possible on the next {config['redelivery_days']} delivery days."
+            )
+            return self._fail(tool, "DATE_UNAVAILABLE", message, **today, available_dates=available)
+        return self._ok(
+            tool, **today, redelivery_id=self._new_id("RD"), tracking_number=parcel["tracking_number"],
+            date=wanted.isoformat(), weekday=WEEKDAYS[wanted.weekday()],
+            window={"start": config["redelivery_window"][0], "end": config["redelivery_window"][1]},
+            signature_required=parcel["signature_required"],
+        )
+
+    def shipment_update_delivery(
+        self,
+        tracking_number: str,
+        postal_code: str,
+        action: str,
+        instructions: str,
+        pickup_point_id: str,
+        unit: str,
+    ) -> dict[str, Any]:
+        tool = "shipment_update_delivery"
+        parcel, failure = self._parcel_for_change(tool, tracking_number, postal_code)
+        if failure:
+            return failure
+        today = self._today_fields()
+        status = parcel["status"]
+        if status == "delivered":
+            return self._fail(tool, "ALREADY_DELIVERED", "The parcel was already delivered.", **today)
+        if status == "returned_to_sender":
+            return self._fail(tool, "TOO_LATE", "The parcel was returned to the sender.", **today)
+        if not parcel["changes_allowed"]:
+            return self._fail(tool, "NOT_ALLOWED_BY_SENDER", "The sender doesn't allow delivery changes for this parcel.", **today)
+        if status == "held_at_pickup_point":
+            return self._fail(tool, "TOO_LATE", "The parcel is already held at a pickup point.", **today)
+        if status == "out_for_delivery" and action != "add_instructions":
+            return self._fail(
+                tool, "TOO_LATE", "The parcel is out for delivery; only delivery instructions can be added now.", **today,
+            )
+        change: dict[str, Any] = {"change_id": self._new_id("DC"), "action": action, "applies_to": "next delivery attempt"}
+        if action == "add_instructions":
+            if not instructions.strip():
+                raise ValueError("instructions are required for add_instructions.")
+            change["summary"] = f"Delivery instructions added: {instructions.strip()}"
+        elif action == "correct_unit":
+            if not unit.strip():
+                raise ValueError("unit is required for correct_unit.")
+            change["summary"] = f"Apartment or unit {unit.strip()} added to the delivery address."
+        else:
+            wanted = pickup_point_id.strip().lower()
+            point = next(
+                (p for p in self._area_points(parcel)
+                 if wanted and (p["pickup_point_id"].lower() == wanted or wanted in p["name"].lower())),
+                None,
+            )
+            if point is None:
+                return self._fail(
+                    tool, "PICKUP_POINT_NOT_FOUND", "That pickup point isn't available for this parcel.", **today,
+                    pickup_points=self._area_points(parcel),
+                )
+            ready = self._delivery_days(1)[0]
+            change.update(
+                summary=f"Held at {point['name']}.", applies_to="hold at pickup point", pickup_point=point,
+                available_from=ready.isoformat(),
+                hold_until=(ready + timedelta(days=self._fixtures["shipments"]["hold_days"])).isoformat(),
+            )
+        return self._ok(tool, **today, tracking_number=parcel["tracking_number"], **change)
+
+    # -------------------------------------------------------------- pharmacy
+
+    def _prescription(self, rx_number: str, last_name: str, date_of_birth: str) -> tuple[dict[str, Any] | None, str | None]:
+        """The prescription only when the Rx number, last name, and date of birth all match; never says which part failed."""
+        config = self._fixtures["pharmacy"]
+        rx = next((r for r in config["prescriptions"] if r["rx_number"] == re.sub(r"\D", "", rx_number)), None)
+        if rx is None:
+            return None, "NOT_FOUND"
+        patient = next(p for p in config["patients"] if p["last_name"] == rx["last_name"])
+        try:
+            birth = date.fromisoformat(date_of_birth.strip()).isoformat()
+        except ValueError:
+            birth = ""
+        if last_name.strip().lower() != patient["last_name"].lower() or birth != patient["date_of_birth"]:
+            return None, "VERIFICATION_FAILED"
+        return {**rx, "patient_first_name": patient["first_name"]}, None
+
+    def _rx_failure(self, tool: str, code: str) -> dict[str, Any]:
+        message = "No prescription matches that number." if code == "NOT_FOUND" else "Those details don't match a prescription."
+        return self._fail(tool, code, message, **self._today_fields())
+
+    def _queued_ready_by(self, refill: dict[str, Any]) -> dict[str, str]:
+        """The fixed ready time of a refill queued before the call (fixture day offset and time), stable across lookups."""
+        ready = self._today() + timedelta(days=refill["ready_in_days"])
+        return {"date": ready.isoformat(), "weekday": WEEKDAYS[ready.weekday()], "time": refill["ready_time"]}
+
+    def _ready_by(self) -> dict[str, str]:
+        """When a refill queued now is ready: before the cutoff in a few hours, otherwise the next day at a fixed time."""
+        config = self._fixtures["pharmacy"]
+        now = self._now_local().replace(second=0, microsecond=0)
+        hours = config["hours"][WEEKDAYS[now.weekday()]]
+        opens = datetime.combine(now.date(), time.fromisoformat(hours[0]), now.tzinfo)
+        closes = datetime.combine(now.date(), time.fromisoformat(hours[1]), now.tzinfo)
+        cutoff = datetime.combine(now.date(), time.fromisoformat(config["same_day_cutoff"]), now.tzinfo)
+        ready = None
+        if now < cutoff:
+            ready = max(now, opens) + timedelta(hours=config["ready_hours"])
+            ready += timedelta(minutes=(30 - ready.minute % 30) % 30)
+            if ready > closes:
+                ready = None
+        if ready is None:
+            ready = datetime.combine(now.date() + timedelta(days=1), time.fromisoformat(config["next_day_ready"]), now.tzinfo)
+        return {"date": ready.date().isoformat(), "weekday": WEEKDAYS[ready.weekday()], "time": ready.strftime("%H:%M")}
+
+    def _earliest_refill(self, rx: dict[str, Any]) -> date:
+        fraction = self._fixtures["pharmacy"]["refill_after_fraction"]
+        last_fill = self._today() - timedelta(days=rx["last_fill_days_ago"])
+        return last_fill + timedelta(days=math.ceil(rx["days_supply"] * fraction))
+
+    def _refill_block(self, rx: dict[str, Any]) -> tuple[str, str] | None:
+        if rx["status"] == "transferred":
+            return "TRANSFERRED_OUT", "This prescription was transferred to another pharmacy."
+        if rx["status"] == "expired":
+            return "PRESCRIPTION_EXPIRED", "This prescription has expired; the prescriber must renew it."
+        if rx["controlled_schedule"] == "II":
+            return "CONTROLLED_SUBSTANCE", "Schedule II prescriptions can't be refilled; the prescriber must send a new prescription."
+        if rx.get("in_progress_refill"):
+            return "ALREADY_IN_PROGRESS", "A refill for this prescription is already in progress."
+        if rx["refills_remaining"] <= 0:
+            return "NO_REFILLS_LEFT", "No refills are left on this prescription."
+        if self._earliest_refill(rx) > self._today():
+            return "TOO_SOON", "It's too soon to refill this prescription."
+        return None
+
+    def _rx_view(self, rx: dict[str, Any]) -> dict[str, Any]:
+        blocked = self._refill_block(rx)
+        in_progress = rx.get("in_progress_refill")
+        view = {
+            "rx_number": rx["rx_number"],
+            "patient_first_name": rx["patient_first_name"],
+            "drug_name": rx["drug_name"],
+            "strength": rx["strength"],
+            "form": rx["form"],
+            "quantity": rx["quantity"],
+            "days_supply": rx["days_supply"],
+            "refills_remaining": rx["refills_remaining"],
+            "last_fill_date": self._day(-rx["last_fill_days_ago"]),
+            "earliest_refill_date": self._earliest_refill(rx).isoformat(),
+            "status": rx["status"],
+            "expired_on": self._day(-rx["expired_days_ago"]) if rx.get("expired_days_ago") is not None else None,
+            "controlled_schedule": rx["controlled_schedule"],
+            "prescriber_name": rx["prescriber_name"],
+            "in_progress_refill": {"refill_id": in_progress["refill_id"], "ready_by": self._queued_ready_by(in_progress)} if in_progress else None,
+            "pending_renewal": rx.get("pending_renewal"),
+            "can_refill_now": blocked is None,
+            "refill_blocked_reason": blocked[0] if blocked else None,
+        }
+        return view
+
+    def pharmacy_rx_lookup(self, rx_number: str, last_name: str, date_of_birth: str) -> dict[str, Any]:
+        tool = "pharmacy_rx_lookup"
+        rx, code = self._prescription(rx_number, last_name, date_of_birth)
+        if rx is None:
+            return self._rx_failure(tool, code or "NOT_FOUND")
+        return self._ok(tool, **self._today_fields(), rx=self._rx_view(rx), store=self._fixtures["pharmacy"]["store"])
+
+    def pharmacy_refill_submit(self, rx_number: str, last_name: str, date_of_birth: str, pickup_date: str) -> dict[str, Any]:
+        tool = "pharmacy_refill_submit"
+        rx, code = self._prescription(rx_number, last_name, date_of_birth)
+        if rx is None:
+            return self._rx_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        if pickup_date.strip():
+            wanted = date.fromisoformat(pickup_date.strip())
+            if wanted < self._today():
+                raise ValueError("pickup_date is in the past.")
+        blocked = self._refill_block(rx)
+        if blocked:
+            extra: dict[str, Any] = {}
+            if blocked[0] == "TOO_SOON":
+                extra["earliest_refill_date"] = self._earliest_refill(rx).isoformat()
+            if blocked[0] == "ALREADY_IN_PROGRESS":
+                extra.update(refill_id=rx["in_progress_refill"]["refill_id"], ready_by=self._queued_ready_by(rx["in_progress_refill"]))
+            if blocked[0] in ("NO_REFILLS_LEFT", "PRESCRIPTION_EXPIRED", "CONTROLLED_SUBSTANCE"):
+                extra["prescriber_name"] = rx["prescriber_name"]
+            return self._fail(tool, blocked[0], blocked[1], **today, **extra)
+        store = self._fixtures["pharmacy"]["store"]
+        return self._ok(
+            tool, **today, refill_id=self._new_id("RF"), rx_number=rx["rx_number"], ready_by=self._ready_by(),
+            pickup_date=pickup_date.strip() or None, pickup_location=f"{store['name']}, {store['address']}",
+            refills_remaining_after=rx["refills_remaining"] - 1,
+        )
+
+    def pharmacy_renewal_request(self, rx_number: str, last_name: str, date_of_birth: str, note: str) -> dict[str, Any]:
+        tool = "pharmacy_renewal_request"
+        rx, code = self._prescription(rx_number, last_name, date_of_birth)
+        if rx is None:
+            return self._rx_failure(tool, code or "NOT_FOUND")
+        today = self._today_fields()
+        if rx["status"] == "transferred":
+            return self._fail(tool, "TRANSFERRED_OUT", "This prescription was transferred to another pharmacy.", **today)
+        if rx.get("pending_renewal"):
+            return self._fail(
+                tool, "RENEWAL_ALREADY_PENDING", "A renewal request was already sent to the prescriber.", **today,
+                renewal_id=rx["pending_renewal"]["renewal_id"], prescriber_name=rx["prescriber_name"],
+            )
+        if rx["status"] == "active" and rx["controlled_schedule"] != "II" and rx["refills_remaining"] > 0:
+            return self._fail(tool, "REFILLS_REMAIN", "Refills are left on this prescription; request a refill instead.", **today)
+        return self._ok(
+            tool, **today, renewal_id=self._new_id("RN"), rx_number=rx["rx_number"],
+            prescriber_name=rx["prescriber_name"], sent_via="electronic", typical_response_business_days=2,
+        )
+
     # ------------------------------------------------- coaching and research
 
     def _record(self, tool: str, prefix: str) -> dict[str, Any]:
@@ -1135,6 +1651,13 @@ def _add_business_days(start: date, days: int) -> date:
         if current.weekday() < 5:
             days -= 1
     return current
+
+
+def _add_months(start: date, months: int) -> date:
+    month = start.month - 1 + months
+    year, month = start.year + month // 12, month % 12 + 1
+    days = [31, 29 if year % 4 == 0 and (year % 100 or year % 400 == 0) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    return date(year, month, min(start.day, days[month - 1]))
 
 
 def _base36(number: int) -> str:

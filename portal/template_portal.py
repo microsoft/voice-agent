@@ -351,6 +351,9 @@ TOOL_GROUPS = (
     ToolGroup("catalog", "Product catalog", re.compile(r"^mock_tool_call_(product|cart)_")),
     ToolGroup("orders", "Order system", re.compile(r"^mock_tool_call_order_")),
     ToolGroup("reservations", "Reservation system", re.compile(r"^mock_tool_call_(hotel|restaurant)_")),
+    ToolGroup("membership", "Subscription billing", re.compile(r"^mock_tool_call_membership_")),
+    ToolGroup("carrier", "Carrier tracking", re.compile(r"^mock_tool_call_shipment_")),
+    ToolGroup("pharmacy", "Pharmacy system", re.compile(r"^mock_tool_call_pharmacy_")),
     ToolGroup("records", "Learning and research records", re.compile(r"^mock_tool_call_(quiz|training|research)_")),
 )
 OTHER_TOOL_GROUP = ToolGroup("other", "Other tools", re.compile(""))

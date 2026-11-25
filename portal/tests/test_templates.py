@@ -116,6 +116,9 @@ SINGLE_AGENT_TEMPLATES = [
     ("ecommerce-shopping-assistant-example", "example42_ecommerce_shopping_assistant", ["zendesk", "catalog", "orders"]),
     ("hospitality-concierge-example", "example43_hospitality_concierge", ["zendesk", "twilio"]),
     ("restaurant-host-example", "example44_restaurant_host", ["twilio", "reservations"]),
+    ("membership-subscription-support-example", "example46_membership_subscription_support", ["membership"]),
+    ("delivery-shipment-status-example", "example47_delivery_shipment_status", ["zendesk", "twilio", "carrier"]),
+    ("pharmacy-prescription-refill-example", "example48_pharmacy_prescription_refill", ["zendesk", "twilio", "pharmacy"]),
 ]
 SINGLE_AGENT_TEMPLATE_IDS = [template_id for template_id, *_ in SINGLE_AGENT_TEMPLATES]
 EXPECTED_TEMPLATES.extend(SINGLE_AGENT_TEMPLATE_IDS)

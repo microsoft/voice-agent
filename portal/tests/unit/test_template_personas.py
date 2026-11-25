@@ -67,7 +67,7 @@ class TestTemplatePersonas:
             "en-US-Andrew:DragonHDOmniLatestNeural",
         }
         paths = sorted(SAMPLES.glob("example*/agent.json"))
-        assert len(paths) == 45
+        assert len(paths) == 49
         for path in paths:
             definition = json.loads(path.read_text(encoding="utf-8"))["definition"]
             voice_name = definition["audio"]["output"]["voice"]["name"]

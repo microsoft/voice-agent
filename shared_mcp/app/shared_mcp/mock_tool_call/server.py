@@ -67,6 +67,13 @@ DiningTime = Annotated[
 ]
 PartySize = Annotated[int, Field(ge=1, le=50, description="Number of guests, including children.")]
 SeatingArea = Annotated[str, Field(max_length=30, description="Optional: dining room, patio, or bar.")]
+CardLast4 = Annotated[
+    str, Field(min_length=4, max_length=12, description="Only the last four digits of the card on file, for example 4417."),
+]
+MemberId = Annotated[str, Field(max_length=20, description="Member number such as M-204518.")]
+TrackingNumber = Annotated[str, Field(min_length=1, max_length=20, description="Tracking number such as CP10447201.")]
+PostalCode = Annotated[str, Field(min_length=3, max_length=10, description="Delivery postal code, for example 98052.")]
+RxNumber = Annotated[str, Field(min_length=1, max_length=20, description="Prescription (Rx) number, 7 digits.")]
 
 
 def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
@@ -460,6 +467,191 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         last_name: Annotated[str, Field(min_length=1, max_length=60)],
     ) -> MockResult:
         return _result(service.restaurant_cancel_reservation(confirmation_number, last_name))
+
+    # ------------------------------------------------------------ membership
+
+    @mcp.tool(
+        name="mock_tool_call_membership_lookup",
+        description=(
+            "Find a mock gym membership by member number or account email, verified with the last four digits of "
+            "the card on file. Returns the plan, price, status, next billing date, current period end, pause "
+            "options, and the retention offers this member is eligible for, plus today and today_weekday. Any "
+            "mismatch returns NOT_FOUND or VERIFICATION_FAILED without saying which detail failed." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_membership_lookup(
+        card_last4: CardLast4,
+        member_id: MemberId = "",
+        email: Email = "",
+    ) -> MockResult:
+        return _result(service.membership_lookup(member_id, email, card_last4))
+
+    @mcp.tool(
+        name="mock_tool_call_membership_change_plan",
+        description=(
+            "Change a mock membership to another plan from the next billing date. Returns the change ID, the new "
+            "plan and price, and the effective date. Failures: NOT_FOUND, VERIFICATION_FAILED, SAME_PLAN, PLAN_NOT_AVAILABLE (annual plans change "
+            "only at renewal), PAST_DUE, NOT_ACTIVE." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_membership_change_plan(
+        member_id: Annotated[str, Field(min_length=1, max_length=20, description="Member number such as M-204518.")],
+        card_last4: CardLast4,
+        new_plan_id: Literal["basic", "plus", "premium", "premium_annual"],
+    ) -> MockResult:
+        return _result(service.membership_change_plan(member_id, card_last4, new_plan_id))
+
+    @mcp.tool(
+        name="mock_tool_call_membership_pause",
+        description=(
+            "Pause a mock monthly membership for 1 to 3 months from the next billing date, free of charge. Returns "
+            "the pause ID, start, and resume date. Failures: NOT_FOUND, VERIFICATION_FAILED, ALREADY_PAUSED, PAUSE_NOT_ELIGIBLE (annual plan or a "
+            "pause in the last 12 months), PAST_DUE, NOT_ACTIVE." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_membership_pause(
+        member_id: Annotated[str, Field(min_length=1, max_length=20, description="Member number such as M-204518.")],
+        card_last4: CardLast4,
+        months: Annotated[int, Field(ge=1, le=3)],
+    ) -> MockResult:
+        return _result(service.membership_pause(member_id, card_last4, months))
+
+    @mcp.tool(
+        name="mock_tool_call_membership_apply_retention_offer",
+        description=(
+            "Apply one of the retention offers that membership_lookup listed for this member. Returns the offer "
+            "terms, the effective date, and when a discount ends. Failures: NOT_FOUND, VERIFICATION_FAILED, OFFER_NOT_ELIGIBLE, NOT_ACTIVE." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_membership_apply_retention_offer(
+        member_id: Annotated[str, Field(min_length=1, max_length=20, description="Member number such as M-204518.")],
+        card_last4: CardLast4,
+        offer_id: Annotated[str, Field(min_length=1, max_length=40, description="offer_id from membership_lookup.")],
+    ) -> MockResult:
+        return _result(service.membership_apply_retention_offer(member_id, card_last4, offer_id))
+
+    @mcp.tool(
+        name="mock_tool_call_membership_cancel",
+        description=(
+            "Cancel a mock membership at the end of the current billing period. Returns the cancellation ID, the "
+            "effective date, and access until. Failures: NOT_FOUND, VERIFICATION_FAILED, ALREADY_CANCELLED, PENDING_CANCEL (already scheduled, with "
+            "its date)." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_membership_cancel(
+        member_id: Annotated[str, Field(min_length=1, max_length=20, description="Member number such as M-204518.")],
+        card_last4: CardLast4,
+        reason: Literal["price", "not_using", "moving", "health", "service", "other", "not_given"] = "not_given",
+        note: Annotated[str, Field(max_length=200)] = "",
+    ) -> MockResult:
+        return _result(service.membership_cancel(member_id, card_last4, reason, note))
+
+    # ------------------------------------------------------------- shipments
+
+    @mcp.tool(
+        name="mock_tool_call_shipment_track",
+        description=(
+            "Track a mock parcel by tracking number: status, plain-language detail, last scan, estimated delivery "
+            "date and window, and whether a signature is required. With the delivery postal code (checked by the "
+            "tool) it also returns where a delivered parcel was left and whether a trace can be opened, redelivery "
+            "dates, pickup points, and a hold end date. Every result carries today and today_weekday. Failures: "
+            "NOT_FOUND, POSTAL_CODE_MISMATCH." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_shipment_track(
+        tracking_number: TrackingNumber,
+        postal_code: Annotated[str, Field(max_length=10, description="Optional delivery postal code, for example 98052.")] = "",
+    ) -> MockResult:
+        return _result(service.shipment_track(tracking_number, postal_code))
+
+    @mcp.tool(
+        name="mock_tool_call_shipment_schedule_redelivery",
+        description=(
+            "Schedule a free redelivery of a mock parcel after a missed delivery attempt, on one of the redelivery "
+            "dates shipment_track returned. Returns the redelivery ID, date, and window. Failures: NOT_ELIGIBLE (with "
+            "reason), DATE_UNAVAILABLE (with available_dates), POSTAL_CODE_MISMATCH, NOT_FOUND." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_shipment_schedule_redelivery(
+        tracking_number: TrackingNumber,
+        postal_code: PostalCode,
+        date: IsoDate,
+    ) -> MockResult:
+        return _result(service.shipment_schedule_redelivery(tracking_number, postal_code, date))
+
+    @mcp.tool(
+        name="mock_tool_call_shipment_update_delivery",
+        description=(
+            "Change the next delivery attempt of a mock parcel: add delivery instructions, hold it at a pickup point "
+            "from shipment_track, or add a missing apartment or unit number (same address and postal code only). "
+            "Failures: NOT_ALLOWED_BY_SENDER, ALREADY_DELIVERED, TOO_LATE (for example out for delivery: only "
+            "instructions can still be added), PICKUP_POINT_NOT_FOUND, POSTAL_CODE_MISMATCH, NOT_FOUND." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_shipment_update_delivery(
+        tracking_number: TrackingNumber,
+        postal_code: PostalCode,
+        action: Literal["add_instructions", "hold_at_pickup_point", "correct_unit"],
+        instructions: Annotated[str, Field(max_length=100, description="For add_instructions, for example 'Leave at the back door'.")] = "",
+        pickup_point_id: Annotated[str, Field(max_length=60, description="For hold_at_pickup_point, a pickup_point_id from shipment_track.")] = "",
+        unit: Annotated[str, Field(max_length=10, description="For correct_unit, the apartment or unit, for example 4B.")] = "",
+    ) -> MockResult:
+        return _result(service.shipment_update_delivery(
+            tracking_number, postal_code, action, instructions, pickup_point_id, unit,
+        ))
+
+    # -------------------------------------------------------------- pharmacy
+
+    @mcp.tool(
+        name="mock_tool_call_pharmacy_rx_lookup",
+        description=(
+            "Look up a mock prescription. The Rx number, the patient's last name, and date of birth must all match "
+            "(checked by the tool) before any detail is returned. Returns the medication, strength, refills left, "
+            "last fill, earliest refill date, status, whether it can be refilled now (with the blocking reason), the "
+            "prescriber, any refill in progress, and the store, plus today and today_weekday. Failures: NOT_FOUND, "
+            "VERIFICATION_FAILED." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_pharmacy_rx_lookup(
+        rx_number: RxNumber,
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+        date_of_birth: IsoDate,
+    ) -> MockResult:
+        return _result(service.pharmacy_rx_lookup(rx_number, last_name, date_of_birth))
+
+    @mcp.tool(
+        name="mock_tool_call_pharmacy_refill_submit",
+        description=(
+            "Submit a refill of a mock prescription for pickup at the store. Returns the refill ID and when it will "
+            "be ready (date and time). Failures: NO_REFILLS_LEFT, TOO_SOON (with earliest_refill_date), "
+            "CONTROLLED_SUBSTANCE, PRESCRIPTION_EXPIRED, TRANSFERRED_OUT, ALREADY_IN_PROGRESS (with that refill's "
+            "ID and ready time), NOT_FOUND, VERIFICATION_FAILED." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_pharmacy_refill_submit(
+        rx_number: RxNumber,
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+        date_of_birth: IsoDate,
+        pickup_date: Annotated[str, Field(max_length=10, description="Optional pickup day as YYYY-MM-DD.")] = "",
+    ) -> MockResult:
+        return _result(service.pharmacy_refill_submit(rx_number, last_name, date_of_birth, pickup_date))
+
+    @mcp.tool(
+        name="mock_tool_call_pharmacy_renewal_request",
+        description=(
+            "Send a renewal request for a mock prescription to its prescriber, when no refills are left, it expired, "
+            "or it needs a new prescription. Returns the renewal ID, the prescriber, and the typical response time "
+            "in business days. Failures: RENEWAL_ALREADY_PENDING, REFILLS_REMAIN (request a refill instead), "
+            "TRANSFERRED_OUT, NOT_FOUND, VERIFICATION_FAILED." + MOCK_NOTE
+        ),
+    )
+    def mock_tool_call_pharmacy_renewal_request(
+        rx_number: RxNumber,
+        last_name: Annotated[str, Field(min_length=1, max_length=60)],
+        date_of_birth: IsoDate,
+        note: Annotated[str, Field(max_length=200, description="Optional short note; no clinical details.")] = "",
+    ) -> MockResult:
+        return _result(service.pharmacy_renewal_request(rx_number, last_name, date_of_birth, note))
 
     # ------------------------------------------------- coaching and research
 

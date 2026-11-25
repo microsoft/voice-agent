@@ -718,6 +718,54 @@
       }
     },
     {
+      "id": "membership-subscription-support-example",
+      "folder": "../samples/example46_membership_subscription_support",
+      "name": "Example 46: Membership and Subscription Support",
+      "target_locale": "en-US",
+      "category": "Customer support",
+      "summary": "Verify a member, give the plan, status, and next billing date, change or pause a plan, and cancel with at most one retention offer. Payment details and refunds are out of scope.",
+      "accent_color": "#2563eb",
+      "lock_runtime": true,
+      "mcp": {
+        "connection_mode": "public",
+        "server_url": "https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/mock-tool-call",
+        "source_label": "Mock tools (shared no-auth MCP)",
+        "source_reference": "voice-agent/shared_mcp mock-tool-call"
+      }
+    },
+    {
+      "id": "delivery-shipment-status-example",
+      "folder": "../samples/example47_delivery_shipment_status",
+      "name": "Example 47: Delivery and Shipment Status",
+      "target_locale": "en-US",
+      "category": "Customer support",
+      "summary": "Track a parcel by tracking number, give the delivery window, schedule a redelivery, add delivery instructions or hold it at a pickup point, open a trace for a missing parcel, and text updates. Store orders, returns, and refunds use Order status tracking.",
+      "accent_color": "#2563eb",
+      "lock_runtime": true,
+      "mcp": {
+        "connection_mode": "public",
+        "server_url": "https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/mock-tool-call",
+        "source_label": "Mock tools (shared no-auth MCP)",
+        "source_reference": "voice-agent/shared_mcp mock-tool-call"
+      }
+    },
+    {
+      "id": "pharmacy-prescription-refill-example",
+      "folder": "../samples/example48_pharmacy_prescription_refill",
+      "name": "Example 48: Pharmacy Prescription Refill",
+      "target_locale": "en-US",
+      "category": "Healthcare",
+      "summary": "Verify a patient by prescription number, last name, and date of birth, check a prescription, submit a refill or a renewal request to the prescriber, text the pickup confirmation, and arrange a pharmacist call back. No medical advice.",
+      "accent_color": "#dc2626",
+      "lock_runtime": true,
+      "mcp": {
+        "connection_mode": "public",
+        "server_url": "https://voice-agent-noauth-mcp.lemonsky-36682081.westus2.azurecontainerapps.io/mcp/mock-tool-call",
+        "source_label": "Mock tools (shared no-auth MCP)",
+        "source_reference": "voice-agent/shared_mcp mock-tool-call"
+      }
+    },
+    {
       "id": "voice-agent-cost-advisor",
       "folder": "../samples/example45_voice_agent_cost_advisor",
       "name": "Example 45: Voice Agent Cost Advisor",
