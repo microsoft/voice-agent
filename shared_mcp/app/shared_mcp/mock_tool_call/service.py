@@ -1471,6 +1471,11 @@ class MockToolCallService:
         message = "No prescription matches that number." if code == "NOT_FOUND" else "Those details don't match a prescription."
         return self._fail(tool, code, message, **self._today_fields())
 
+    def _queued_ready_by(self, refill: dict[str, Any]) -> dict[str, str]:
+        """The fixed ready time of a refill queued before the call (fixture day offset and time), stable across lookups."""
+        ready = self._today() + timedelta(days=refill["ready_in_days"])
+        return {"date": ready.isoformat(), "weekday": WEEKDAYS[ready.weekday()], "time": refill["ready_time"]}
+
     def _ready_by(self) -> dict[str, str]:
         """When a refill queued now is ready: before the cutoff in a few hours, otherwise the next day at a fixed time."""
         config = self._fixtures["pharmacy"]
@@ -1527,7 +1532,7 @@ class MockToolCallService:
             "expired_on": self._day(-rx["expired_days_ago"]) if rx.get("expired_days_ago") is not None else None,
             "controlled_schedule": rx["controlled_schedule"],
             "prescriber_name": rx["prescriber_name"],
-            "in_progress_refill": {"refill_id": in_progress["refill_id"], "ready_by": self._ready_by()} if in_progress else None,
+            "in_progress_refill": {"refill_id": in_progress["refill_id"], "ready_by": self._queued_ready_by(in_progress)} if in_progress else None,
             "pending_renewal": rx.get("pending_renewal"),
             "can_refill_now": blocked is None,
             "refill_blocked_reason": blocked[0] if blocked else None,
@@ -1557,7 +1562,7 @@ class MockToolCallService:
             if blocked[0] == "TOO_SOON":
                 extra["earliest_refill_date"] = self._earliest_refill(rx).isoformat()
             if blocked[0] == "ALREADY_IN_PROGRESS":
-                extra.update(refill_id=rx["in_progress_refill"]["refill_id"], ready_by=self._ready_by())
+                extra.update(refill_id=rx["in_progress_refill"]["refill_id"], ready_by=self._queued_ready_by(rx["in_progress_refill"]))
             if blocked[0] in ("NO_REFILLS_LEFT", "PRESCRIPTION_EXPIRED", "CONTROLLED_SUBSTANCE"):
                 extra["prescriber_name"] = rx["prescriber_name"]
             return self._fail(tool, blocked[0], blocked[1], **today, **extra)

@@ -490,7 +490,7 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         name="mock_tool_call_membership_change_plan",
         description=(
             "Change a mock membership to another plan from the next billing date. Returns the change ID, the new "
-            "plan and price, and the effective date. Failures: SAME_PLAN, PLAN_NOT_AVAILABLE (annual plans change "
+            "plan and price, and the effective date. Failures: NOT_FOUND, VERIFICATION_FAILED, SAME_PLAN, PLAN_NOT_AVAILABLE (annual plans change "
             "only at renewal), PAST_DUE, NOT_ACTIVE." + MOCK_NOTE
         ),
     )
@@ -505,7 +505,7 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         name="mock_tool_call_membership_pause",
         description=(
             "Pause a mock monthly membership for 1 to 3 months from the next billing date, free of charge. Returns "
-            "the pause ID, start, and resume date. Failures: ALREADY_PAUSED, PAUSE_NOT_ELIGIBLE (annual plan or a "
+            "the pause ID, start, and resume date. Failures: NOT_FOUND, VERIFICATION_FAILED, ALREADY_PAUSED, PAUSE_NOT_ELIGIBLE (annual plan or a "
             "pause in the last 12 months), PAST_DUE, NOT_ACTIVE." + MOCK_NOTE
         ),
     )
@@ -520,7 +520,7 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         name="mock_tool_call_membership_apply_retention_offer",
         description=(
             "Apply one of the retention offers that membership_lookup listed for this member. Returns the offer "
-            "terms, the effective date, and when a discount ends. Failures: OFFER_NOT_ELIGIBLE, NOT_ACTIVE." + MOCK_NOTE
+            "terms, the effective date, and when a discount ends. Failures: NOT_FOUND, VERIFICATION_FAILED, OFFER_NOT_ELIGIBLE, NOT_ACTIVE." + MOCK_NOTE
         ),
     )
     def mock_tool_call_membership_apply_retention_offer(
@@ -534,7 +534,7 @@ def register_tools(mcp: FastMCP, service: MockToolCallService) -> None:
         name="mock_tool_call_membership_cancel",
         description=(
             "Cancel a mock membership at the end of the current billing period. Returns the cancellation ID, the "
-            "effective date, and access until. Failures: ALREADY_CANCELLED, PENDING_CANCEL (already scheduled, with "
+            "effective date, and access until. Failures: NOT_FOUND, VERIFICATION_FAILED, ALREADY_CANCELLED, PENDING_CANCEL (already scheduled, with "
             "its date)." + MOCK_NOTE
         ),
     )

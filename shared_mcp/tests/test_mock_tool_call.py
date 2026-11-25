@@ -695,6 +695,13 @@ class PharmacyToolTests(unittest.TestCase):
                 result = self.refill(rx_number, *person)
                 self.assertEqual(result["error"]["code"], expected)
         self.assertEqual(self.refill("6010233", "Test", "1990-02-14")["refill_id"], "RF-20417")
+        # A refill queued before the call keeps its ready time; it does not move with the time of the lookup.
+        queued = {"date": "2026-10-21", "weekday": "Wednesday", "time": "11:00"}
+        evening = build(MockToolCallService(clock=lambda: datetime(2026, 10, 21, 1, 0, tzinfo=timezone.utc)))
+        for mcp in (self.mcp, evening):
+            lookup = call(mcp, "mock_tool_call_pharmacy_rx_lookup", {"rx_number": "6010233", **DANA_RX})
+            self.assertEqual(lookup["rx"]["in_progress_refill"]["ready_by"], queued)
+            self.assertEqual(call(mcp, "mock_tool_call_pharmacy_refill_submit", {"rx_number": "6010233", **DANA_RX})["ready_by"], queued)
         self.assertEqual(self.refill("6020418", *jordan)["earliest_refill_date"], "2026-11-02")
 
     def test_renewal_outcomes(self) -> None:

@@ -737,7 +737,7 @@
         "rx_number": "6010233", "last_name": "Test", "drug_name": "Metformin", "strength": "500 mg", "form": "tablet",
         "quantity": 60, "days_supply": 30, "refills_remaining": 4, "last_fill_days_ago": 27, "status": "active",
         "controlled_schedule": null, "prescriber_name": "Dr. Avery Rivera",
-        "in_progress_refill": {"refill_id": "RF-20417"}
+        "in_progress_refill": {"refill_id": "RF-20417", "ready_in_days": 1, "ready_time": "11:00"}
       },
       {
         "rx_number": "6020418", "last_name": "Lee", "drug_name": "Sertraline", "strength": "50 mg", "form": "tablet",
