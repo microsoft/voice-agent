@@ -242,6 +242,7 @@ class ProjectsSDKSampleTests(unittest.IsolatedAsyncioTestCase):
         voice_requirements = {
             "requirements.txt",
             "subagent/client/requirements.txt",
+            "subagent/paper-agent/requirements.txt",
             "subagent/voice_subagent_prompt_basic/requirements.txt",
             "subagent/voice_subagent_hosted_agent/requirements.txt",
         }
