@@ -558,5 +558,213 @@
         "special_requests": "high chair"
       }
     ]
+  },
+  "memberships": {
+    "name": "Contoso Fitness Club",
+    "plans": [
+      {"plan_id": "basic", "plan_name": "Basic", "billing_cycle": "monthly", "price_usd": 29.0},
+      {"plan_id": "plus", "plan_name": "Plus", "billing_cycle": "monthly", "price_usd": 49.0},
+      {"plan_id": "premium", "plan_name": "Premium", "billing_cycle": "monthly", "price_usd": 79.0},
+      {"plan_id": "premium_annual", "plan_name": "Premium annual", "billing_cycle": "annual", "price_usd": 790.0}
+    ],
+    "offers": [
+      {"offer_id": "OFFER-DOWN-BASIC", "kind": "downgrade", "description": "Switch to Basic at $29 a month from the next billing date.", "months": 0, "price_usd": 29.0, "new_plan_id": "basic"},
+      {"offer_id": "OFFER-50OFF-2M", "kind": "discount", "description": "50% off the next 2 monthly payments, $24.50 each, then the regular price.", "months": 2, "price_usd": 24.5, "new_plan_id": ""},
+      {"offer_id": "OFFER-DOWN-PLUS-AT-RENEWAL", "kind": "downgrade", "description": "Switch to Plus monthly at $49 a month when the annual plan renews.", "months": 0, "price_usd": 49.0, "new_plan_id": "plus"}
+    ],
+    "members": [
+      {
+        "member_id": "M-204518", "first_name": "Dana", "last_name": "Test", "email": "dana.test20261020@example.com",
+        "card_last4": "4417", "plan_id": "plus", "status": "active", "next_billing_days": 9,
+        "member_since_days_ago": 730, "pause_used_days_ago": null,
+        "eligible_offer_ids": ["OFFER-DOWN-BASIC", "OFFER-50OFF-2M"]
+      },
+      {
+        "member_id": "M-204519", "first_name": "Jordan", "last_name": "Lee", "email": "jordan.lee@example.com",
+        "card_last4": "8823", "plan_id": "premium_annual", "status": "active", "next_billing_days": 40,
+        "member_since_days_ago": 410, "pause_used_days_ago": null, "discount_used_days_ago": 90,
+        "eligible_offer_ids": ["OFFER-DOWN-PLUS-AT-RENEWAL"]
+      },
+      {
+        "member_id": "M-204520", "first_name": "Sam", "last_name": "Quinn", "email": "sam.quinn@example.com",
+        "card_last4": "1209", "plan_id": "plus", "status": "paused", "next_billing_days": 20,
+        "member_since_days_ago": 300, "pause_used_days_ago": 40, "eligible_offer_ids": []
+      },
+      {
+        "member_id": "M-204521", "first_name": "Rose", "last_name": "Gonzalez", "email": "rose@edge.com",
+        "card_last4": "3390", "plan_id": "basic", "status": "past_due", "next_billing_days": 27,
+        "payment_failed_days_ago": 3, "member_since_days_ago": 200, "pause_used_days_ago": null,
+        "eligible_offer_ids": []
+      },
+      {
+        "member_id": "M-204522", "first_name": "Tim", "last_name": "Barr", "email": "barr_tim@grandhotels.com",
+        "card_last4": "7001", "plan_id": "plus", "status": "cancelled", "next_billing_days": null,
+        "cancelled_days_ago": 60, "member_since_days_ago": 500, "pause_used_days_ago": null,
+        "eligible_offer_ids": []
+      },
+      {
+        "member_id": "M-204523", "first_name": "Megan", "last_name": "Bowen", "email": "meganb@contoso.com",
+        "card_last4": "5150", "plan_id": "premium", "status": "pending_cancel", "next_billing_days": null,
+        "cancel_effective_days": 5, "member_since_days_ago": 150, "pause_used_days_ago": null,
+        "eligible_offer_ids": []
+      }
+    ]
+  },
+  "shipments": {
+    "carrier": "Contoso Parcel",
+    "pickup_points": [
+      {"pickup_point_id": "PP-1021", "name": "Contoso Parcel Point - Pike Street", "postal_code": "98101", "hours": "Monday to Saturday 8 AM to 8 PM"},
+      {"pickup_point_id": "PP-1022", "name": "Contoso Parcel Point - Westlake", "postal_code": "98101", "hours": "Monday to Friday 9 AM to 7 PM"},
+      {"pickup_point_id": "PP-2051", "name": "Contoso Parcel Point - Redmond Town Center", "postal_code": "98052", "hours": "Monday to Saturday 9 AM to 9 PM"},
+      {"pickup_point_id": "PP-3004", "name": "Contoso Parcel Point - Bellevue Square", "postal_code": "98004", "hours": "Monday to Saturday 10 AM to 8 PM"},
+      {"pickup_point_id": "PP-4033", "name": "Contoso Parcel Point - Kirkland Downtown", "postal_code": "98033", "hours": "Monday to Friday 9 AM to 6 PM"}
+    ],
+    "redelivery_window": ["12:00", "18:00"],
+    "redelivery_days": 5,
+    "hold_days": 5,
+    "trace_after_hours": 24,
+    "parcels": [
+      {
+        "tracking_number": "CP10447201", "postal_code": "98052", "status": "out_for_delivery",
+        "status_detail": "Out for delivery with the driver today.", "exception_code": null,
+        "last_event": {"days_ago": 0, "time": "07:42", "city": "Redmond, WA"},
+        "estimated_delivery_days": 0, "delivery_window": ["14:00", "18:00"], "signature_required": false,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447202", "postal_code": "98101", "status": "delivery_attempted",
+        "status_detail": "Delivery attempted yesterday. A signature is required and no one was available.",
+        "exception_code": "SIGNATURE_REQUIRED_NO_ONE_HOME",
+        "last_event": {"days_ago": 1, "time": "15:20", "city": "Seattle, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": true,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447203", "postal_code": "98004", "status": "exception",
+        "status_detail": "Delivery exception: the address is missing an apartment or unit number.",
+        "exception_code": "ADDRESS_INCOMPLETE",
+        "last_event": {"days_ago": 1, "time": "11:05", "city": "Bellevue, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447204", "postal_code": "98052", "status": "delivered",
+        "status_detail": "Delivered.", "exception_code": null,
+        "last_event": {"days_ago": 2, "time": "13:14", "city": "Redmond, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true,
+        "delivered": {"days_ago": 2, "time": "13:14", "location": "Front door", "photo_available": true}
+      },
+      {
+        "tracking_number": "CP10447205", "postal_code": "98033", "status": "in_transit",
+        "status_detail": "In transit. Delayed by severe weather; the delivery date has changed.",
+        "exception_code": "WEATHER_DELAY",
+        "last_event": {"days_ago": 1, "time": "21:30", "city": "Portland, OR"},
+        "estimated_delivery_days": 2, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447206", "postal_code": "98052", "status": "label_created",
+        "status_detail": "Shipping label created. The sender hasn't handed the parcel to us yet.",
+        "exception_code": null,
+        "last_event": {"days_ago": 1, "time": "16:02", "city": "Tacoma, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447207", "postal_code": "98101", "status": "held_at_pickup_point",
+        "status_detail": "Held at a pickup point, ready to collect with photo ID.", "exception_code": null,
+        "last_event": {"days_ago": 2, "time": "10:15", "city": "Seattle, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true, "held_at": "PP-1021", "hold_until_days": 3
+      },
+      {
+        "tracking_number": "CP10447208", "postal_code": "98004", "status": "returned_to_sender",
+        "status_detail": "Returned to the sender after the pickup hold ended.", "exception_code": null,
+        "last_event": {"days_ago": 3, "time": "09:40", "city": "Bellevue, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true
+      },
+      {
+        "tracking_number": "CP10447209", "postal_code": "98052", "status": "in_transit",
+        "status_detail": "In transit to the local delivery station.", "exception_code": null,
+        "last_event": {"days_ago": 0, "time": "05:55", "city": "Kent, WA"},
+        "estimated_delivery_days": 1, "delivery_window": ["09:00", "13:00"], "signature_required": false,
+        "changes_allowed": false
+      },
+      {
+        "tracking_number": "CP10447210", "postal_code": "98052", "status": "delivered",
+        "status_detail": "Delivered.", "exception_code": null,
+        "last_event": {"hours_ago": 3, "city": "Redmond, WA"},
+        "estimated_delivery_days": null, "delivery_window": null, "signature_required": false,
+        "changes_allowed": true,
+        "delivered": {"hours_ago": 3, "location": "Front porch", "photo_available": false}
+      }
+    ]
+  },
+  "pharmacy": {
+    "store": {"name": "Contoso Pharmacy", "address": "120 Pine Street"},
+    "hours": {
+      "Monday": ["09:00", "21:00"],
+      "Tuesday": ["09:00", "21:00"],
+      "Wednesday": ["09:00", "21:00"],
+      "Thursday": ["09:00", "21:00"],
+      "Friday": ["09:00", "21:00"],
+      "Saturday": ["09:00", "18:00"],
+      "Sunday": ["10:00", "17:00"]
+    },
+    "same_day_cutoff": "17:00",
+    "next_day_ready": "11:00",
+    "ready_hours": 4,
+    "refill_after_fraction": 0.75,
+    "patients": [
+      {"last_name": "Test", "first_name": "Dana", "date_of_birth": "1990-02-14"},
+      {"last_name": "Lee", "first_name": "Jordan", "date_of_birth": "1985-03-14"},
+      {"last_name": "Quinn", "first_name": "Sam", "date_of_birth": "1992-07-30"}
+    ],
+    "prescriptions": [
+      {
+        "rx_number": "6010231", "last_name": "Test", "drug_name": "Atorvastatin", "strength": "20 mg", "form": "tablet",
+        "quantity": 30, "days_supply": 30, "refills_remaining": 3, "last_fill_days_ago": 26, "status": "active",
+        "controlled_schedule": null, "prescriber_name": "Dr. Avery Rivera"
+      },
+      {
+        "rx_number": "6010232", "last_name": "Test", "drug_name": "Lisinopril", "strength": "10 mg", "form": "tablet",
+        "quantity": 30, "days_supply": 30, "refills_remaining": 0, "last_fill_days_ago": 28, "status": "active",
+        "controlled_schedule": null, "prescriber_name": "Dr. Avery Rivera"
+      },
+      {
+        "rx_number": "6010233", "last_name": "Test", "drug_name": "Metformin", "strength": "500 mg", "form": "tablet",
+        "quantity": 60, "days_supply": 30, "refills_remaining": 4, "last_fill_days_ago": 27, "status": "active",
+        "controlled_schedule": null, "prescriber_name": "Dr. Avery Rivera",
+        "in_progress_refill": {"refill_id": "RF-20417"}
+      },
+      {
+        "rx_number": "6020418", "last_name": "Lee", "drug_name": "Sertraline", "strength": "50 mg", "form": "tablet",
+        "quantity": 30, "days_supply": 30, "refills_remaining": 5, "last_fill_days_ago": 10, "status": "active",
+        "controlled_schedule": null, "prescriber_name": "Dr. Morgan Ellis"
+      },
+      {
+        "rx_number": "6020419", "last_name": "Lee", "drug_name": "Oxycodone", "strength": "5 mg", "form": "tablet",
+        "quantity": 20, "days_supply": 5, "refills_remaining": 0, "last_fill_days_ago": 20, "status": "active",
+        "controlled_schedule": "II", "prescriber_name": "Dr. Morgan Ellis"
+      },
+      {
+        "rx_number": "6030555", "last_name": "Quinn", "drug_name": "Levothyroxine", "strength": "50 mcg", "form": "tablet",
+        "quantity": 90, "days_supply": 90, "refills_remaining": 2, "last_fill_days_ago": 70, "status": "transferred",
+        "controlled_schedule": null, "prescriber_name": "Dr. Casey Nguyen"
+      },
+      {
+        "rx_number": "6030556", "last_name": "Quinn", "drug_name": "Amlodipine", "strength": "5 mg", "form": "tablet",
+        "quantity": 30, "days_supply": 30, "refills_remaining": 2, "last_fill_days_ago": 75, "status": "expired",
+        "expired_days_ago": 60, "controlled_schedule": null, "prescriber_name": "Dr. Casey Nguyen"
+      },
+      {
+        "rx_number": "6030557", "last_name": "Quinn", "drug_name": "Omeprazole", "strength": "20 mg", "form": "capsule",
+        "quantity": 30, "days_supply": 30, "refills_remaining": 0, "last_fill_days_ago": 25, "status": "active",
+        "controlled_schedule": null, "prescriber_name": "Dr. Casey Nguyen",
+        "pending_renewal": {"renewal_id": "RN-30112"}
+      }
+    ]
   }
 }

@@ -466,6 +466,255 @@ class BusinessToolTests(unittest.TestCase):
         self.assertEqual(refused["error"]["code"], "CONSENT_REQUIRED")
 
 
+DANA_MEMBER = {"member_id": "M-204518", "card_last4": "4417"}
+DANA_RX = {"last_name": "Test", "date_of_birth": "1990-02-14"}
+
+
+class MembershipToolTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.mcp = build()
+
+    def code(self, name: str, arguments: dict[str, Any]) -> str | None:
+        result = call(self.mcp, "mock_tool_call_membership_" + name, arguments)
+        self.assertIn("today", result)
+        return None if result["ok"] else result["error"]["code"]
+
+    def test_lookup_needs_the_card_last_four_and_reveals_nothing_otherwise(self) -> None:
+        found = call(self.mcp, "mock_tool_call_membership_lookup", {"member_id": "m 204518", "card_last4": "4 4 1 7"})
+        member = found["member"]
+        self.assertEqual((member["plan_name"], member["price_usd"], member["status"]), ("Plus", 49.0, "active"))
+        self.assertEqual(member["next_billing_date"], "2026-10-29")
+        self.assertEqual(member["current_period_end"], "2026-10-28")
+        self.assertEqual(member["pause_options"], [1, 2, 3])
+        self.assertEqual([o["offer_id"] for o in member["eligible_offers"]], ["OFFER-DOWN-BASIC", "OFFER-50OFF-2M"])
+        by_email = call(self.mcp, "mock_tool_call_membership_lookup", {
+            "email": "Dana.Test20261020@example.com", "card_last4": "4417",
+        })
+        self.assertEqual(by_email["member"]["member_id"], "M-204518")
+        for arguments, code in [
+            ({"member_id": "M-204518", "card_last4": "1111"}, "VERIFICATION_FAILED"),
+            ({"member_id": "M-204518", "email": "jordan.lee@example.com", "card_last4": "4417"}, "VERIFICATION_FAILED"),
+            ({"member_id": "M-999999", "card_last4": "4417"}, "NOT_FOUND"),
+        ]:
+            with self.subTest(arguments=arguments):
+                result = call(self.mcp, "mock_tool_call_membership_lookup", arguments)
+                self.assertEqual(result["error"]["code"], code)
+                self.assertNotIn("Plus", json.dumps(result))
+        with self.assertRaises(ToolError):
+            call(self.mcp, "mock_tool_call_membership_lookup", {"card_last4": "4417"})
+
+    def test_annual_member_gets_no_pause_and_no_discount(self) -> None:
+        member = call(self.mcp, "mock_tool_call_membership_lookup", {"member_id": "M-204519", "card_last4": "8823"})["member"]
+        self.assertEqual(member["billing_cycle"], "annual")
+        self.assertEqual(member["pause_options"], [])
+        self.assertEqual([o["offer_id"] for o in member["eligible_offers"]], ["OFFER-DOWN-PLUS-AT-RENEWAL"])
+
+    def test_change_plan_outcomes(self) -> None:
+        changed = call(self.mcp, "mock_tool_call_membership_change_plan", {**DANA_MEMBER, "new_plan_id": "premium"})
+        self.assertTrue(changed["ok"])
+        self.assertEqual((changed["new_plan_name"], changed["new_price_usd"]), ("Premium", 79.0))
+        self.assertEqual(changed["effective_date"], "2026-10-29")
+        self.assertRegex(changed["change_id"], r"^CHG-\d{5}$")
+        cases = [
+            ({**DANA_MEMBER, "new_plan_id": "plus"}, "SAME_PLAN"),
+            ({"member_id": "M-204519", "card_last4": "8823", "new_plan_id": "plus"}, "PLAN_NOT_AVAILABLE"),
+            ({"member_id": "M-204521", "card_last4": "3390", "new_plan_id": "plus"}, "PAST_DUE"),
+            ({"member_id": "M-204522", "card_last4": "7001", "new_plan_id": "basic"}, "NOT_ACTIVE"),
+            ({"member_id": "M-204518", "card_last4": "0000", "new_plan_id": "basic"}, "VERIFICATION_FAILED"),
+        ]
+        for arguments, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(self.code("change_plan", arguments), expected)
+
+    def test_pause_outcomes(self) -> None:
+        paused = call(self.mcp, "mock_tool_call_membership_pause", {**DANA_MEMBER, "months": 2})
+        self.assertEqual((paused["pause_start"], paused["resume_date"]), ("2026-10-29", "2026-12-29"))
+        for arguments, expected in [
+            ({"member_id": "M-204520", "card_last4": "1209", "months": 1}, "ALREADY_PAUSED"),
+            ({"member_id": "M-204519", "card_last4": "8823", "months": 1}, "PAUSE_NOT_ELIGIBLE"),
+            ({"member_id": "M-204521", "card_last4": "3390", "months": 1}, "PAST_DUE"),
+            ({"member_id": "M-204523", "card_last4": "5150", "months": 1}, "NOT_ACTIVE"),
+        ]:
+            with self.subTest(expected=expected):
+                self.assertEqual(self.code("pause", arguments), expected)
+        with self.assertRaises(ToolError):
+            call(self.mcp, "mock_tool_call_membership_pause", {**DANA_MEMBER, "months": 4})
+
+    def test_retention_offer_only_when_listed_for_the_member(self) -> None:
+        applied = call(self.mcp, "mock_tool_call_membership_apply_retention_offer", {**DANA_MEMBER, "offer_id": "OFFER-50OFF-2M"})
+        self.assertEqual((applied["new_price_usd"], applied["effective_date"], applied["ends_on"]), (24.5, "2026-10-29", "2026-12-28"))
+        self.assertEqual(self.code("apply_retention_offer", {
+            "member_id": "M-204519", "card_last4": "8823", "offer_id": "OFFER-50OFF-2M",
+        }), "OFFER_NOT_ELIGIBLE")
+        self.assertEqual(self.code("apply_retention_offer", {**DANA_MEMBER, "offer_id": "FREE-3-MONTHS"}), "OFFER_NOT_ELIGIBLE")
+        self.assertEqual(self.code("apply_retention_offer", {
+            "member_id": "M-204522", "card_last4": "7001", "offer_id": "OFFER-DOWN-BASIC",
+        }), "NOT_ACTIVE")
+
+    def test_cancel_outcomes_and_nothing_is_stored(self) -> None:
+        cancelled = call(self.mcp, "mock_tool_call_membership_cancel", {**DANA_MEMBER, "reason": "price"})
+        self.assertEqual((cancelled["effective_date"], cancelled["access_until"]), ("2026-10-28", "2026-10-28"))
+        self.assertRegex(cancelled["cancellation_id"], r"^CXL-\d{5}$")
+        self.assertEqual(self.code("cancel", {"member_id": "M-204522", "card_last4": "7001"}), "ALREADY_CANCELLED")
+        pending = call(self.mcp, "mock_tool_call_membership_cancel", {"member_id": "M-204523", "card_last4": "5150"})
+        self.assertEqual((pending["error"]["code"], pending["effective_date"]), ("PENDING_CANCEL", "2026-10-25"))
+        later = call(self.mcp, "mock_tool_call_membership_lookup", DANA_MEMBER)
+        self.assertEqual(later["member"]["status"], "active")
+
+
+class ShipmentToolTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.mcp = build()
+
+    def track(self, tracking_number: str, postal_code: str = "") -> dict[str, Any]:
+        return call(self.mcp, "mock_tool_call_shipment_track", {"tracking_number": tracking_number, "postal_code": postal_code})
+
+    def test_delivered_location_needs_the_postal_code(self) -> None:
+        plain = self.track("CP10447204")
+        self.assertEqual(plain["today_weekday"], "Tuesday")
+        self.assertEqual(plain["shipment"]["status"], "delivered")
+        self.assertNotIn("delivered", plain["shipment"])
+        self.assertNotIn("Front door", json.dumps(plain))
+        verified = self.track("c p 1044-7204", "98052")["shipment"]
+        self.assertTrue(verified["address_verified"])
+        self.assertEqual(verified["delivered"]["location"], "Front door")
+        self.assertTrue(verified["delivered"]["trace_eligible"])
+        recent = self.track("CP10447210", "98052")["shipment"]["delivered"]
+        self.assertFalse(recent["trace_eligible"])
+        mismatch = self.track("CP10447204", "98101")
+        self.assertEqual(mismatch["error"]["code"], "POSTAL_CODE_MISMATCH")
+        self.assertIsNone(mismatch["shipment"])
+        self.assertEqual(self.track("CP99999999")["error"]["code"], "NOT_FOUND")
+
+    def test_out_for_delivery_window_and_weather_estimate(self) -> None:
+        out = self.track("CP10447201")["shipment"]
+        self.assertEqual(out["delivery_window"], {"start": "14:00", "end": "18:00"})
+        self.assertEqual(out["estimated_delivery_date"], "2026-10-20")
+        weather = self.track("CP10447205")["shipment"]
+        self.assertEqual((weather["exception_code"], weather["estimated_delivery_date"]), ("WEATHER_DELAY", "2026-10-22"))
+
+    def test_redelivery_dates_skip_sunday(self) -> None:
+        attempted = self.track("CP10447202", "98101")["shipment"]
+        self.assertEqual(attempted["redelivery_dates"], ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-26"])
+        booked = call(self.mcp, "mock_tool_call_shipment_schedule_redelivery", {
+            "tracking_number": "CP10447202", "postal_code": "98101", "date": "2026-10-22",
+        })
+        self.assertEqual((booked["weekday"], booked["window"]), ("Thursday", {"start": "12:00", "end": "18:00"}))
+        self.assertRegex(booked["redelivery_id"], r"^RD-\d{5}$")
+        sunday = call(self.mcp, "mock_tool_call_shipment_schedule_redelivery", {
+            "tracking_number": "CP10447202", "postal_code": "98101", "date": "2026-10-25",
+        })
+        self.assertEqual(sunday["error"]["code"], "DATE_UNAVAILABLE")
+        self.assertEqual(sunday["available_dates"], attempted["redelivery_dates"])
+        for tracking, postal, reason in [
+            ("CP10447204", "98052", "delivered"), ("CP10447208", "98004", "returned"),
+            ("CP10447207", "98101", "held"), ("CP10447201", "98052", "not_attempted"),
+        ]:
+            with self.subTest(tracking=tracking):
+                result = call(self.mcp, "mock_tool_call_shipment_schedule_redelivery", {
+                    "tracking_number": tracking, "postal_code": postal, "date": "2026-10-22",
+                })
+                self.assertEqual((result["error"]["code"], result["reason"]), ("NOT_ELIGIBLE", reason))
+
+    def test_update_delivery_outcomes(self) -> None:
+        def update(tracking: str, postal: str, action: str, **extra: str) -> dict[str, Any]:
+            return call(self.mcp, "mock_tool_call_shipment_update_delivery", {
+                "tracking_number": tracking, "postal_code": postal, "action": action, **extra,
+            })
+
+        hold = update("CP10447202", "98101", "hold_at_pickup_point", pickup_point_id="PP-1021")
+        self.assertEqual(hold["pickup_point"]["name"], "Contoso Parcel Point - Pike Street")
+        self.assertEqual(hold["hold_until"], "2026-10-26")
+        self.assertTrue(update("CP10447201", "98052", "add_instructions", instructions="Leave at the back door")["ok"])
+        unit = update("CP10447203", "98004", "correct_unit", unit="4B")
+        self.assertIn("4B", unit["summary"])
+        for result, expected in [
+            (update("CP10447201", "98052", "hold_at_pickup_point", pickup_point_id="PP-2051"), "TOO_LATE"),
+            (update("CP10447202", "98101", "hold_at_pickup_point", pickup_point_id="PP-2051"), "PICKUP_POINT_NOT_FOUND"),
+            (update("CP10447209", "98052", "add_instructions", instructions="Side gate"), "NOT_ALLOWED_BY_SENDER"),
+            (update("CP10447204", "98052", "add_instructions", instructions="Side gate"), "ALREADY_DELIVERED"),
+            (update("CP10447201", "98101", "add_instructions", instructions="Side gate"), "POSTAL_CODE_MISMATCH"),
+        ]:
+            with self.subTest(expected=expected):
+                self.assertEqual(result["error"]["code"], expected)
+        later = self.track("CP10447201", "98052")["shipment"]
+        self.assertEqual(later["status"], "out_for_delivery")
+
+
+class PharmacyToolTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.mcp = build()
+
+    def refill(self, rx_number: str, last_name: str, date_of_birth: str) -> dict[str, Any]:
+        return call(self.mcp, "mock_tool_call_pharmacy_refill_submit", {
+            "rx_number": rx_number, "last_name": last_name, "date_of_birth": date_of_birth,
+        })
+
+    def test_lookup_needs_rx_name_and_birth_date(self) -> None:
+        found = call(self.mcp, "mock_tool_call_pharmacy_rx_lookup", {"rx_number": "601 0231", **DANA_RX})
+        rx = found["rx"]
+        self.assertEqual((rx["drug_name"], rx["strength"], rx["refills_remaining"]), ("Atorvastatin", "20 mg", 3))
+        self.assertTrue(rx["can_refill_now"])
+        self.assertEqual(found["store"]["address"], "120 Pine Street")
+        for arguments, code in [
+            ({"rx_number": "6010231", "last_name": "Test", "date_of_birth": "1990-02-15"}, "VERIFICATION_FAILED"),
+            ({"rx_number": "6010231", "last_name": "Lee", "date_of_birth": "1990-02-14"}, "VERIFICATION_FAILED"),
+            ({"rx_number": "6099999", **DANA_RX}, "NOT_FOUND"),
+        ]:
+            with self.subTest(arguments=arguments):
+                result = call(self.mcp, "mock_tool_call_pharmacy_rx_lookup", arguments)
+                self.assertEqual(result["error"]["code"], code)
+                self.assertNotIn("Atorvastatin", json.dumps(result))
+        sertraline = call(self.mcp, "mock_tool_call_pharmacy_rx_lookup", {
+            "rx_number": "6020418", "last_name": "Lee", "date_of_birth": "1985-03-14",
+        })["rx"]
+        self.assertEqual((sertraline["refill_blocked_reason"], sertraline["earliest_refill_date"]), ("TOO_SOON", "2026-11-02"))
+
+    def test_refill_ready_time_follows_the_cutoff(self) -> None:
+        submitted = self.refill("6010231", "Test", "1990-02-14")
+        self.assertEqual(submitted["ready_by"], {"date": "2026-10-20", "weekday": "Tuesday", "time": "14:00"})
+        self.assertEqual(submitted["refills_remaining_after"], 2)
+        self.assertRegex(submitted["refill_id"], r"^RF-\d{5}$")
+        # 6 PM Pacific is after the 5 PM cutoff: ready the next day at 11 AM.
+        evening = build(MockToolCallService(clock=lambda: datetime(2026, 10, 21, 1, 0, tzinfo=timezone.utc)))
+        late = call(evening, "mock_tool_call_pharmacy_refill_submit", {"rx_number": "6010231", **DANA_RX})
+        self.assertEqual(late["ready_by"], {"date": "2026-10-21", "weekday": "Wednesday", "time": "11:00"})
+
+    def test_refill_failure_codes(self) -> None:
+        jordan, sam = ("Lee", "1985-03-14"), ("Quinn", "1992-07-30")
+        for rx_number, person, expected in [
+            ("6010232", ("Test", "1990-02-14"), "NO_REFILLS_LEFT"),
+            ("6010233", ("Test", "1990-02-14"), "ALREADY_IN_PROGRESS"),
+            ("6020418", jordan, "TOO_SOON"),
+            ("6020419", jordan, "CONTROLLED_SUBSTANCE"),
+            ("6030555", sam, "TRANSFERRED_OUT"),
+            ("6030556", sam, "PRESCRIPTION_EXPIRED"),
+            ("6030557", sam, "NO_REFILLS_LEFT"),
+        ]:
+            with self.subTest(rx=rx_number):
+                result = self.refill(rx_number, *person)
+                self.assertEqual(result["error"]["code"], expected)
+        self.assertEqual(self.refill("6010233", "Test", "1990-02-14")["refill_id"], "RF-20417")
+        self.assertEqual(self.refill("6020418", *jordan)["earliest_refill_date"], "2026-11-02")
+
+    def test_renewal_outcomes(self) -> None:
+        def renew(rx_number: str, last_name: str, date_of_birth: str) -> dict[str, Any]:
+            return call(self.mcp, "mock_tool_call_pharmacy_renewal_request", {
+                "rx_number": rx_number, "last_name": last_name, "date_of_birth": date_of_birth,
+            })
+
+        sent = renew("6010232", "Test", "1990-02-14")
+        self.assertEqual((sent["prescriber_name"], sent["typical_response_business_days"]), ("Dr. Avery Rivera", 2))
+        self.assertRegex(sent["renewal_id"], r"^RN-\d{5}$")
+        self.assertTrue(renew("6020419", "Lee", "1985-03-14")["ok"])
+        self.assertTrue(renew("6030556", "Quinn", "1992-07-30")["ok"])
+        pending = renew("6030557", "Quinn", "1992-07-30")
+        self.assertEqual((pending["error"]["code"], pending["renewal_id"]), ("RENEWAL_ALREADY_PENDING", "RN-30112"))
+        self.assertEqual(renew("6010231", "Test", "1990-02-14")["error"]["code"], "REFILLS_REMAIN")
+        self.assertEqual(renew("6030555", "Quinn", "1992-07-30")["error"]["code"], "TRANSFERRED_OUT")
+        self.assertEqual(renew("6010232", "Test", "1990-01-01")["error"]["code"], "VERIFICATION_FAILED")
+
+
 class NoRetentionTests(unittest.TestCase):
     """Caller-provided data must never be kept or shown to a later caller."""
 
@@ -505,6 +754,12 @@ class NoRetentionTests(unittest.TestCase):
                 "first_name": self.SECRET, "last_name": self.SECRET, "phone": "+14255550199", "date": "2026-10-22",
                 "time": "18:00", "party_size": 2, "special_requests": self.SECRET,
             }),
+            ("mock_tool_call_membership_cancel", {**DANA_MEMBER, "reason": "other", "note": self.SECRET}),
+            ("mock_tool_call_shipment_update_delivery", {
+                "tracking_number": "CP10447201", "postal_code": "98052", "action": "add_instructions",
+                "instructions": self.SECRET,
+            }),
+            ("mock_tool_call_pharmacy_renewal_request", {"rx_number": "6010232", **DANA_RX, "note": self.SECRET}),
         ]
         for name, arguments in writes:
             with self.subTest(tool=name):
@@ -520,6 +775,9 @@ class NoRetentionTests(unittest.TestCase):
             ("mock_tool_call_zendesk_search", {"query": self.SECRET, "type": "tickets"}),
             ("mock_tool_call_zendesk_search", {"query": "401", "type": "tickets"}),
             ("mock_tool_call_salesforce_search", {"email": email}),
+            ("mock_tool_call_membership_lookup", DANA_MEMBER),
+            ("mock_tool_call_shipment_track", {"tracking_number": "CP10447201", "postal_code": "98052"}),
+            ("mock_tool_call_pharmacy_rx_lookup", {"rx_number": "6010232", **DANA_RX}),
         ]
         for name, arguments in reads:
             with self.subTest(tool=name):

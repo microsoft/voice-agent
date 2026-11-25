@@ -523,7 +523,7 @@ behind an IP allowlist, with optional Microsoft Entra sign-in. See
   call mock tools on the public `/mcp/mock-tool-call` route by default and
   need no MCP setup. `example35_conference_concierge` (Conference Concierge, Ignite 2026,
   official data only) uses the hosted `/mcp/conference` route; its README also describes running
-  the pack locally. The single-agent `example39_*` through `example44_*`
+  the pack locally. The single-agent `example39_*` through `example44_*` and `example46_*` through `example48_*`
   examples (no handoff graph) also call the public `/mcp/mock-tool-call` route. Each card has a **Version** selector: **Default** loads
   the configured Agent file;
   other versions are discovered recursively under that sample folder using
