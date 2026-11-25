@@ -1,0 +1,2586 @@
+{
+ "note": "compaction_model.py simulate() and price() outputs; USD per call. Tier rates are USD per 1M tokens.",
+ "tiers": {
+  "rt_pro": {
+   "txtIn": 4.0,
+   "txtCached": 0.4,
+   "audIn": 32.0,
+   "audCached": 0.4,
+   "txtOut": 24.0,
+   "stt": 0.0,
+   "tts": 31.0
+  },
+  "casc_pro": {
+   "txtIn": 4.0,
+   "txtCached": 0.4,
+   "txtOut": 16.0,
+   "stt": 17.0,
+   "tts": 31.0
+  },
+  "casc_std": {
+   "txtIn": 0.66,
+   "txtCached": 0.33,
+   "txtOut": 2.64,
+   "stt": 15.0,
+   "tts": 26.0
+  },
+  "casc_lite": {
+   "txtIn": 0.11,
+   "txtCached": 0.04,
+   "txtOut": 0.44,
+   "stt": 15.0,
+   "tts": 25.0
+  }
+ },
+ "summaryUsd": 0.000576,
+ "cases": [
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 249746.0,
+    "uncTxt": 3574.0,
+    "cachedAud": 44654.0,
+    "uncAud": 6496.0,
+    "outTxt": 3900.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 30,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.339928,
+     "llm": 0.433528,
+     "fixedSpeech": 0.1302,
+     "summary": 0.0,
+     "total": 0.563728
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 208422.0,
+    "uncTxt": 4818.0,
+    "cachedAud": 15834.0,
+    "uncAud": 6716.0,
+    "outTxt": 3900.0,
+    "compactions": 2,
+    "busts": 2,
+    "responses": 30,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.32388639999999996,
+     "llm": 0.4174864,
+     "fixedSpeech": 0.1302,
+     "summary": 0.001152,
+     "total": 0.5488384000000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 164122.0,
+    "uncTxt": 17778.0,
+    "cachedAud": 44646.0,
+    "uncAud": 13104.0,
+    "outTxt": 4020.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.5739472000000001,
+     "llm": 0.6704272000000001,
+     "fixedSpeech": 0.1302,
+     "summary": 0.0,
+     "total": 0.8006272000000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 109042.0,
+    "uncTxt": 7890.0,
+    "cachedAud": 7694.0,
+    "uncAud": 6496.0,
+    "outTxt": 4020.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.28612639999999995,
+     "llm": 0.38260639999999996,
+     "fixedSpeech": 0.1302,
+     "summary": 0.002304,
+     "total": 0.5151104
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 107506.0,
+    "uncTxt": 13478.0,
+    "cachedAud": 7694.0,
+    "uncAud": 9136.0,
+    "outTxt": 4020.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.392344,
+     "llm": 0.48882400000000004,
+     "fixedSpeech": 0.1302,
+     "summary": 0.002304,
+     "total": 0.621328
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 120882.0,
+    "uncTxt": 13516.0,
+    "cachedAud": 15822.0,
+    "uncAud": 9588.0,
+    "outTxt": 4020.0,
+    "compactions": 2,
+    "busts": 6,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.4155616,
+     "llm": 0.5120416,
+     "fixedSpeech": 0.1302,
+     "summary": 0.001152,
+     "total": 0.6433936
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 431254.0,
+    "uncTxt": 5426.0,
+    "cachedAud": 104042.0,
+    "uncAud": 9808.0,
+    "outTxt": 5850.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.5496784,
+     "llm": 0.6900784,
+     "fixedSpeech": 0.1953,
+     "summary": 0.0,
+     "total": 0.8853784
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 312558.0,
+    "uncTxt": 7782.0,
+    "cachedAud": 23314.0,
+    "uncAud": 10236.0,
+    "outTxt": 5850.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.4930288,
+     "llm": 0.6334288,
+     "fixedSpeech": 0.1953,
+     "summary": 0.002304,
+     "total": 0.8310328
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 299032.0,
+    "uncTxt": 24768.0,
+    "cachedAud": 104040.0,
+    "uncAud": 19710.0,
+    "outTxt": 5970.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.8910208000000001,
+     "llm": 1.0343008,
+     "fixedSpeech": 0.1953,
+     "summary": 0.0,
+     "total": 1.2296008
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 171422.0,
+    "uncTxt": 9446.0,
+    "cachedAud": 18914.0,
+    "uncAud": 9796.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.42739039999999995,
+     "llm": 0.5706703999999999,
+     "fixedSpeech": 0.1953,
+     "summary": 0.002304,
+     "total": 0.7682743999999999
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 169886.0,
+    "uncTxt": 17050.0,
+    "cachedAud": 18914.0,
+    "uncAud": 13756.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.583912,
+     "llm": 0.727192,
+     "fixedSpeech": 0.1953,
+     "summary": 0.002304,
+     "total": 0.924796
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 175700.0,
+    "uncTxt": 17630.0,
+    "cachedAud": 22316.0,
+    "uncAud": 13984.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.5972144,
+     "llm": 0.7404944,
+     "fixedSpeech": 0.1953,
+     "summary": 0.002304,
+     "total": 0.9380984
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 1202674.0,
+    "uncTxt": 10886.0,
+    "cachedAud": 430734.0,
+    "uncAud": 19716.0,
+    "outTxt": 11700.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 90,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 1.3278192000000002,
+     "llm": 1.6086192000000001,
+     "fixedSpeech": 0.3906,
+     "summary": 0.0,
+     "total": 1.9992192000000002
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 634350.0,
+    "uncTxt": 15690.0,
+    "cachedAud": 51474.0,
+    "uncAud": 20576.0,
+    "outTxt": 11700.0,
+    "compactions": 8,
+    "busts": 8,
+    "responses": 90,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.9955216,
+     "llm": 1.2763216,
+     "fixedSpeech": 0.3906,
+     "summary": 0.004608,
+     "total": 1.6715296
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 931196.0,
+    "uncTxt": 45104.0,
+    "cachedAud": 430724.0,
+    "uncAud": 39526.0,
+    "outTxt": 11820.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 1.990016,
+     "llm": 2.273696,
+     "fixedSpeech": 0.3906,
+     "summary": 0.0,
+     "total": 2.664296
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 402862.0,
+    "uncTxt": 15174.0,
+    "cachedAud": 82258.0,
+    "uncAud": 19712.0,
+    "outTxt": 11820.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.885528,
+     "llm": 1.169208,
+     "fixedSpeech": 0.3906,
+     "summary": 0.002304,
+     "total": 1.5621120000000002
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 401326.0,
+    "uncTxt": 28826.0,
+    "cachedAud": 82258.0,
+    "uncAud": 27632.0,
+    "outTxt": 11820.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 1.1929615999999998,
+     "llm": 1.4766415999999998,
+     "fixedSpeech": 0.3906,
+     "summary": 0.002304,
+     "total": 1.8695456
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 355066.0,
+    "uncTxt": 24598.0,
+    "cachedAud": 51462.0,
+    "uncAud": 23668.0,
+    "outTxt": 11820.0,
+    "compactions": 8,
+    "busts": 12,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 1.0183792,
+     "llm": 1.3020592,
+     "fixedSpeech": 0.3906,
+     "summary": 0.004608,
+     "total": 1.6972672
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 238254.20799999998,
+    "uncTxt": 30410.791999999983,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 3900.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 30,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.21694485119999993,
+     "llm": 0.2793448511999999,
+     "fixedSpeech": 0.1863,
+     "summary": 0.0,
+     "total": 0.4656448511999999
+    },
+    "casc_std": {
+     "input": 0.09869501135999999,
+     "llm": 0.10899101135999999,
+     "fixedSpeech": 0.1587,
+     "summary": 0.0,
+     "total": 0.26769101136
+    },
+    "casc_lite": {
+     "input": 0.012875355439999998,
+     "llm": 0.014591355439999999,
+     "fixedSpeech": 0.1545,
+     "summary": 0.0,
+     "total": 0.16909135544
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 199665.28000000006,
+    "uncTxt": 20339.719999999987,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 3900.0,
+    "compactions": 2,
+    "busts": 2,
+    "responses": 30,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.16122499199999996,
+     "llm": 0.22362499199999997,
+     "fixedSpeech": 0.1863,
+     "summary": 0.001152,
+     "total": 0.411076992
+    },
+    "casc_std": {
+     "input": 0.0793137576,
+     "llm": 0.0896097576,
+     "fixedSpeech": 0.1587,
+     "summary": 0.001152,
+     "total": 0.2494617576
+    },
+    "casc_lite": {
+     "input": 0.0102239804,
+     "llm": 0.011939980400000001,
+     "fixedSpeech": 0.1545,
+     "summary": 0.001152,
+     "total": 0.16759198039999998
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 132773.76,
+    "uncTxt": 66451.24,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 4020.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.318914464,
+     "llm": 0.383234464,
+     "fixedSpeech": 0.1863,
+     "summary": 0.0,
+     "total": 0.569534464
+    },
+    "casc_std": {
+     "input": 0.0876731592,
+     "llm": 0.09828595920000001,
+     "fixedSpeech": 0.1587,
+     "summary": 0.0,
+     "total": 0.2569859592
+    },
+    "casc_lite": {
+     "input": 0.012620586800000002,
+     "llm": 0.0143893868,
+     "fixedSpeech": 0.1545,
+     "summary": 0.0,
+     "total": 0.16888938679999999
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 95975.04,
+    "uncTxt": 25213.960000000006,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 4020.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.13924585600000003,
+     "llm": 0.20356585600000004,
+     "fixedSpeech": 0.1863,
+     "summary": 0.002304,
+     "total": 0.392169856
+    },
+    "casc_std": {
+     "input": 0.048312976800000004,
+     "llm": 0.0589257768,
+     "fixedSpeech": 0.1587,
+     "summary": 0.002304,
+     "total": 0.2199297768
+    },
+    "casc_lite": {
+     "input": 0.006612537200000001,
+     "llm": 0.008381337200000002,
+     "fixedSpeech": 0.1545,
+     "summary": 0.002304,
+     "total": 0.1651853372
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 95406.72000000002,
+    "uncTxt": 30626.280000000006,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 4020.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.16066780800000002,
+     "llm": 0.224987808,
+     "fixedSpeech": 0.1863,
+     "summary": 0.002304,
+     "total": 0.41359180799999995
+    },
+    "casc_std": {
+     "input": 0.05169756240000001,
+     "llm": 0.062310362400000006,
+     "fixedSpeech": 0.1587,
+     "summary": 0.002304,
+     "total": 0.22331436240000002
+    },
+    "casc_lite": {
+     "input": 0.007185159600000001,
+     "llm": 0.008953959600000002,
+     "fixedSpeech": 0.1545,
+     "summary": 0.002304,
+     "total": 0.1657579596
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 10,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 104144.63999999998,
+    "uncTxt": 37876.36,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 4020.0,
+    "compactions": 2,
+    "busts": 6,
+    "responses": 34,
+    "userS": 330.0,
+    "agentS": 210.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.193163296,
+     "llm": 0.25748329600000003,
+     "fixedSpeech": 0.1863,
+     "summary": 0.001152,
+     "total": 0.444935296
+    },
+    "casc_std": {
+     "input": 0.059366128799999994,
+     "llm": 0.06997892879999999,
+     "fixedSpeech": 0.1587,
+     "summary": 0.001152,
+     "total": 0.2298309288
+    },
+    "casc_lite": {
+     "input": 0.0083321852,
+     "llm": 0.010100985199999999,
+     "fixedSpeech": 0.1545,
+     "summary": 0.001152,
+     "total": 0.16575298519999998
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 409975.552,
+    "uncTxt": 60859.447999999975,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5850.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.4074280127999999,
+     "llm": 0.5010280127999999,
+     "fixedSpeech": 0.27945,
+     "summary": 0.0,
+     "total": 0.7804780127999998
+    },
+    "casc_std": {
+     "input": 0.17545916784,
+     "llm": 0.19090316784,
+     "fixedSpeech": 0.23805,
+     "summary": 0.0,
+     "total": 0.42895316784000004
+    },
+    "casc_lite": {
+     "input": 0.02309356136,
+     "llm": 0.02566756136,
+     "fixedSpeech": 0.23175,
+     "summary": 0.0,
+     "total": 0.25741756136
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 299281.02400000003,
+    "uncTxt": 31123.975999999988,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5850.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.24420831359999998,
+     "llm": 0.33780831359999997,
+     "fixedSpeech": 0.27945,
+     "summary": 0.002304,
+     "total": 0.6195623135999999
+    },
+    "casc_std": {
+     "input": 0.11930456208000001,
+     "llm": 0.13474856208000002,
+     "fixedSpeech": 0.23805,
+     "summary": 0.002304,
+     "total": 0.37510256208000003
+    },
+    "casc_lite": {
+     "input": 0.01539487832,
+     "llm": 0.01796887832,
+     "fixedSpeech": 0.23175,
+     "summary": 0.002304,
+     "total": 0.25202287832
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 233155.2,
+    "uncTxt": 127769.80000000002,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5970.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.60434128,
+     "llm": 0.6998612799999999,
+     "fixedSpeech": 0.27945,
+     "summary": 0.0,
+     "total": 0.9793112799999999
+    },
+    "casc_std": {
+     "input": 0.161269284,
+     "llm": 0.177030084,
+     "fixedSpeech": 0.23805,
+     "summary": 0.0,
+     "total": 0.415080084
+    },
+    "casc_lite": {
+     "input": 0.023380886000000003,
+     "llm": 0.026007686000000002,
+     "fixedSpeech": 0.23175,
+     "summary": 0.0,
+     "total": 0.25775768600000004
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 147978.23999999996,
+    "uncTxt": 41502.760000000024,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.22520233600000006,
+     "llm": 0.32072233600000005,
+     "fixedSpeech": 0.27945,
+     "summary": 0.002304,
+     "total": 0.602476336
+    },
+    "casc_std": {
+     "input": 0.07622464080000001,
+     "llm": 0.09198544080000001,
+     "fixedSpeech": 0.23805,
+     "summary": 0.002304,
+     "total": 0.3323394408
+    },
+    "casc_lite": {
+     "input": 0.0104844332,
+     "llm": 0.0131112332,
+     "fixedSpeech": 0.23175,
+     "summary": 0.002304,
+     "total": 0.2471652332
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 147409.91999999998,
+    "uncTxt": 49327.08000000002,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.25627228800000007,
+     "llm": 0.35179228800000006,
+     "fixedSpeech": 0.27945,
+     "summary": 0.002304,
+     "total": 0.633546288
+    },
+    "casc_std": {
+     "input": 0.08120114640000001,
+     "llm": 0.09696194640000001,
+     "fixedSpeech": 0.23805,
+     "summary": 0.002304,
+     "total": 0.3373159464
+    },
+    "casc_lite": {
+     "input": 0.011322375600000004,
+     "llm": 0.013949175600000004,
+     "fixedSpeech": 0.23175,
+     "summary": 0.002304,
+     "total": 0.24800317560000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 151104.0,
+    "uncTxt": 53116.00000000001,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.2729056,
+     "llm": 0.3684256,
+     "fixedSpeech": 0.27945,
+     "summary": 0.002304,
+     "total": 0.6501796
+    },
+    "casc_std": {
+     "input": 0.08492088,
+     "llm": 0.10068168000000001,
+     "fixedSpeech": 0.23805,
+     "summary": 0.002304,
+     "total": 0.34103568
+    },
+    "casc_lite": {
+     "input": 0.011886920000000002,
+     "llm": 0.014513720000000003,
+     "fixedSpeech": 0.23175,
+     "summary": 0.002304,
+     "total": 0.24856772000000002
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 1135687.936,
+    "uncTxt": 213007.06399999995,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11700.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 90,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 1.3063034303999999,
+     "llm": 1.4935034303999999,
+     "fixedSpeech": 0.5589,
+     "summary": 0.0,
+     "total": 2.0524034304
+    },
+    "casc_std": {
+     "input": 0.5153616811199999,
+     "llm": 0.5462496811199999,
+     "fixedSpeech": 0.4761,
+     "summary": 0.0,
+     "total": 1.02234968112
+    },
+    "casc_lite": {
+     "input": 0.06885829448,
+     "llm": 0.07400629448,
+     "fixedSpeech": 0.4635,
+     "summary": 0.0,
+     "total": 0.53750629448
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 606880.3840000001,
+    "uncTxt": 64774.61599999995,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11700.0,
+    "compactions": 8,
+    "busts": 8,
+    "responses": 90,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.5018506175999998,
+     "llm": 0.6890506175999999,
+     "fixedSpeech": 0.5589,
+     "summary": 0.004608,
+     "total": 1.2525586175999999
+    },
+    "casc_std": {
+     "input": 0.24302177328,
+     "llm": 0.27390977328,
+     "fixedSpeech": 0.4761,
+     "summary": 0.004608,
+     "total": 0.7546177732799999
+    },
+    "casc_lite": {
+     "input": 0.03140042311999999,
+     "llm": 0.03654842311999999,
+     "fixedSpeech": 0.4635,
+     "summary": 0.004608,
+     "total": 0.5046564231199999
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 684549.1200000001,
+    "uncTxt": 432825.88,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11820.0,
+    "compactions": 0,
+    "busts": 4,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 2.005123168,
+     "llm": 2.194243168,
+     "fixedSpeech": 0.5589,
+     "summary": 0.0,
+     "total": 2.753143168
+    },
+    "casc_std": {
+     "input": 0.5115662904,
+     "llm": 0.5427710904,
+     "fixedSpeech": 0.4761,
+     "summary": 0.0,
+     "total": 1.0188710904
+    },
+    "casc_lite": {
+     "input": 0.0749928116,
+     "llm": 0.0801936116,
+     "fixedSpeech": 0.4635,
+     "summary": 0.0,
+     "total": 0.5436936116000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 333682.56,
+    "uncTxt": 114944.44000000002,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11820.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.5932507840000001,
+     "llm": 0.782370784,
+     "fixedSpeech": 0.5589,
+     "summary": 0.002304,
+     "total": 1.343574784
+    },
+    "casc_std": {
+     "input": 0.18597857520000002,
+     "llm": 0.21718337520000003,
+     "fixedSpeech": 0.4761,
+     "summary": 0.002304,
+     "total": 0.6955873752
+    },
+    "casc_lite": {
+     "input": 0.025991190800000005,
+     "llm": 0.031191990800000007,
+     "fixedSpeech": 0.4635,
+     "summary": 0.002304,
+     "total": 0.4969959908
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 333114.23999999993,
+    "uncTxt": 130004.76,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11820.0,
+    "compactions": 4,
+    "busts": 8,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.6532647359999999,
+     "llm": 0.8423847359999999,
+     "fixedSpeech": 0.5589,
+     "summary": 0.002304,
+     "total": 1.403588736
+    },
+    "casc_std": {
+     "input": 0.1957308408,
+     "llm": 0.2269356408,
+     "fixedSpeech": 0.4761,
+     "summary": 0.002304,
+     "total": 0.7053396408
+    },
+    "casc_lite": {
+     "input": 0.027625093199999996,
+     "llm": 0.0328258932,
+     "fixedSpeech": 0.4635,
+     "summary": 0.002304,
+     "total": 0.4986298932
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 30,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 302353.9199999999,
+    "uncTxt": 99849.08000000005,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 11820.0,
+    "compactions": 8,
+    "busts": 12,
+    "responses": 94,
+    "userS": 990.0,
+    "agentS": 630.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.5203378880000001,
+     "llm": 0.7094578880000002,
+     "fixedSpeech": 0.5589,
+     "summary": 0.004608,
+     "total": 1.272965888
+    },
+    "casc_std": {
+     "input": 0.1656771864,
+     "llm": 0.19688198640000001,
+     "fixedSpeech": 0.4761,
+     "summary": 0.004608,
+     "total": 0.6775899864
+    },
+    "casc_lite": {
+     "input": 0.0230775556,
+     "llm": 0.0282783556,
+     "fixedSpeech": 0.4635,
+     "summary": 0.004608,
+     "total": 0.49638635560000005
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 8,
+    "nodes": 4,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 213022.0,
+    "uncTxt": 10958.0,
+    "cachedAud": 24290.0,
+    "uncAud": 9810.0,
+    "outTxt": 5940.0,
+    "compactions": 3,
+    "busts": 3,
+    "responses": 48,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.4526768,
+     "llm": 0.5952368,
+     "fixedSpeech": 0.1953,
+     "summary": 0.001728,
+     "total": 0.7922648
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 3,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 316705.3333333333,
+    "uncTxt": 17563.333333333372,
+    "cachedAud": 104030.66666666667,
+    "uncAud": 15759.333333333336,
+    "outTxt": 5910.0,
+    "compactions": 0,
+    "busts": 2,
+    "responses": 47,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.7428464000000002,
+     "llm": 0.8846864000000002,
+     "fixedSpeech": 0.1953,
+     "summary": 0.0,
+     "total": 1.0799864000000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 3,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s2",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 216456.6666666667,
+    "uncTxt": 15082.000000000025,
+    "cachedAud": 36727.33333333333,
+    "uncAud": 13762.666666666668,
+    "outTxt": 5910.0,
+    "compactions": 2,
+    "busts": 4,
+    "responses": 47,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.6020069333333335,
+     "llm": 0.7438469333333335,
+     "fixedSpeech": 0.1953,
+     "summary": 0.001152,
+     "total": 0.9402989333333336
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "node",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 174494.0,
+    "uncTxt": 6374.0,
+    "cachedAud": 18914.0,
+    "uncAud": 9796.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.41633119999999996,
+     "llm": 0.5596112,
+     "fixedSpeech": 0.1953,
+     "summary": 0.002304,
+     "total": 0.7572152
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 7.3,
+    "respPerMin": 2.7,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 137639.5,
+    "uncTxt": 2800.500000000002,
+    "cachedAud": 10840.5,
+    "uncAud": 4817.999999999999,
+    "outTxt": 2600.0,
+    "compactions": 1,
+    "busts": 1,
+    "responses": 20,
+    "userS": 240.9,
+    "agentS": 153.29999999999998
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.22477,
+     "llm": 0.28717,
+     "fixedSpeech": 0.09504599999999999,
+     "summary": 0.000576,
+     "total": 0.382792
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "periodic",
+    "periodicEvery": 5,
+    "periodicKeep": 3,
+    "respPerTurn": 1.0,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 301970.0,
+    "uncTxt": 10870.0,
+    "cachedAud": 16494.0,
+    "uncAud": 11556.0,
+    "outTxt": 5850.0,
+    "compactions": 8,
+    "busts": 8,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.5406576,
+     "llm": 0.6810575999999999,
+     "fixedSpeech": 0.1953,
+     "summary": 0.004608,
+     "total": 0.8809655999999999
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "realtime",
+    "minutes": 1,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 12416.0,
+    "uncTxt": 2484.0,
+    "cachedAud": 0.0,
+    "uncAud": 550.0,
+    "outTxt": 450.0,
+    "compactions": 2,
+    "busts": 2,
+    "responses": 5,
+    "userS": 33.0,
+    "agentS": 21.0
+   },
+   "prices": {
+    "rt_pro": {
+     "input": 0.0325024,
+     "llm": 0.043302400000000005,
+     "fixedSpeech": 0.01302,
+     "summary": 0.001152,
+     "total": 0.05747440000000001
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 5,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "s1",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.0,
+    "cascadeZeroFlat": 0.0,
+    "cascadeFallbackHandoff": 0.0,
+    "cascadeZeroHandoff": 0.0
+   },
+   "totals": {
+    "cachedTxt": 173696.0,
+    "uncTxt": 15785.0,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5970.0,
+    "compactions": 4,
+    "busts": 4,
+    "responses": 49,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.13261840000000003,
+     "llm": 0.22813840000000002,
+     "fixedSpeech": 0.27945,
+     "summary": 0.002304,
+     "total": 0.5098923999999999
+    },
+    "casc_std": {
+     "input": 0.06773778,
+     "llm": 0.08349858,
+     "fixedSpeech": 0.23805,
+     "summary": 0.002304,
+     "total": 0.32385258
+    },
+    "casc_lite": {
+     "input": 0.008684190000000001,
+     "llm": 0.011310990000000002,
+     "fixedSpeech": 0.23175,
+     "summary": 0.002304,
+     "total": 0.24536499
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 15.0,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 2000,
+    "stageTokens": 800,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.0,
+    "cascadeZeroFlat": 0.0,
+    "cascadeFallbackHandoff": 0.0,
+    "cascadeZeroHandoff": 0.0
+   },
+   "totals": {
+    "cachedTxt": 459264.0,
+    "uncTxt": 11571.0,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 5850.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 45,
+    "userS": 495.0,
+    "agentS": 315.0
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.22998960000000002,
+     "llm": 0.32358960000000003,
+     "fixedSpeech": 0.27945,
+     "summary": 0.0,
+     "total": 0.6030396
+    },
+    "casc_std": {
+     "input": 0.15919397999999998,
+     "llm": 0.17463797999999997,
+     "fixedSpeech": 0.23805,
+     "summary": 0.0,
+     "total": 0.41268797999999995
+    },
+    "casc_lite": {
+     "input": 0.019643370000000004,
+     "llm": 0.022217370000000004,
+     "fixedSpeech": 0.23175,
+     "summary": 0.0,
+     "total": 0.25396737
+    }
+   }
+  },
+  {
+   "profile": {
+    "pipeline": "cascade",
+    "minutes": 12.5,
+    "respPerMin": 3.0,
+    "userTalk": 0.55,
+    "agentTalk": 0.35,
+    "stages": 5,
+    "nodes": 1,
+    "sysTokens": 900,
+    "stageTokens": 3000,
+    "outTextPerResp": 130.0,
+    "histTextPerResp": 160.0,
+    "transcriptTokPerS": 3.0,
+    "userFraming": 8.0,
+    "summaryTokens": 180,
+    "strategy": "none",
+    "periodicEvery": 8,
+    "periodicKeep": 2,
+    "respPerTurn": 1.2,
+    "handoffCallTokens": 30.0,
+    "warmStatic": "sys",
+    "cascadeFallbackFlat": 0.2,
+    "cascadeZeroFlat": 0.023,
+    "cascadeFallbackHandoff": 0.4,
+    "cascadeZeroHandoff": 0.045
+   },
+   "totals": {
+    "cachedTxt": 693560.4479999996,
+    "uncTxt": 53178.802000000214,
+    "cachedAud": 0.0,
+    "uncAud": 0.0,
+    "outTxt": 4940.0,
+    "compactions": 0,
+    "busts": 0,
+    "responses": 38,
+    "userS": 412.5,
+    "agentS": 262.5
+   },
+   "prices": {
+    "casc_pro": {
+     "input": 0.4901393872000007,
+     "llm": 0.5691793872000007,
+     "fixedSpeech": 0.232875,
+     "summary": 0.0,
+     "total": 0.8020543872000008
+    },
+    "casc_std": {
+     "input": 0.26397295716,
+     "llm": 0.27701455716,
+     "fixedSpeech": 0.198375,
+     "summary": 0.0,
+     "total": 0.47538955716
+    },
+    "casc_lite": {
+     "input": 0.033592086140000005,
+     "llm": 0.03576568614,
+     "fixedSpeech": 0.193125,
+     "summary": 0.0,
+     "total": 0.22889068614
+    }
+   }
+  }
+ ]
+}

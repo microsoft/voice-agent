@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#01033b">
+  <title>Voice-agent cost, step by step</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="./"><span class="brand-glyph" aria-hidden="true">¢</span><strong>Voice agent <span>cost lab</span></strong></a>
+    <nav aria-label="Sections"><a class="nav-link" href="#setup">1 · Choose</a><a class="nav-link" href="#calc">2 · Breakdown</a><a class="nav-link" href="#result">3 · Bill</a><button type="button" id="nav-savings" class="nav-link" aria-controls="savings">4 · Save</button></nav>
+    <div class="header-actions"><button type="button" id="copy-link" class="header-button" title="Copy a link that opens this page with these settings">URL to these settings</button><button type="button" id="export-excel" class="header-button" title="Download the breakdown, the settings and the walk as an Excel workbook">Export Excel</button></div>
+    <button id="guide-launcher" class="guide-launcher" aria-expanded="false" aria-controls="assistant-panel"><canvas id="launcher-orb" class="launcher-orb" aria-hidden="true"></canvas><span class="launcher-text"><strong>Ask the cost guide</strong><small>Voice agent · live</small></span></button>
+  </header>
+  <main>
+    <section id="setup" class="setup" aria-labelledby="setup-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="live-dot"></span>PLANNING MODEL · LIST PRICES · <span id="rates-as-of"></span></p>
+        <h1 id="setup-title">What does one call <em>really</em> cost?</h1>
+        <p class="hero-description">Pick a model and describe the call. The price follows the team's live-call measurements, worked out response by response; ask the voice guide to explain any part of it.</p>
+      </div>
+      <h2 class="section-label">Pricing option</h2>
+      <div id="scheme-grid" class="scheme-grid" role="radiogroup" aria-label="Pricing option"></div>
+      <div class="knobs">
+        <div class="knob" id="knob-minutes"><span class="knob-label">Call length</span>
+          <div class="segmented" role="group" aria-label="Preset call lengths"><button type="button" data-minutes="10">10 min</button><button type="button" data-minutes="15">15 min</button><button type="button" data-minutes="30">30 min</button></div>
+          <label class="slider"><input id="minutes" type="range" min="1" max="60" step="1" aria-label="Call length in minutes"><output id="minutes-out" for="minutes"></output></label></div>
+        <div class="knob" id="knob-cache"><span class="knob-label">Cached model input</span>
+          <p id="cache-measured" class="knob-value"></p>
+          <p id="cache-hint" class="knob-hint"></p></div>
+        <div class="knob" id="knob-tools"><span class="knob-label">Tool (MCP) calls per minute</span>
+          <label class="slider"><input id="tools" type="range" min="0" max="3" step="0.1" aria-label="Tool calls per minute"><output id="tools-out" for="tools"></output></label>
+          <p id="tools-hint" class="knob-hint"></p></div>
+        <div class="knob wide" id="knob-prompt"><span class="knob-label">Prompt size</span>
+          <div class="prompt-fields"><label class="field"><span>System prompt (shared rules), tokens</span><input id="system-tokens" type="number" min="0" max="100000" step="100"></label><label class="field"><span>Business logic, all stages, tokens</span><input id="logic-tokens" type="number" min="0" max="200000" step="100"></label><label class="field"><span>Stages</span><input id="stages" type="number" min="1" max="20" step="1"></label></div>
+          <div class="prompt-choice"><div class="segmented" role="group" aria-label="Prompt design"><button type="button" data-prompt="single">One mixed prompt</button><button type="button" data-prompt="stage">Split by stage (handoff)</button></div>
+            <label class="switch-row" id="knob-compaction"><input id="summarise" type="checkbox"><span class="switch" aria-hidden="true"></span><span><b>Compaction</b> <span id="summary-text"></span></span></label></div>
+          <div class="prompt-bar" aria-hidden="true"><span id="prompt-system" class="s4"></span><span id="prompt-logic" class="s5"></span><span id="prompt-rest" class="rest"></span></div>
+          <p id="prompt-hint" class="knob-hint"></p></div>
+        <div class="knob wide" id="knob-talk"><span class="knob-label">Who talks</span>
+          <div id="talk-bar" class="talk-bar"><span id="talk-caller" class="talk-seg s1"></span><span id="talk-agent" class="talk-seg s2"></span><span id="talk-silence" class="talk-seg silence"></span><button type="button" id="talk-handle-a" class="talk-handle" role="slider" aria-label="Where the caller's share ends"></button><button type="button" id="talk-handle-b" class="talk-handle" role="slider" aria-label="Where the agent's share ends"></button></div>
+          <p class="knob-hint">Drag the two handles. Silence is not billed as audio.</p></div>
+      </div>
+      <details id="advanced" class="advanced"><summary>All assumptions</summary><div id="advanced-grid" class="advanced-grid"></div></details>
+      <div class="cost-readout" aria-live="polite"><span class="cost-word">COST</span><strong id="preview-price" class="cost-value"></strong><span id="preview-note" class="cost-note"></span><p id="input-error" class="input-error" role="alert" hidden></p></div>
+    </section>
+
+    <section id="calc" class="calc" aria-labelledby="calc-title">
+      <div class="price-head">
+        <div><p class="eyebrow">PRICE PER MINUTE OF CALL · USD LIST PRICE</p><h2 id="calc-title" class="price-now"><span id="price-now">—</span></h2><p id="price-note" class="price-note"></p></div>
+        <div class="player"><button id="expand-all" class="text-link" type="button">Expand all</button><button id="collapse-all" class="text-link" type="button">Collapse</button><button id="skip" class="text-link" type="button">See the bill ↓</button></div>
+      </div>
+      <p class="tree-hint">Every cost in this tree is in US cents per minute of call. Click a line to break it down; how it is calculated appears below the tree.</p>
+      <div id="cost-tree" class="cost-tree"></div>
+      <div class="concepts" role="group" aria-label="How the model is billed"><span class="eyebrow">HOW IT WORKS</span><button type="button" class="concept-chip" data-concept="request">What each response sends</button><button type="button" class="concept-chip" data-concept="cache">How the cache prices it</button><button type="button" class="concept-chip" data-concept="handoff">Handoff</button><button type="button" class="concept-chip" data-concept="compaction">Compaction</button></div>
+      <div id="detail" class="detail">
+        <aside class="formula-card" aria-live="polite"><p id="detail-path" class="detail-path"></p><h3 id="formula-title">—</h3><p id="detail-value" class="detail-value"></p><p id="formula-symbolic" class="formula"></p><p id="formula-numbers" class="formula numbers"></p><p id="detail-explain" class="detail-explain"></p><ul id="detail-children" class="detail-children"></ul></aside>
+        <div class="stage-wrap"><svg id="stage" class="stage" viewBox="0 0 720 420" role="img" aria-labelledby="stage-caption"></svg><p id="stage-caption" class="stage-caption"></p></div>
+      </div>
+    </section>
+
+    <section id="result" class="result" aria-labelledby="result-title">
+      <div class="calc-head"><div><p class="eyebrow">THE BILL</p><h2 id="result-title">Price per call and per minute</h2></div><p id="result-scheme" class="calc-scheme"></p></div>
+      <div id="tiles" class="tiles"></div>
+      <div class="result-grid">
+        <figure class="chart-card"><figcaption><span class="eyebrow">COST LINES PER CALL</span><span class="chart-note">USD list price</span></figcaption><div id="bill" class="bill"></div></figure>
+        <figure class="chart-card"><figcaption><span class="eyebrow">ALL OPTIONS, SAME CALL</span><span class="chart-note">cents per minute</span></figcaption><div id="compare" class="compare"></div></figure>
+        <figure class="chart-card wide"><figcaption><span class="eyebrow">PRICE PER MINUTE BY CALL LENGTH</span><span class="chart-note">longer calls re-read more history</span></figcaption><div id="curve" class="curve"></div></figure>
+      </div>
+      <details class="assumptions"><summary>What this planning model assumes</summary><ul id="assumptions"></ul></details>
+    </section>
+    <footer><span>Planning estimate from list prices; not a quote or an invoice.</span><span>Priced response by response, calibrated on the team's live calls.</span></footer>
+  </main>
+  <button type="button" id="savings-toggle" class="savings-tab" aria-expanded="false" aria-controls="savings"><span>Ways to pay less</span><b id="savings-count"></b></button>
+  <aside id="savings" class="savings-drawer" aria-labelledby="savings-title" hidden>
+    <div class="drawer-head"><div><p class="eyebrow">WAYS TO PAY LESS</p><h2 id="savings-title">What would lower this price</h2></div><button type="button" id="savings-close" class="icon-button" aria-label="Close the ways to pay less">×</button></div>
+    <p id="savings-context" class="drawer-context"></p>
+    <p class="drawer-hint">Each saving is worked out for the settings above; the label says what real calls showed.</p>
+    <div id="savings-list" class="savings-list"></div>
+  </aside>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+  <section id="assistant-panel" class="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
+    <div class="island">
+      <canvas id="agent-orb" class="agent-orb" aria-hidden="true"></canvas>
+      <div class="island-title"><span id="agent-live" class="live-pill" data-live="false">OFFLINE</span><h2 id="assistant-title">Cost guide</h2><span id="agent-state" class="agent-state" data-state="offline">OFFLINE</span><p id="last-action" class="last-action" hidden></p></div>
+      <div class="voice-controls"><button id="connect" class="button-primary" disabled>Start voice ↗</button><label class="mic-option" title="Use microphone"><input id="use-mic" type="checkbox" checked><span class="switch" aria-hidden="true"></span>Mic</label><button id="type-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="message-form" aria-label="Type to the agent" title="Type instead of talking">⌨</button><button id="close-guide" class="icon-button" type="button" aria-label="End and close" title="End the conversation and close">×</button></div>
+      <p id="live-caption" class="live-caption" aria-hidden="true" data-hint="Try “Walk me through a 15-minute call on GPT Realtime 2.1.”"></p>
+      <p id="voice-status" class="voice-status" role="status">Opening the guide starts your conversation…</p>
+      <form id="message-form" class="message-form" hidden><label class="sr-only" for="message">Message the cost guide</label><input id="message" maxlength="1000" placeholder="Type to the agent…" autocomplete="off" disabled><button id="send" type="submit" aria-label="Send message" disabled>↑</button></form>
+      <p id="error" class="error" role="alert" hidden></p>
+    </div>
+    <div id="transcript" class="sr-only" aria-label="Conversation" aria-live="polite"></div>
+  </section>
+</body>
+</html>
