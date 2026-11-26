@@ -32,9 +32,9 @@ and a confirmed booking of the next session at the wrap-up.
 | `wrap_up` | Summarize progress and what to practice; offer returned slots for the next session and send the invite after a yes. |
 | `end` | Say a short goodbye and call `end_conversation`. |
 
-Every stage can route to `end`. After the welcome, a student who wants to stop
-goes to `wrap_up` first so they get a summary. Handoffs are silent: no edge
-carries a `transfer_message`.
+Every stage can route to `end`, and a goodbye ends the call from any stage. After the
+welcome, a student who wants to stop without saying goodbye goes to `wrap_up` first
+so they get a summary. Handoffs are silent: no edge carries a `transfer_message`.
 
 Each stage repeats the persona, tone, conversation rules, and the sample facts
 because a handoff node's instructions replace the session instructions. Without
