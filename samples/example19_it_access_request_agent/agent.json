@@ -312,14 +312,14 @@
           "interface": "voice",
           "description": "Close politely and terminate the conversation with the platform tool.",
           "inherit_base_instructions": true,
-          "instructions": "The caller is ending the call. In this response, call end_conversation. If nothing was spoken yet in this turn, first say one short, warm goodbye sentence in the language the caller has been speaking, that fits how the conversation went; if a goodbye was already spoken in this turn, add nothing. Never ask another question, and never leave a goodbye without the end_conversation call, because only that call ends the call. Do not claim that anything was sent, booked, saved, created, or transferred unless a tool result in this conversation confirmed it.",
+          "instructions": "The caller is ending the call. In this response, say one short, warm goodbye sentence in the language the caller has been speaking, that fits how the conversation went, then call end_conversation. Never call end_conversation without saying that goodbye sentence first, and never say the goodbye without the call: only that call ends the call, and a goodbye without it leaves the caller on an open line. Never ask another question. Do not claim that anything was sent, booked, saved, created, or transferred unless a tool result in this conversation confirmed it.",
           "tools": [
             {
               "type": "system",
               "name": "end_conversation"
             }
           ],
-          "tool_choice": "required"
+          "tool_choice": "auto"
         }
       ],
       "handoff_policy": {
