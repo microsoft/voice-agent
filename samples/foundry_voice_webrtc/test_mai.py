@@ -11,7 +11,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from live import live_definition
 from scenarios import scenario_definition
-from server import (MAI_MODEL, AgentPreparationError, SessionConfiguration,
+from server import (MAI_CATALOG_MODEL, MAI_MODEL, AgentPreparationError, SessionConfiguration,
                     SessionConfigurationError, Settings, create_app, forward_browser,
                     lookup_configured_agent, mai_definition)
 from test_agent_creation import Response
@@ -74,6 +74,95 @@ class MaiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.cfg.mai_companion().agent, "demo-agent-mai")
         self.assertEqual(self.cfg.mai_companion().companion_for, self.cfg.agent)
         self.assertEqual(Settings(self.cfg.endpoint, self.cfg.agent).mai_companion().endpoint, self.cfg.endpoint)
+
+    def test_catalog_definition_uses_deployment_and_caller_first_scenario(self):
+        definition = mai_definition(self.source, "my-mai-deployment")
+        self.assertEqual((definition["model"], definition["model_type"]),
+                         ("my-mai-deployment", "self_deployed"))
+        scenario = scenario_definition(definition, "banking", mai=True)
+        self.assertNotIn("greeting", scenario)
+        self.assertIn("Wait for the caller", scenario["instructions"])
+        self.assertFalse(scenario["tools"])
+
+    async def test_catalog_companion_is_separate_and_owned_by_the_original_agent(self):
+        cfg = Settings(self.cfg.endpoint, self.cfg.agent, mai_catalog_deployment="my-mai-deployment",
+                       mai_catalog_project_endpoint="https://catalog.services.ai.azure.com/api/projects/catalog")
+        target = cfg.mai_catalog_companion()
+        self.assertEqual(target.agent, "demo-agent-mai-1")
+        self.assertEqual(target.project_url(), cfg.mai_catalog_project_endpoint)
+        definition = mai_definition(self.source, "my-mai-deployment")
+        metadata = {"sample": "foundry_voice_webrtc", "voice_companion_for": cfg.agent}
+        agent = self.saved(definition, "2", metadata)
+        result = await lookup_configured_agent(ServiceClient([Response(200, agent)]), target, {}, include_version=True)
+        self.assertEqual(result["definition"], definition)
+        agent["versions"]["latest"]["definition"]["model"] = "another-deployment"
+        with self.assertRaisesRegex(AgentPreparationError, "another deployment"):
+            await lookup_configured_agent(ServiceClient([Response(200, agent)]), target, {})
+        with self.assertRaisesRegex(AgentPreparationError, "MAI_REALTIME_1_DEPLOYMENT"):
+            await lookup_configured_agent(ServiceClient([]), self.cfg.mai_catalog_companion(), {})
+
+    async def test_catalog_session_tracks_predecessor_and_rejects_another_model(self):
+        vad = {"type": "azure_semantic_vad", "auto_truncate": False,
+               "interrupt_response": True, "create_response": True}
+        session = {"id": "session-one", "model": "mai-realtime-1-rc2",
+                   "audio": {"input": {"turn_detection": vad}}}
+        configuration, upstream = SessionConfiguration(catalog_mai=True), AsyncMock()
+        self.assertTrue(await configuration.observe({"type": "session.updated", "session": session}, upstream))
+        self.assertEqual(configuration.model, MAI_CATALOG_MODEL)
+        message = {"type": "conversation.item.create", "item": {
+            "id": "user-1", "type": "message", "role": "user",
+            "content": [{"type": "input_text", "text": "Hello"}]}}
+        await forward_browser(frames([message]), upstream, "websocket", configuration)
+        self.assertEqual(upstream.send_json.await_args.args[0]["previous_item_id"], "root")
+        await configuration.observe({"type": "response.output_item.done", "item": {
+            "id": "assistant-1", "type": "message", "role": "assistant"}}, upstream)
+        message["item"]["id"] = "user-2"
+        await forward_browser(frames([message]), upstream, "websocket", configuration)
+        self.assertEqual(upstream.send_json.await_args.args[0]["previous_item_id"], "assistant-1")
+        session["model"] = "gpt-realtime"
+        with self.assertRaisesRegex(SessionConfigurationError, "expected"):
+            await SessionConfiguration(catalog_mai=True).observe({"type": "session.updated", "session": session}, upstream)
+
+    async def test_catalog_model_requires_a_deployment_before_creating_a_companion(self):
+        service = ServiceClient([Response(200, self.saved(self.source, "9"))])
+        async with TestClient(TestServer(create_app(self.cfg, AsyncMock()))) as client:
+            with patch("server.aiohttp.ClientSession", return_value=service):
+                response = await client.post("/api/agent/model",
+                    headers={"Origin": str(client.make_url("")).rstrip("/")},
+                    json={"model": MAI_CATALOG_MODEL, "version": "9"})
+                result = await response.json()
+        self.assertEqual(response.status, 502)
+        self.assertIn("MAI_REALTIME_1_DEPLOYMENT", result["error"])
+        self.assertEqual(service.writes, [])
+
+    async def test_catalog_companion_switches_without_overwriting_other_agents(self):
+        cfg = Settings(self.cfg.endpoint, self.cfg.agent, mai_catalog_deployment="my-mai-deployment")
+        original, managed, live = self.saved(self.source, "9"), self.mai_agent(), self.live_agent()
+        catalog = self.saved(mai_definition(self.source, "my-mai-deployment"), "4", {
+            "sample": "foundry_voice_webrtc", "voice_companion_for": cfg.agent,
+            "realtime_source_version": "9", "microsoft.voice-live.enabled": "false"})
+        cases = [
+            ("demo-agent", "9", MAI_CATALOG_MODEL, [original, catalog, catalog], "demo-agent-mai-1"),
+            ("demo-agent-mai", "2", MAI_CATALOG_MODEL, [managed, original, catalog, catalog], "demo-agent-mai-1"),
+            ("demo-agent-mai-1", "4", MAI_MODEL, [catalog, original, managed, managed], "demo-agent-mai"),
+            ("demo-agent-mai-1", "4", "gpt-live-1", [catalog, original, live, live], "demo-agent-live"),
+            ("demo-agent-mai-1", "4", self.source["model"], [catalog, original, original], "demo-agent"),
+        ]
+        for selected, version, target, reads, expected in cases:
+            with self.subTest(selected=selected, target=target):
+                service = ServiceClient([Response(200, item) for item in reads], [Response(204)])
+                async with TestClient(TestServer(create_app(cfg, AsyncMock()))) as client:
+                    with patch("server.aiohttp.ClientSession", return_value=service):
+                        response = await client.post(f"/api/agent/model?agent={selected}",
+                            headers={"Origin": str(client.make_url("")).rstrip("/")},
+                            json={"model": target, "version": version})
+                        result = await response.json()
+                self.assertEqual(response.status, 200, result)
+                self.assertEqual(result["agent"], expected)
+                self.assertEqual(result["modelChoice"], target)
+                self.assertEqual(len(service.writes), 1)
+                self.assertIn(f"/agents/{expected}:enable", service.writes[0][0])
+                self.assertEqual(service.removals, [])
 
     async def test_creation_publishes_only_the_separate_owned_mai_agent_and_verifies_readback(self):
         source = self.saved(self.source, "9")

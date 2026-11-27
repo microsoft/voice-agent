@@ -20,6 +20,9 @@ param gptLiveDeployment string = 'gpt-live-1'
 param gptLiveBackendDeployment string = 'gpt-5.4'
 @secure()
 param gptLiveProjectEndpoint string = ''
+param maiRealtime1Deployment string = ''
+@secure()
+param maiRealtime1ProjectEndpoint string = ''
 @allowed(['websocket', 'webrtc'])
 param defaultTransport string = 'websocket'
 param startWithGptLive bool = false
@@ -136,6 +139,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'GPT_LIVE_PROJECT_ENDPOINT'
               value: gptLiveProjectEndpoint
+            }
+            {
+              name: 'MAI_REALTIME_1_DEPLOYMENT'
+              value: maiRealtime1Deployment
+            }
+            {
+              name: 'MAI_REALTIME_1_PROJECT_ENDPOINT'
+              value: maiRealtime1ProjectEndpoint
             }
             {
               name: 'DEFAULT_TRANSPORT'

@@ -89,6 +89,12 @@ try {
     if ($settings.ContainsKey("GPT_LIVE_PROJECT_ENDPOINT")) {
         $commonParameters += "gptLiveProjectEndpoint=$($settings['GPT_LIVE_PROJECT_ENDPOINT'])"
     }
+    if ($settings.ContainsKey("MAI_REALTIME_1_DEPLOYMENT")) {
+        $commonParameters += "maiRealtime1Deployment=$($settings['MAI_REALTIME_1_DEPLOYMENT'])"
+    }
+    if ($settings.ContainsKey("MAI_REALTIME_1_PROJECT_ENDPOINT")) {
+        $commonParameters += "maiRealtime1ProjectEndpoint=$($settings['MAI_REALTIME_1_PROJECT_ENDPOINT'])"
+    }
     if ($settings.ContainsKey("DEFAULT_TRANSPORT")) {
         $commonParameters += "defaultTransport=$($settings['DEFAULT_TRANSPORT'])"
     }
