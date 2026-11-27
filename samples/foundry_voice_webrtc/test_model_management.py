@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from server import (ACTIVE, DEFAULT_TRANSCRIPTION_MODEL, ENHANCED_TURN_DETECTION, ENHANCED_TURN_MODELS, FLASH_MODEL, LIVE_MODEL, MAI_MODEL, MODELS,
+from server import (ACTIVE, DEFAULT_TRANSCRIPTION_MODEL, ENHANCED_TURN_DETECTION, ENHANCED_TURN_MODELS, FLASH_MODEL, LIVE_MODEL, MAI_MODEL, MAI_MODELS, MODELS,
                     TRANSCRIPTION_MODELS, TURN_DETECTION_BEFORE_VERSION, Settings, create_app,
                     compatible_turn_detection, model_definition, redact_settings, transcription_model)
 from test_agent_creation import Client, Response
@@ -313,7 +313,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         import re
         html = Path(__file__).with_name("public").joinpath("index.html").read_text(encoding="utf-8")
         select = re.search(r'<select id="agent-model-choice".*?</select>', html, re.S).group()
-        self.assertEqual(set(re.findall(r'<option value="([^"]+)"', select)), MODELS | {LIVE_MODEL, MAI_MODEL})
+        self.assertEqual(set(re.findall(r'<option value="([^"]+)"', select)), MODELS | {LIVE_MODEL} | MAI_MODELS)
         original = self.definition()
         native = model_definition(original, "azure-realtime")
         for model in ("microsoft-realtime-flash-1", "gpt-realtime-2.1-mini"):
@@ -332,7 +332,7 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
         html = Path(__file__).with_name("public").joinpath("index.html").read_text(encoding="utf-8")
         select = re.search(r'<select id="agent-model-choice".*?</select>', html, re.S).group()
         labels = dict(re.findall(r'<option value="([^"]+)">([^<]+)</option>', select))
-        self.assertEqual(labels, {model: model for model in MODELS | {LIVE_MODEL, MAI_MODEL}})
+        self.assertEqual(labels, {model: model for model in MODELS | {LIVE_MODEL} | MAI_MODELS})
 
     def test_flash_disables_greeting_even_when_the_model_is_already_selected(self):
         original = self.definition()

@@ -8,7 +8,9 @@ const messages = new Map();
 const flashModel = 'microsoft-realtime-flash-1';
 const flashModels = [flashModel, 'azure-realtime-flash-2026-10-14', 'azure-realtime-flash-1'];
 const maiModel = 'mai-realtime';
-const modelChoices = ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini', 'azure-realtime', flashModel, maiModel, 'gpt-5.4', 'gpt-live-1'];
+const maiCatalogModel = 'MAI-Realtime-1';
+const maiModels = [maiModel, maiCatalogModel];
+const modelChoices = ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini', 'azure-realtime', flashModel, ...maiModels, 'gpt-5.4', 'gpt-live-1'];
 let preparingAgent = false;
 let agentAvailability = 'unknown';
 let savedModel = null, savedVersion = null, savedTranscription = null, latestDownload = null, downloading = false;
@@ -28,7 +30,7 @@ function agentPath(path, agent = selectedAgent) {
 
 function updateAgentControls() {
   const busy = Boolean(call) || preparingAgent;
-  const savedMai = savedModel === maiModel;
+  const savedMai = maiModels.includes(savedModel);
   $('webrtc-transport').disabled = savedMai;
   $('mai-transport-note').hidden = !savedMai;
   if (savedMai && $('transport').value === 'webrtc') {
@@ -46,11 +48,11 @@ function updateAgentControls() {
   $('start').disabled = busy || !config?.configured || agentAvailability === 'unknown';
   $('start').textContent = agentAvailability === 'missing' ? 'Create Agent & start' :
     agentAvailability === 'error' ? 'Retry setup & start' : 'Start conversation';
-  $('recreate-agent').disabled = busy || !config?.configured || !config?.agentRecreateAllowed || agentAvailability !== 'ready' || ['gpt-live-1', maiModel].includes(savedModel);
+  $('recreate-agent').disabled = busy || !config?.configured || !config?.agentRecreateAllowed || agentAvailability !== 'ready' || ['gpt-live-1', ...maiModels].includes(savedModel);
   $('agent-model-choice').disabled = busy || agentAvailability !== 'ready';
   const selectedModel = $('agent-model-choice').value;
   const live = selectedModel === 'gpt-live-1';
-  const mai = selectedModel === maiModel;
+  const mai = maiModels.includes(selectedModel);
   const builtInTranscription = live || mai;
   const turnSupported = enhancedTurnModels.includes(selectedModel) &&
     enhancedTurnModels.includes(savedModel);
@@ -105,7 +107,7 @@ function renderScenario() {
   if (!preset) return;
   $('scenario-title').textContent = preset.title;
   $('scenario-subtitle').textContent = preset.subtitle;
-  $('scenario-greeting').textContent = savedModel === maiModel ?
+  $('scenario-greeting').textContent = maiModels.includes(savedModel) ?
     'Say hello or send a message to start this fictional demo.' : preset.greeting;
   for (const [label, value] of preset.facts) {
     const group = document.createElement('div');
@@ -130,7 +132,7 @@ function renderScenario() {
 function updateVoiceChoices(model) {
   const native = model === 'azure-realtime';
   const live = model === 'gpt-live-1';
-  const mai = model === maiModel;
+  const mai = maiModels.includes(model);
   $('voice').hidden = native || live || mai;
   $('native-voice').hidden = !native;
   $('live-voice').hidden = !live;
@@ -153,13 +155,13 @@ function applyAgentDetails(result) {
   pendingEnhancedTurnDetection = savedEnhancedTurnDetection;
   savedTranscription = typeof result.transcriptionModel === 'string' ? result.transcriptionModel : null;
   transcriptionLanguageUpdateNeeded = result.transcriptionLanguageUpdateNeeded === true;
-  if (!['gpt-live-1', maiModel].includes(savedModel)) realtimeTranscription = savedTranscription;
+  if (!['gpt-live-1', ...maiModels].includes(savedModel)) realtimeTranscription = savedTranscription;
   transcriptionChanged = false;
   $('agent-transcription').textContent = savedModel === 'gpt-live-1' ? 'Built into GPT Live' :
-    savedModel === maiModel ? 'Built into MAI Realtime' : savedTranscription ?
+    maiModels.includes(savedModel) ? 'Built into MAI Realtime' : savedTranscription ?
     savedTranscription + (result.exists === false ? ' (after setup)' : '') : 'Unavailable';
   $('agent-transcription-choice').value = savedTranscription ||
-    (['gpt-live-1', maiModel].includes(savedModel) ? realtimeTranscription || config.defaultTranscriptionModel || 'mai-transcribe-2-streaming' : '');
+    (['gpt-live-1', ...maiModels].includes(savedModel) ? realtimeTranscription || config.defaultTranscriptionModel || 'mai-transcribe-2-streaming' : '');
   $('agent-version').textContent = savedVersion || (result.exists === false ? 'Not created' : 'Unavailable');
   $('agent-model-choice').value = modelChoices.includes(savedModel) ?
     savedModel : flashModels.includes(savedModel) ? flashModel : 'gpt-realtime-2.1';
@@ -170,16 +172,16 @@ function applyAgentDetails(result) {
   $('weather-tool-hint').hidden = Boolean(selectedScenario) || !savedWeatherEnabled;
   $('text-help').textContent = savedModel === 'gpt-live-1' ?
     'GPT Live uses microphone input and spoken replies. Text-only replies are unavailable.' :
-    savedModel === maiModel ?
+    maiModels.includes(savedModel) ?
     'Say hello or send a message to start. MAI Realtime replies aloud, including to typed messages.' :
     "Start a conversation to send text. Press Enter or Send for a text-only reply; wait for the agent's response before sending another message. Mute the mic to use text only.";
   $('history-help').textContent = savedModel === 'gpt-live-1' ?
     'GPT Live captions are timed speech fragments, not complete turns or authoritative retained history. Listening and speaking can overlap.' :
-    flashModels.includes(savedModel) || savedModel === maiModel ?
+    flashModels.includes(savedModel) || maiModels.includes(savedModel) ?
     'Automatic interruption truncation is disabled for this model. Interrupted replies may still show text that was not heard; the transcript is not authoritative retained history.' :
     "Replies stream here as live drafts. After an interruption, only the service's retained text remains; unheard text is removed.";
   if (selectedScenario && config?.scenarios?.[selectedScenario])
-    $('scenario-greeting').textContent = savedModel === maiModel ?
+    $('scenario-greeting').textContent = maiModels.includes(savedModel) ?
       'Say hello or send a message to start this fictional demo.' : config.scenarios[selectedScenario].greeting;
   config.personalizationRequired = Boolean(result.personalizationRequired);
   $('personalize').disabled = config.personalizationRequired;
@@ -201,8 +203,8 @@ async function saveAgentModel() {
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:$('agent-model-choice').value, version:savedVersion,
         ...(turnChanged ? {enhancedTurnDetection:pendingEnhancedTurnDetection} :
-          !['gpt-live-1', maiModel].includes($('agent-model-choice').value) &&
-          (!['gpt-live-1', maiModel].includes(savedModel) || transcriptionChanged) ?
+          !['gpt-live-1', ...maiModels].includes($('agent-model-choice').value) &&
+          (!['gpt-live-1', ...maiModels].includes(savedModel) || transcriptionChanged) ?
           {transcriptionModel:$('agent-transcription-choice').value} : {})})});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not save the model version.');
@@ -303,7 +305,7 @@ async function prepareAgent(recreate = false) {
   if (call) throw new Error('End the conversation before changing the Agent.');
   if (preparingAgent) throw new Error('Agent preparation is already running.');
   if (recreate) {
-    if (['gpt-live-1', maiModel].includes(savedModel)) throw new Error('Switch to the original Agent before resetting it.');
+    if (['gpt-live-1', ...maiModels].includes(savedModel)) throw new Error('Switch to the original Agent before resetting it.');
     if (!config.agentRecreateAllowed) throw new Error('Agent recreation is disabled by the server.');
     if (agentAvailability !== 'ready') throw new Error('Start a conversation to set up the Agent before resetting it.');
     const confirmation = window.prompt(
@@ -362,7 +364,7 @@ function sendText(event) {
     session.ws.send(JSON.stringify({type:'conversation.item.create', item:{
       id, type:'message', role:'user', content:[{type:'input_text', text}]
     }}));
-    session.ws.send(JSON.stringify(session.model === maiModel ?
+    session.ws.send(JSON.stringify(maiModels.includes(session.model) ?
       {type:'response.create'} : {type:'response.create', response:{output_modalities:['text']}}));
   } catch (error) {
     fail(session, error);
@@ -691,7 +693,7 @@ async function start() {
   const session = {abort:new AbortController(), muted:false, transport:$('transport').value, ready:false, personalization,
     model:savedModel, agent:selectedAgent, scenario:selectedScenario,
     live:savedModel === 'gpt-live-1',
-    voice:savedModel === maiModel ? '' : savedModel === 'gpt-live-1' ? $('live-voice').value :
+    voice:maiModels.includes(savedModel) ? '' : savedModel === 'gpt-live-1' ? $('live-voice').value :
       savedModel === 'azure-realtime' ? $('native-voice').value : $('voice').value}; call = session;
   if (session.live && session.transport === 'webrtc') {
     latestDownload = null;

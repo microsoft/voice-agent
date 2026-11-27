@@ -9,6 +9,8 @@ SCENARIOS = json.loads(Path(__file__).with_name("scenarios.json").read_text(enco
 FLASH_MODEL = "microsoft-realtime-flash-1"
 FLASH_MODELS = frozenset({FLASH_MODEL, "azure-realtime-flash-2026-10-14", "azure-realtime-flash-1"})
 MAI_MODEL = "mai-realtime"
+MAI_CATALOG_MODEL = "MAI-Realtime-1"
+MAI_MODELS = frozenset({MAI_MODEL, MAI_CATALOG_MODEL})
 DEMO_POLICY = (
     "You are an unbranded demonstration assistant. Never mention a company, customer or caller name, "
     "even if supplied. Do not imply affiliation with any real organization. "
@@ -31,11 +33,11 @@ def scenario_name(agent, scenario):
     return f"voice-demo-{digest}-{scenario}"
 
 
-def scenario_definition(source, scenario):
+def scenario_definition(source, scenario, *, mai=False):
     preset = SCENARIOS[scenario]
     definition = copy.deepcopy(source)
     policy = DEMO_POLICY
-    if source.get("model") == MAI_MODEL:
+    if mai or source.get("model") == MAI_MODEL:
         policy = policy.replace(
             "The configured greeting opens the conversation; do not repeat it.",
             "Wait for the caller's first turn, then greet them briefly and address their request.")
@@ -61,6 +63,6 @@ def scenario_definition(source, scenario):
     elif definition.get("model") in FLASH_MODELS:
         # Flash does not support the saved greeting; the bridge requests one at readiness.
         definition.pop("greeting")
-    elif definition.get("model") == MAI_MODEL:
+    elif mai or definition.get("model") == MAI_MODEL:
         definition.pop("greeting")
     return definition

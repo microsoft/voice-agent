@@ -28,7 +28,8 @@ from dotenv import load_dotenv
 
 from auth import AuthenticationError, AzureTokenProvider, authentication_mode, find_azure_cli
 from live import LIVE_VOICES, LiveSessionError, connect_live, live_definition, with_live_greeting
-from scenarios import FLASH_MODEL, FLASH_MODELS, MAI_MODEL, SCENARIOS, scenario_definition, scenario_name
+from scenarios import (FLASH_MODEL, FLASH_MODELS, MAI_CATALOG_MODEL, MAI_MODEL, MAI_MODELS,
+                       SCENARIOS, scenario_definition, scenario_name)
 
 ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -75,25 +76,37 @@ class SessionConfiguration:
     ready: bool = False
     closed: asyncio.Event = field(default_factory=asyncio.Event)
     model: str | None = None
+    catalog_mai: bool = False
+    last_item_id: str | None = None
 
     async def observe(self, frame, upstream):
+        if self.catalog_mai and frame.get("type") in {
+                "conversation.item.created", "conversation.item.added", "conversation.item.done",
+                "response.output_item.added", "response.output_item.done"}:
+            item = frame.get("item") or {}
+            if item.get("type") == "message" and isinstance(item.get("id"), str) and item["id"]:
+                self.last_item_id = item["id"]
         # The first session.updated applies the saved agent, unlike session.created.
         if frame.get("type") != "session.updated":
             return False
         session = frame.get("session") or {}
-        if self.update is None and session.get("model") in FLASH_MODELS | {MAI_MODEL}:
+        catalog_model = self.catalog_mai and isinstance(session.get("model"), str) and bool(
+            re.match(r"^mai-realtime-1(?:$|[-.])", session["model"], re.IGNORECASE))
+        if self.catalog_mai and not catalog_model:
+            raise SessionConfigurationError("The session did not report the expected MAI-Realtime-1 model.")
+        if self.update is None and (session.get("model") in FLASH_MODELS | {MAI_MODEL} or catalog_model):
             audio_input = (session.get("audio") or {}).get("input") or {}
             vad = audio_input.get("turn_detection") if "turn_detection" in audio_input else session.get("turn_detection")
             if (not session.get("id") or not isinstance(vad, dict) or not vad.get("type")
                     or vad.get("create_response") is False
-                    or (session.get("model") == MAI_MODEL and
+                    or ((session.get("model") == MAI_MODEL or catalog_model) and
                         (vad.get("auto_truncate") is not False or vad.get("interrupt_response") is not True))
                     or (self.session_id is not None and session["id"] != self.session_id)):
                 self.ready = False
                 raise SessionConfigurationError(
                     "The saved Agent must report a consistent session ID and supported server-side turn detection with automatic responses.")
             self.session_id = session["id"]
-            self.model = session["model"]
+            self.model = MAI_CATALOG_MODEL if catalog_model else session["model"]
             first_ready = not self.ready
             self.ready = True
             return first_ready
@@ -385,6 +398,8 @@ class Settings:
     live_project_endpoint: str = ""
     mai_project_endpoint: str = ""
     companion_model: str = ""
+    mai_catalog_deployment: str = ""
+    mai_catalog_project_endpoint: str = ""
 
     def __post_init__(self):
         object.__setattr__(self, "agent", self.agent.strip() or DEFAULT_AGENT_NAME)
@@ -436,6 +451,9 @@ class Settings:
     def mai_companion(self):
         return self._companion("mai", self.mai_project_endpoint, MAI_MODEL)
 
+    def mai_catalog_companion(self):
+        return self._companion("mai-1", self.mai_catalog_project_endpoint, MAI_CATALOG_MODEL)
+
     def voice_url(self, transport="webrtc"):
         if transport not in TRANSPORTS:
             raise ValueError("Unsupported transport.")
@@ -473,7 +491,9 @@ def load_settings():
                     default_transport=os.getenv("DEFAULT_TRANSPORT", "websocket").strip(),
                     start_with_live=os.getenv("START_WITH_GPT_LIVE", "").lower() == "true",
                     live_project_endpoint=os.getenv("GPT_LIVE_PROJECT_ENDPOINT", "").strip().rstrip("/"),
-                    mai_project_endpoint=os.getenv("MAI_REALTIME_PROJECT_ENDPOINT", "").strip().rstrip("/"))
+                    mai_project_endpoint=os.getenv("MAI_REALTIME_PROJECT_ENDPOINT", "").strip().rstrip("/"),
+                    mai_catalog_deployment=os.getenv("MAI_REALTIME_1_DEPLOYMENT", "").strip(),
+                    mai_catalog_project_endpoint=os.getenv("MAI_REALTIME_1_PROJECT_ENDPOINT", "").strip().rstrip("/"))
 
 
 def origin_allowed(host_value, scheme, origin, public_origin="", *, remote=None,
@@ -508,7 +528,7 @@ def selected_settings(request):
     agent = request.query.get("agent", cfg.agent)
     if agent == cfg.agent:
         return cfg
-    for companion in (cfg.live_companion(), cfg.mai_companion()):
+    for companion in (cfg.live_companion(), cfg.mai_companion(), cfg.mai_catalog_companion()):
         if agent == companion.agent:
             return companion
     raise web.HTTPBadRequest(text="Choose the configured Agent or one of its companion Agents.")
@@ -543,7 +563,7 @@ async def public_config(request):
                               "setupIssues": cfg.setup_issues,
                               "personalizationRequired": cfg.personalization_required,
                               "agentRecreateAllowed": cfg.allow_agent_recreate,
-                              "models": sorted(MODELS | {LIVE_MODEL, MAI_MODEL}),
+                              "models": sorted(MODELS | {LIVE_MODEL} | MAI_MODELS),
                               "liveVoices": sorted(LIVE_VOICES),
                               "transcriptionModels": sorted(TRANSCRIPTION_MODELS),
                               "defaultTranscriptionModel": DEFAULT_TRANSCRIPTION_MODEL,
@@ -571,7 +591,7 @@ async def prepare_scenario_agent(client, cfg, headers, source, scenario):
     compatible = await compatible_turn_detection(
         client, cfg, headers, source["definition"], copy.deepcopy(source.get("metadata") or {}),
         source["version"], source["definition"].get("model"))
-    definition = scenario_definition(compatible, scenario)
+    definition = scenario_definition(compatible, scenario, mai=cfg.companion_model in MAI_MODELS)
     metadata = {"sample": "foundry_voice_webrtc", "scenario": scenario, "scenario_source": cfg.agent}
     latest = await lookup_configured_agent(client, target, headers, include_version=True)
     if latest and latest.get("metadata") != metadata:
@@ -661,6 +681,9 @@ async def resolve_weather_toolbox_references(client, cfg, headers, definition):
 
 
 async def lookup_configured_agent(client, cfg, headers, *, include_version=False):
+    if cfg.companion_model == MAI_CATALOG_MODEL and not cfg.mai_catalog_deployment:
+        raise AgentPreparationError(
+            "Set MAI_REALTIME_1_DEPLOYMENT to a MAI-Realtime-1 deployment in the companion project.")
     required = set(json.loads((ROOT / "personalized-agent.json").read_text())["structured_inputs"])
     async with client.get(cfg.agent_url(), headers=headers, allow_redirects=False) as response:
         if response.status == 200:
@@ -674,10 +697,22 @@ async def lookup_configured_agent(client, cfg, headers, *, include_version=False
                 owner = metadata.get("voice_companion_for")
                 if owner is None and cfg.companion_model == LIVE_MODEL and metadata.get("sample") == "foundry_voice_webrtc":
                     owner = metadata.get("companion_of")
+                if (cfg.companion_model == MAI_CATALOG_MODEL and owner == cfg.companion_for
+                        and metadata.get("sample") == "foundry_voice_webrtc"
+                        and definition.get("sub_protocol") == "realtime"
+                        and definition.get("model_type") == "self_deployed"
+                        and definition.get("model") != cfg.mai_catalog_deployment):
+                    raise AgentPreparationError(
+                        "The MAI-Realtime-1 companion uses another deployment. Restore its deployment setting "
+                        "or choose a new base Agent name; the existing Agent was not changed.")
                 compatible = (definition.get("sub_protocol") == "live" if cfg.companion_model == LIVE_MODEL else
-                    cfg.companion_model == MAI_MODEL and definition.get("sub_protocol") == "realtime"
-                    and definition.get("model_type") == "managed" and definition.get("model") == MAI_MODEL
-                    and metadata.get("sample") == "foundry_voice_webrtc")
+                    definition.get("sub_protocol") == "realtime"
+                    and metadata.get("sample") == "foundry_voice_webrtc"
+                    and ((cfg.companion_model == MAI_MODEL and definition.get("model_type") == "managed"
+                          and definition.get("model") == MAI_MODEL)
+                         or (cfg.companion_model == MAI_CATALOG_MODEL
+                             and definition.get("model_type") == "self_deployed"
+                             and definition.get("model") == cfg.mai_catalog_deployment)))
                 if not compatible or owner != cfg.companion_for:
                     raise AgentPreparationError(
                         "The companion name is already used by an unrelated Agent. It was not changed.")
@@ -820,6 +855,7 @@ async def inspect_configured_agent(client, cfg, headers, expected_settings=None)
     return {"agent": cfg.agent, "exists": definition is not None,
             "model": (demo if definition is None else definition).get("model"),
             "modelChoice": LIVE_MODEL if (definition or {}).get("sub_protocol") == "live" else
+                MAI_CATALOG_MODEL if cfg.companion_model == MAI_CATALOG_MODEL else
                 (demo if definition is None else definition).get("model"),
             "transcriptionModel": transcription_model(demo if definition is None else definition),
             "transcriptionLanguageUpdateNeeded": transcription_language_update_needed(
@@ -890,7 +926,8 @@ async def prepare_configured_agent(client, cfg, headers):
     return {"agent": cfg.agent, "created": created, "toolboxReferenceUpdated": repaired,
             "turnDetectionUpdated": turn_repaired,
             "model": definition.get("model"),
-            "modelChoice": LIVE_MODEL if definition.get("sub_protocol") == "live" else definition.get("model"),
+            "modelChoice": LIVE_MODEL if definition.get("sub_protocol") == "live" else
+                MAI_CATALOG_MODEL if cfg.companion_model == MAI_CATALOG_MODEL else definition.get("model"),
             "transcriptionModel": transcription_model(definition),
             "transcriptionLanguageUpdateNeeded": transcription_language_update_needed(definition),
             "enhancedTurnDetection": enhanced_turn_detection(definition, metadata),
@@ -934,7 +971,7 @@ def model_definition(definition, model, transcription=None):
     return updated
 
 
-def mai_definition(source):
+def mai_definition(source, deployment=None):
     instructions = source.get("instructions", "")
     template = json.loads((ROOT / "personalized-agent.json").read_text())["instructions"]
     search = template.partition("\n\nWEB SEARCH\n")[2].partition("\n\nLANGUAGE POLICY\n")[0]
@@ -966,6 +1003,8 @@ def mai_definition(source):
         },
         "output_modalities": ["audio"],
     }
+    if deployment is not None:
+        definition["model_type"], definition["model"] = "self_deployed", deployment
     if source.get("structured_inputs"):
         definition["structured_inputs"] = copy.deepcopy(source["structured_inputs"])
     return definition
@@ -1020,7 +1059,7 @@ async def change_agent_model(request):
         return web.json_response({"error": "Choose a model and the current Agent version."}, status=400)
     if (not isinstance(body, dict) or not {"model", "version"}.issubset(body)
             or set(body) - {"model", "version", "transcriptionModel", "enhancedTurnDetection"}
-            or not isinstance(body["model"], str) or body["model"] not in MODELS | {LIVE_MODEL, MAI_MODEL}
+            or not isinstance(body["model"], str) or body["model"] not in MODELS | {LIVE_MODEL} | MAI_MODELS
             or not isinstance(body["version"], str) or not body["version"]
             or ("enhancedTurnDetection" in body and (
                 type(body["enhancedTurnDetection"]) is not bool or body["model"] not in MODELS
@@ -1028,7 +1067,7 @@ async def change_agent_model(request):
                 or "transcriptionModel" in body))
             or ("transcriptionModel" in body and (
                 not isinstance(body["transcriptionModel"], str) or body["transcriptionModel"] not in TRANSCRIPTION_MODELS
-                or body["model"] in {LIVE_MODEL, MAI_MODEL}))):
+                or body["model"] in {LIVE_MODEL} | MAI_MODELS))):
         return web.json_response({"error": "Choose supported Agent/transcription models and the current Agent version. "
                                   "The turn-detection toggle manages transcription; save it separately."}, status=400)
     async with request.app[PREPARATION]:
@@ -1050,7 +1089,7 @@ async def change_agent_model(request):
                 destination_metadata = copy.deepcopy(metadata)
                 source = latest["definition"]
                 was_live = source.get("sub_protocol") == "live"
-                was_mai = cfg.companion_model == MAI_MODEL
+                was_mai = cfg.companion_model in MAI_MODELS
                 switched_agent = False
                 destination_definition = latest["definition"]
                 if body["model"] == LIVE_MODEL:
@@ -1081,11 +1120,11 @@ async def change_agent_model(request):
                                         "realtime_source_version": latest["version"]}
                             destination_definition = None
                     definition = with_live_greeting(definition)
-                elif body["model"] == MAI_MODEL:
-                    if was_mai:
+                elif body["model"] in MAI_MODELS:
+                    if cfg.companion_model == body["model"]:
                         definition = copy.deepcopy(source)
                     else:
-                        if was_live:
+                        if was_live or was_mai:
                             if not cfg.companion_for:
                                 raise AgentPreparationError("The original realtime Agent is unavailable. No Agent was changed.")
                             original = await lookup_configured_agent(client, base_cfg, headers, include_version=True)
@@ -1093,7 +1132,11 @@ async def change_agent_model(request):
                                 raise AgentPreparationError("The original realtime Agent is unavailable. No Agent was changed.")
                             source = original["definition"]
                             latest = original
-                        cfg = base_cfg.mai_companion()
+                        cfg = (base_cfg.mai_companion() if body["model"] == MAI_MODEL
+                               else base_cfg.mai_catalog_companion())
+                        if body["model"] == MAI_CATALOG_MODEL and not cfg.mai_catalog_deployment:
+                            raise AgentPreparationError(
+                                "Set MAI_REALTIME_1_DEPLOYMENT to a MAI-Realtime-1 deployment in the companion project.")
                         companion = await lookup_configured_agent(client, cfg, headers, include_version=True)
                         destination_latest = companion
                         switched_agent = True
@@ -1104,7 +1147,8 @@ async def change_agent_model(request):
                             expected_version = companion["version"]
                             destination_definition = companion["definition"]
                         else:
-                            definition = mai_definition(source)
+                            definition = mai_definition(
+                                source, cfg.mai_catalog_deployment if body["model"] == MAI_CATALOG_MODEL else None)
                             metadata = {"sample": "foundry_voice_webrtc",
                                         "voice_companion_for": base_cfg.agent,
                                         "realtime_source_version": latest["version"],
@@ -1148,7 +1192,7 @@ async def change_agent_model(request):
                     if enhanced_turn_detection(source, metadata):
                         definition["audio"]["input"]["turn_detection"]["auto_truncate"] = body["model"] != FLASH_MODEL
                 if definition != destination_definition or metadata != destination_metadata:
-                    if "enhancedTurnDetection" in body or turn_repaired or body["model"] == MAI_MODEL:
+                    if "enhancedTurnDetection" in body or turn_repaired or body["model"] in MAI_MODELS:
                         current = await lookup_configured_agent(client, cfg, headers, include_version=True)
                         if current != destination_latest:
                             return web.json_response(
@@ -1184,7 +1228,7 @@ async def change_agent_model(request):
                         raise AgentPreparationError("The model version was saved but could not be enabled. Retry setup before starting a call.")
                 result = await inspect_configured_agent(client, cfg, headers,
                     expected_settings={"definition": definition, "metadata": metadata}
-                    if "enhancedTurnDetection" in body or turn_repaired or body["model"] == MAI_MODEL else None)
+                    if "enhancedTurnDetection" in body or turn_repaired or body["model"] in MAI_MODELS else None)
                 if (result.get("version") != expected_version or result.get("modelChoice") != body["model"]
                         or (body["model"] != LIVE_MODEL and result.get("transcriptionLanguageUpdateNeeded"))
                         or (body["model"] in UNSUPPORTED_TURN_MODELS and result.get("enhancedTurnDetection"))
@@ -1382,8 +1426,13 @@ async def forward_browser(browser, upstream, transport, configuration):
             frame = validate_client_frame(message.data, started, transport)
             if not configuration.ready and frame["type"] not in {"rtc.call.sdp.create", "conversation.item.retrieve"}:
                 raise SessionConfigurationError("Wait for the retained-history configuration acknowledgment before sending input.")
-            if configuration.model == MAI_MODEL and frame["type"] == "response.create" and "response" in frame:
+            if configuration.model in MAI_MODELS and frame["type"] == "response.create" and "response" in frame:
                 raise SessionConfigurationError("MAI Realtime replies with audio; text-only response overrides are not supported.")
+            if configuration.catalog_mai and frame["type"] == "conversation.item.create":
+                item = frame["item"]
+                item.setdefault("id", uuid.uuid4().hex)
+                frame["previous_item_id"] = configuration.last_item_id or "root"
+                configuration.last_item_id = item["id"]
             await upstream.send_json(frame)
             if frame["type"] == "session.close":
                 try:
@@ -1425,8 +1474,8 @@ async def forward_upstream(upstream, browser, transport, configuration, on_conve
         raise SessionConfigurationError("Timed out waiting for Azure to acknowledge retained-history session configuration.") from None
 
 
-async def relay(browser, upstream, transport, on_conversation=None, greeting=None):
-    configuration = SessionConfiguration()
+async def relay(browser, upstream, transport, on_conversation=None, greeting=None, catalog_mai=False):
+    configuration = SessionConfiguration(catalog_mai=catalog_mai)
     tasks = [asyncio.create_task(forward_browser(browser, upstream, transport, configuration)),
              asyncio.create_task(forward_upstream(upstream, browser, transport, configuration, on_conversation, greeting))]
     try:
@@ -1562,7 +1611,8 @@ async def bridge(request):
         structured = None
         voice = request.query.get("voice", "")
         live = request.query.get("protocol") == "live"
-        mai = cfg.companion_model == MAI_MODEL
+        mai = cfg.companion_model in MAI_MODELS
+        catalog_mai = cfg.companion_model == MAI_CATALOG_MODEL
         if cfg.companion_model == LIVE_MODEL and not live:
             raise LiveSessionError("Use the GPT Live protocol for the companion Agent.")
         if mai and live:
@@ -1625,6 +1675,8 @@ async def bridge(request):
                 options = {}
                 if scenario and latest["definition"].get("model") in FLASH_MODELS:
                     options["greeting"] = json.loads(structured)["greeting_text"]
+                if catalog_mai:
+                    options["catalog_mai"] = True
                 await relay(browser, upstream, transport, on_conversation=announce_conversation, **options)
     except Exception as exc:
         # Never send auth exceptions, headers or tokens to the browser or logs.

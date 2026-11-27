@@ -598,6 +598,38 @@ test('MAI uses WebSocket even when WebRTC was the previous default, without limi
   assert.equal(ui.element('mai-transport-note').hidden, true);
 });
 
+test('MAI-Realtime-1 uses the catalog companion and its native audio controls', async () => {
+  const requests = [];
+  const realtime = {agent:'demo-agent', exists:true, model:'gpt-realtime-2.1', version:'3',
+    transcriptionModel:'whisper-1'};
+  const catalog = {agent:'demo-agent-mai-1', exists:true, model:'my-mai-deployment',
+    modelChoice:'MAI-Realtime-1', version:'2', transcriptionModel:null, switchedAgent:true};
+  const ui = await setup('websocket', {
+    fetch:async (url, options = {})=>{
+      if (options.body) requests.push([url, JSON.parse(options.body)]);
+      return {ok:true, json:async()=>url === '/api/config' ?
+        {configured:true, agent:'demo-agent', scenarios} : options.method === 'POST' ? catalog : realtime};
+    },
+  });
+  ui.stop();
+  ui.element('agent-model-choice').value = 'MAI-Realtime-1';
+  ui.element('agent-model-choice').onchange();
+  assert.equal(ui.element('mai-voice').hidden, false);
+  assert.equal(ui.element('agent-transcription-choice').disabled, true);
+  await ui.element('save-model').onclick();
+  assert.deepEqual(requests, [['/api/agent/model', {model:'MAI-Realtime-1', version:'3'}]]);
+  assert.equal(ui.element('agent').textContent, 'demo-agent-mai-1');
+  assert.equal(ui.element('agent-model').textContent, 'my-mai-deployment');
+  assert.equal(ui.element('webrtc-transport').disabled, true);
+  ui.reconnect();
+  ui.session.model = 'MAI-Realtime-1';
+  ui.session.configured = true;
+  ui.markReady(ui.session);
+  ui.element('text-input').value = 'Hello';
+  ui.element('text-form').onsubmit({preventDefault() {}});
+  assert.deepEqual(ui.sent[1], {type:'response.create'});
+});
+
 for (const transport of ['websocket', 'webrtc']) {
   test(`${transport}: MAI typed input requests a spoken response without a modality override`, async () => {
     const ui = await setup(transport);

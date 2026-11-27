@@ -314,6 +314,26 @@ the selected scenario, session audio, and any stored conversation data.
 Model availability varies by resource: test the chosen project rather than
 assuming every resource in a region supports the model.
 
+### Self-deployed MAI-Realtime-1
+
+Select **MAI-Realtime-1** to use a separately owned voice Agent with a Foundry
+catalog deployment. Set `MAI_REALTIME_1_DEPLOYMENT` to its deployment name.
+Optionally set `MAI_REALTIME_1_PROJECT_ENDPOINT` to a project in the same
+Foundry resource; otherwise the main project is used. The runtime identity
+needs access to that project and deployment. This option is separate from the
+managed `mai-realtime` companion, which remains available.
+The deployment script passes these settings to Container Apps. If the catalog
+project uses another Foundry resource, grant the app identity the required
+access there separately; the script does not add that resource's role assignment.
+If changing the deployment name, use a new base Agent name or restore the
+previous setting; an existing companion is not overwritten.
+
+The sample uses WebSocket, the model's native voice, audio-only replies, and
+caller-first scenarios. It does not configure external transcription, tools,
+voice overrides, or automatic greeting. As with managed MAI, interrupted
+transcripts are not authoritative retained history. Deployment availability
+and data processing depend on the selected Foundry deployment and its SKU.
+
 The sample uses Azure semantic VAD with interruption enabled and
 `auto_truncate: false`. MAI does not accept the bridge's additional
 startup `session.update` for retained-item events, so the bridge leaves the
