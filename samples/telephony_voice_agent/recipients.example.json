@@ -1,0 +1,18 @@
+[
+  {
+    "phone_number": "+14255550123",
+    "structured_inputs": {
+      "customer_name": "Alex",
+      "opening_line": "I am calling to confirm your dental visit on Tuesday at 2:00 PM. Does that time still work?",
+      "call_context": "Outbound reminder for Alex's Tuesday 2:00 PM dental visit; confirm attendance or reschedule."
+    }
+  },
+  {
+    "phone_number": "+14255550124",
+    "structured_inputs": {
+      "customer_name": "Priya",
+      "opening_line": "I am calling to confirm your checkup on Tuesday at 3:30 PM. Would you like to keep that slot?",
+      "call_context": "Outbound reminder for Priya's Tuesday 3:30 PM checkup; confirm attendance or reschedule."
+    }
+  }
+]
